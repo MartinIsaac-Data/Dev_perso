@@ -1,0 +1,61 @@
+# The 0-5 scale. Defined once, referenced by self-assessment, by the market
+# gap analysis and by the prerequisite thresholds on graph edges.
+#
+# The scale is deliberately evidence-anchored rather than feeling-anchored:
+# each level names what must exist in the world, not how confident you feel.
+skill_levels:
+  - level: 0
+    code: unknown
+    name: Not started
+    definition: >-
+      No exposure. Cannot describe what the skill is for or when it applies.
+    evidence_expectation: None.
+
+  - level: 1
+    code: aware
+    name: Aware
+    definition: >-
+      Can explain what it is, why it matters and roughly when to reach for it.
+      Cannot yet apply it without a tutorial open.
+    evidence_expectation: >-
+      Reading or a course. Not sufficient to claim anything above this level.
+
+  - level: 2
+    code: assisted
+    name: Applied with help
+    definition: >-
+      Has used it on a real task, following an example or with review.
+      Produces correct results on well-shaped problems.
+    evidence_expectation: >-
+      A small project, an exercise repository, a guided implementation.
+
+  - level: 3
+    code: autonomous
+    name: Autonomous
+    definition: >-
+      Uses it unaided on real problems, including messy ones. Knows the common
+      failure modes and can debug them. This is the working threshold: it is
+      the default level required by graph edges.
+    evidence_expectation: >-
+      A shipped project where the skill was central, or a relevant
+      certification backed by applied work.
+
+  - level: 4
+    code: designs
+    name: Designs with it
+    definition: >-
+      Makes architectural choices with it, judges trade-offs, and can justify
+      those choices to a technical audience that disagrees.
+    evidence_expectation: >-
+      A production system, a published technical article going beyond usage
+      into design, or a paid engagement.
+
+  - level: 5
+    code: authority
+    name: Authority
+    definition: >-
+      Teaches it, sets standards for others, and is sought out on it. Has an
+      opinion on it that other practitioners cite.
+    evidence_expectation: >-
+      Conference talk, sustained open source contribution, published reference
+      material, or repeated advisory engagements.

@@ -1,0 +1,54 @@
+# Types of deliverable. Extendable at runtime — a `book_chapter` type belongs
+# to the 2032+ phase and adding it should be a row, not a migration.
+#
+# `is_publication` drives the Reputation Tracker. A certification is a real
+# deliverable and real evidence, but nobody outside the profile sees it, so it
+# does not count towards visibility.
+deliverable_types:
+  - code: project
+    name: Project
+    is_publication: false
+    description: >-
+      A built, working thing with an artefact someone else could run or
+      inspect. The default unit of technical evidence.
+
+  - code: article
+    name: Article
+    is_publication: true
+    description: >-
+      A written technical piece published somewhere public.
+
+  - code: talk
+    name: Talk
+    is_publication: true
+    description: >-
+      A conference, meetup or webinar presentation actually delivered.
+      Accepted-but-not-yet-given stays `in_progress`.
+
+  - code: certification
+    name: Certification
+    is_publication: false
+    description: >-
+      A passed exam. Evidence of coverage, not of judgement — which is why it
+      never satisfies a quota on its own.
+
+  - code: open_source
+    name: Open source contribution
+    is_publication: true
+    description: >-
+      A merged contribution to someone else's project, or a maintained
+      repository of your own with external users.
+
+  - code: engagement
+    name: Client engagement
+    is_publication: false
+    description: >-
+      Paid or pro-bono work delivered for an organisation, with a measurable
+      outcome. The strongest evidence type available.
+
+  - code: case_study
+    name: Business case study
+    is_publication: false
+    description: >-
+      A fully quantified and reviewed case from the Business Case Lab.
+      Publishing it turns it into an `article` as well.

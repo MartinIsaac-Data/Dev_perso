@@ -1,0 +1,108 @@
+# The trajectory, as data.
+#
+# Quotas are per quarter, never per year. An annual target is satisfiable by a
+# burst in December, which is exactly the failure this application exists to
+# make visible.
+#
+# Note what the quotas do *not* include: certifications never satisfy a quota
+# on their own in any phase after the first. Passing exams is coverage, not
+# evidence of judgement, and a trajectory that optimises for exam count
+# produces a certified person nobody hires as an architect.
+
+target_roles:
+  - code: ai_transformation_lead
+    name: AI Transformation Lead
+    description: >-
+      Owns the AI and data agenda of a business unit end to end: opportunity
+      identification, solution design, delivery and adoption.
+  - code: enterprise_data_architect
+    name: Enterprise Data Architect
+    description: >-
+      Owns the target data architecture across systems: platform, modelling,
+      governance, integration and standards.
+  - code: industrial_ai_consultant
+    name: Industrial AI Consultant
+    description: >-
+      Advises industrial and supply chain organisations on applied AI, from
+      feasibility through to deployed operating model.
+  - code: digital_transformation_manager
+    name: Digital Transformation Manager
+    description: >-
+      Leads process, data and technology change programmes with accountability
+      for measured business outcomes.
+
+phases:
+  - code: foundations
+    name: Foundations
+    ordinal: 1
+    starts_on: 2026-01-01
+    ends_on: 2027-12-31
+    objective: >-
+      Convert an Excel and Power BI base into genuine data engineering
+      foundations: SQL beyond querying, dimensional modelling, Python, the
+      Azure and Fabric platform, and working literacy in models and agents.
+      The measure of this phase is not exams passed but whether a complete
+      pipeline from source to dashboard can be built unaided.
+    quotas:
+      - type: project
+        min_per_quarter: 1
+      - type: article
+        min_per_quarter: 1
+      - type: certification
+        min_per_quarter: 0
+
+  - code: technical_reference
+    name: Technical reference
+    ordinal: 2
+    starts_on: 2028-01-01
+    ends_on: 2029-12-31
+    objective: >-
+      Become the person locally who ships the whole chain — ERP to data
+      platform to AI component to dashboard — and can defend every design
+      choice in it. Local conference presence begins here, as does the first
+      paid advisory work.
+    quotas:
+      - type: project
+        min_per_quarter: 1
+      - type: article
+        min_per_quarter: 2
+      - type: talk
+        min_per_quarter: 1
+      - type: case_study
+        min_per_quarter: 1
+
+  - code: international_reputation
+    name: International reputation
+    ordinal: 3
+    starts_on: 2030-01-01
+    ends_on: 2032-12-31
+    objective: >-
+      Move from locally known to externally cited: regular publication, open
+      source with users other than yourself, international speaking, and
+      engagements won on reputation rather than on application.
+    quotas:
+      - type: article
+        min_per_quarter: 3
+      - type: talk
+        min_per_quarter: 1
+      - type: open_source
+        min_per_quarter: 1
+      - type: engagement
+        min_per_quarter: 1
+
+  - code: authority
+    name: Authority
+    ordinal: 4
+    starts_on: 2033-01-01
+    ends_on: 2036-12-31
+    objective: >-
+      Set direction rather than follow it: reference material others teach
+      from, advisory work with large groups, and a practice that exists
+      independently of any single engagement.
+    quotas:
+      - type: article
+        min_per_quarter: 2
+      - type: talk
+        min_per_quarter: 2
+      - type: engagement
+        min_per_quarter: 2

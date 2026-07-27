@@ -1,0 +1,554 @@
+# A fully worked demonstration case, from symptom to reviewed ROI model.
+#
+# Read it as the worked example of what the Business Case Lab expects: every
+# figure below is a named assumption with a range and a source, the issue tree
+# is quantified bottom-up from those assumptions, and the gap between the
+# bottom-up total and what the director claimed is left visible rather than
+# reconciled away.
+#
+# Bottom-up total of the tree:  3,492,608 EUR
+# Claimed by the client:        4,200,000 EUR
+# Unexplained:                    707,392 EUR  (16.8%)
+#
+# That gap is not an error in the fixture. It is the first thing the review
+# board attacks, and the most useful thing in the whole example.
+
+business_cases:
+  - title: Stock-outs and expedited freight at a regional beverage distributor
+    industry: Distribution — food and beverage
+    currency: EUR
+    status: reviewed
+    opened_on: 2026-06-15
+    claimed_annual_loss: 4200000
+    company_context: >-
+      Regional beverage distributor, six depots, roughly 2,400 active SKUs and
+      380 employees. Orders arrive through field sales and a small B2B portal.
+      Replenishment is decided weekly by four planners working from ERP
+      reports exported to Excel. There is no forecasting system; safety stock
+      levels were last reviewed in 2023 and are held as static ERP fields.
+    symptom: >-
+      The commercial director states that stock-outs and emergency logistics
+      cost the company about 4.2 million euros a year, and wants "AI" applied
+      to it. No breakdown of that figure exists and nobody in the room could
+      say where it came from.
+
+    assumptions:
+      # --- Volume and structure -----------------------------------------
+      - code: annual_order_lines
+        label: Order lines shipped per year
+        unit: lines
+        base_value: 412000
+        low_value: 400000
+        high_value: 420000
+        confidence: high
+        source: ERP sales document line count, FY2025, extracted 2026-06-17.
+      - code: stockout_rate
+        label: Share of order lines short-shipped or cancelled for stock
+        unit: ratio
+        base_value: 0.061
+        low_value: 0.045
+        high_value: 0.078
+        confidence: medium
+        source: >-
+          WMS pick-shortage log, 12 months to May 2026. Medium confidence: the
+          log does not capture lines the sales team removed before order entry
+          because they knew stock was unavailable, so this is a floor.
+        rationale: >-
+          Understates the true rate. Deliberately not adjusted upwards — an
+          unmeasured correction would be exactly the kind of number this
+          method exists to avoid.
+      - code: lost_margin_per_line
+        label: Gross margin lost per unfilled order line
+        unit: EUR/line
+        base_value: 44
+        low_value: 26
+        high_value: 58
+        confidence: low
+        source: >-
+          Average line margin from the FY2025 sales ledger (44 EUR).
+        rationale: >-
+          Assumes every unfilled line is a permanently lost sale. In practice
+          some customers reorder and some substitute. The low bound of 26
+          assumes 40% is recovered. This is the weakest assumption in the case.
+
+      # --- Expedited freight ---------------------------------------------
+      - code: expedite_shipments_per_year
+        label: Emergency inter-depot and supplier shipments per year
+        unit: shipments
+        base_value: 1340
+        low_value: 1180
+        high_value: 1450
+        confidence: high
+        source: Transport invoices flagged "urgent", FY2025, counted manually.
+      - code: expedite_premium_per_shipment
+        label: Premium paid over standard freight per emergency shipment
+        unit: EUR/shipment
+        base_value: 780
+        low_value: 620
+        high_value: 910
+        confidence: medium
+        source: >-
+          Mean difference between urgent and standard tariffs on the same
+          lanes, 2025 carrier contracts, 84 matched pairs.
+
+      # --- Inventory positioning -----------------------------------------
+      - code: transfers_per_year
+        label: Corrective inter-depot stock transfers per year
+        unit: transfers
+        base_value: 3100
+        low_value: 2800
+        high_value: 3400
+        confidence: high
+        source: WMS transfer document count, FY2025.
+      - code: transfer_cost
+        label: Fully loaded cost per corrective transfer
+        unit: EUR/transfer
+        base_value: 145
+        low_value: 110
+        high_value: 190
+        confidence: medium
+        source: >-
+          Transport cost plus handling time at both ends, costed at the depot
+          labour rate. Excludes the administrative time to raise the transfer.
+      - code: expiry_writeoff
+        label: Annual write-off of expired stock
+        unit: EUR/year
+        base_value: 690000
+        low_value: 640000
+        high_value: 740000
+        confidence: high
+        source: FY2025 general ledger, stock obsolescence account.
+
+      # --- Planning effort -------------------------------------------------
+      - code: planner_overtime_hours
+        label: Planner overtime hours per year on manual replanning
+        unit: hours
+        base_value: 21500
+        low_value: 17000
+        high_value: 24000
+        confidence: low
+        source: >-
+          Payroll overtime for the planning and depot supervision population.
+        rationale: >-
+          Attributes all recorded overtime in that population to replanning.
+          Almost certainly overstated; the low bound assumes 20% is other work.
+      - code: overtime_cost_per_hour
+        label: Loaded overtime cost per hour
+        unit: EUR/hour
+        base_value: 9.4
+        low_value: 9.4
+        high_value: 9.4
+        confidence: high
+        source: Payroll, including employer contributions and the overtime premium.
+
+      # --- Solution costs --------------------------------------------------
+      - code: build_cost
+        label: One-off build cost — platform, models, integration
+        unit: EUR
+        base_value: 210000
+        low_value: 180000
+        high_value: 310000
+        confidence: medium
+        source: >-
+          Two vendor estimates plus 0.5 FTE internal for nine months. The high
+          bound reflects the larger of the two vendor quotes.
+      - code: change_cost_y0
+        label: Change management, year 0 — training and process redesign
+        unit: EUR
+        base_value: 45000
+        low_value: 35000
+        high_value: 80000
+        confidence: low
+        source: Comparable rollout at a previous employer, scaled by headcount.
+      - code: change_cost_y1
+        label: Change management, year 1 — reinforcement and rework
+        unit: EUR
+        base_value: 22000
+        low_value: 15000
+        high_value: 60000
+        confidence: low
+        source: >-
+          Assumed at half of year 0. No local evidence base; the high bound
+          reflects a rollout that needs a second attempt.
+      - code: run_cost_annual
+        label: Annual run cost — support, monitoring, model maintenance
+        unit: EUR/year
+        base_value: 64000
+        low_value: 55000
+        high_value: 95000
+        confidence: medium
+        source: 0.4 FTE data engineer plus 0.2 FTE analyst at local loaded rates.
+      - code: licence_annual
+        label: Annual platform and tooling licences
+        unit: EUR/year
+        base_value: 38000
+        low_value: 34000
+        high_value: 46000
+        confidence: high
+        source: Published list pricing for the capacity tier sized in the design.
+
+      # --- Solution benefits -----------------------------------------------
+      - code: benefit_stockout
+        label: Annual margin recovered from fewer stock-outs
+        unit: EUR/year
+        base_value: 430000
+        low_value: 180000
+        high_value: 620000
+        confidence: low
+        source: >-
+          Assumes the stock-out rate falls from 6.1% to 3.8% at steady state.
+        rationale: >-
+          The 2.3 point reduction comes from a vendor case study in a different
+          sector, not from anything measured here. Flagged as the most fragile
+          benefit in the model.
+      - code: benefit_expedite
+        label: Annual reduction in expedited freight premium
+        unit: EUR/year
+        base_value: 310000
+        low_value: 120000
+        high_value: 470000
+        confidence: low
+        source: Assumes 30% of emergency shipments become avoidable.
+      - code: benefit_transfers
+        label: Annual reduction in corrective transfers
+        unit: EUR/year
+        base_value: 135000
+        low_value: 60000
+        high_value: 200000
+        confidence: medium
+        source: Assumes 30% fewer transfers from better initial allocation.
+      - code: benefit_expiry
+        label: Annual reduction in expiry write-offs
+        unit: EUR/year
+        base_value: 240000
+        low_value: 140000
+        high_value: 330000
+        confidence: medium
+        source: >-
+          Assumes 35% of write-offs are attributable to misallocation that
+          shelf-life-aware allocation would prevent.
+      - code: benefit_planner_time
+        label: Planner time released
+        unit: EUR/year
+        base_value: 96000
+        low_value: 0
+        high_value: 96000
+        confidence: low
+        source: >-
+          60% of recorded replanning overtime, valued at the loaded rate.
+        rationale: >-
+          Included knowingly as a soft benefit. Low bound is zero because
+          released hours only become cash if the overtime budget is actually
+          cut, and no such commitment exists.
+
+    cause_tree:
+      - label: Demand is not forecast, so replenishment is reactive
+        description: >-
+          Safety stock is a static ERP field last reviewed in 2023. Planners
+          react to yesterday's shortages rather than next week's demand.
+        evidence_note: >-
+          Confirmed by observation over two weekly planning cycles in June.
+        children:
+          - label: Margin lost on unfilled order lines
+            drivers: [annual_order_lines, stockout_rate, lost_margin_per_line]
+            evidence_note: >-
+              WMS shortage log crossed with the sales ledger. The weak link is
+              the assumption that an unfilled line is a lost sale.
+
+      - label: Supplier lead time variability absorbed by emergency logistics
+        description: >-
+          Inbound lead times vary by up to eleven days against contract, and
+          the response is to pay for speed rather than to hold the right
+          buffer.
+        children:
+          - label: Premium paid on emergency shipments
+            drivers: [expedite_shipments_per_year, expedite_premium_per_shipment]
+            evidence_note: Carrier invoices, matched-lane comparison.
+
+      - label: Stock is in the wrong depot
+        description: >-
+          Initial allocation across the six depots follows historical splits
+          rather than current demand or remaining shelf life.
+        children:
+          - label: Cost of corrective inter-depot transfers
+            drivers: [transfers_per_year, transfer_cost]
+          - label: Write-off of stock that expired in the wrong place
+            drivers: [expiry_writeoff]
+            evidence_note: >-
+              Ledger figure is solid; the attribution to misallocation rather
+              than to over-purchasing is not, and is handled in the benefit
+              assumption rather than here.
+
+      - label: Planning is manual and repeated
+        description: >-
+          Four planners rebuild the same Excel model weekly from ERP exports.
+        children:
+          - label: Overtime spent on manual replanning
+            drivers: [planner_overtime_hours, overtime_cost_per_hour]
+            evidence_note: >-
+              Weakest branch of the tree. Payroll data is exact; the
+              attribution of all of it to replanning is not.
+
+    solution:
+      data_requirements: >-
+        Order line history with shortage flags (ERP, 36 months); stock
+        movements and expiry dates by depot (WMS); supplier confirmed versus
+        actual delivery dates (ERP purchasing); carrier invoices with lane and
+        urgency flag; product master with shelf life. Two gaps must be closed
+        before build: shortage reasons are free text and need a controlled
+        vocabulary, and the portal does not currently record orders abandoned
+        for lack of stock at all.
+      architecture: >-
+        Incremental extraction from ERP and WMS into partitioned Parquet in a
+        lakehouse, silver layer conformed on product and depot, gold layer as
+        a star schema on order line fact and stock movement fact. Forecasting
+        and allocation run as scheduled jobs against the gold layer. Power BI
+        semantic model on top for planners and the commercial director.
+      ai_component: >-
+        Two models, neither of them large. A weekly SKU-depot demand forecast
+        (gradient boosting on lagged demand, price, seasonality and promotion
+        calendar), and a stochastic safety stock calculation driven by
+        forecast error and observed supplier lead time distribution. An
+        allocation heuristic weights remaining shelf life against forecast
+        demand per depot. Explicitly not an LLM problem: the director asked
+        for "AI", but the value here is forecasting and optimisation.
+      automation_component: >-
+        Replenishment proposals written back to ERP as draft purchase requests
+        for planner approval, replacing the weekly Excel rebuild. Approval
+        stays human — trust has to be earned before the loop is closed.
+      process_change: >-
+        Weekly planning becomes a review of exceptions rather than a rebuild.
+        Safety stock parameters move from static ERP fields to a calculated
+        table with a monthly review cadence. Shortage reason codes become
+        mandatory at pick confirmation.
+      governance: >-
+        Named owner for the product master (currently nobody). Forecast
+        accuracy and bias reviewed monthly in the existing S&OP meeting rather
+        than in a new forum. Model retraining quarterly with a documented
+        acceptance threshold; a model that fails it does not ship, and the
+        previous version stays in service.
+      deployment_plan: >-
+        Two depots for the first four months, chosen for data quality rather
+        than for size, with the other four as a comparison group so the
+        benefit claim can actually be measured. Full rollout only if forecast
+        accuracy and the stock-out rate both move in the pilot.
+      key_risks: >-
+        Product master quality is unknown and could delay the build by a
+        quarter. Planner adoption is the largest risk: the Excel model is
+        theirs and replacing it without their involvement will fail. Supplier
+        lead time variability is partly commercial, not analytical, and no
+        model fixes a supplier who is late by choice.
+      kpis:
+        - name: Order line fill rate
+          definition: Lines shipped complete on first attempt, divided by lines ordered.
+          unit: ratio
+          baseline_value: 0.939
+          target_value: 0.962
+          measurement_frequency: Weekly
+          data_source: WMS pick confirmation
+        - name: Forecast accuracy (1 - weighted MAPE)
+          definition: At SKU-depot-week grain, weighted by volume.
+          unit: ratio
+          baseline_value: 0
+          target_value: 0.72
+          measurement_frequency: Monthly
+          data_source: Gold layer forecast versus actual
+        - name: Emergency shipments per month
+          unit: shipments
+          baseline_value: 112
+          target_value: 78
+          measurement_frequency: Monthly
+          data_source: Carrier invoices, urgency flag
+        - name: Expiry write-off
+          unit: EUR/month
+          baseline_value: 57500
+          target_value: 37500
+          measurement_frequency: Monthly
+          data_source: General ledger obsolescence account
+        - name: Planner hours in weekly cycle
+          definition: Tracked to test the released-time benefit rather than assume it.
+          unit: hours/week
+          baseline_value: 62
+          target_value: 34
+          measurement_frequency: Monthly
+          data_source: Planner self-report, sampled
+
+    roi_models:
+      - version: 1
+        horizon_years: 5
+        discount_rate: 0.12
+        currency: EUR
+        notes: >-
+          Benefits ramp at 50% in year 1 (two-depot pilot for four months,
+          then rollout) and reach full run rate from year 2. Discount rate of
+          12% is the rate the group applies to internal projects.
+        lines:
+          # Year 0 — investment
+          - {kind: cost, category: build, label: Build — platform, models, integration, year_index: 0, amount: build_cost}
+          - {kind: cost, category: change_management, label: Change management — year 0, year_index: 0, amount: change_cost_y0}
+          - {kind: cost, category: license, label: Licences — year 0, year_index: 0, amount: licence_annual}
+
+          # Year 1
+          - {kind: cost, category: run, label: Run cost, year_index: 1, amount: run_cost_annual}
+          - {kind: cost, category: license, label: Licences, year_index: 1, amount: licence_annual}
+          - {kind: cost, category: change_management, label: Change management — reinforcement, year_index: 1, amount: change_cost_y1}
+          - {kind: benefit, category: loss_avoidance, label: Stock-out margin recovered (50% ramp), year_index: 1, amount: benefit_stockout, quantity: 0.5}
+          - {kind: benefit, category: loss_avoidance, label: Expedited freight avoided (50% ramp), year_index: 1, amount: benefit_expedite, quantity: 0.5}
+          - {kind: benefit, category: loss_avoidance, label: Corrective transfers avoided (50% ramp), year_index: 1, amount: benefit_transfers, quantity: 0.5}
+          - {kind: benefit, category: loss_avoidance, label: Expiry write-off avoided (50% ramp), year_index: 1, amount: benefit_expiry, quantity: 0.5}
+          - {kind: benefit, category: labour_saving, label: Planner time released (50% ramp), year_index: 1, amount: benefit_planner_time, quantity: 0.5}
+
+          # Years 2-4 — full run rate
+          - {kind: cost, category: run, label: Run cost, year_index: 2, amount: run_cost_annual}
+          - {kind: cost, category: license, label: Licences, year_index: 2, amount: licence_annual}
+          - {kind: benefit, category: loss_avoidance, label: Stock-out margin recovered, year_index: 2, amount: benefit_stockout}
+          - {kind: benefit, category: loss_avoidance, label: Expedited freight avoided, year_index: 2, amount: benefit_expedite}
+          - {kind: benefit, category: loss_avoidance, label: Corrective transfers avoided, year_index: 2, amount: benefit_transfers}
+          - {kind: benefit, category: loss_avoidance, label: Expiry write-off avoided, year_index: 2, amount: benefit_expiry}
+          - {kind: benefit, category: labour_saving, label: Planner time released, year_index: 2, amount: benefit_planner_time}
+
+          - {kind: cost, category: run, label: Run cost, year_index: 3, amount: run_cost_annual}
+          - {kind: cost, category: license, label: Licences, year_index: 3, amount: licence_annual}
+          - {kind: benefit, category: loss_avoidance, label: Stock-out margin recovered, year_index: 3, amount: benefit_stockout}
+          - {kind: benefit, category: loss_avoidance, label: Expedited freight avoided, year_index: 3, amount: benefit_expedite}
+          - {kind: benefit, category: loss_avoidance, label: Corrective transfers avoided, year_index: 3, amount: benefit_transfers}
+          - {kind: benefit, category: loss_avoidance, label: Expiry write-off avoided, year_index: 3, amount: benefit_expiry}
+          - {kind: benefit, category: labour_saving, label: Planner time released, year_index: 3, amount: benefit_planner_time}
+
+          - {kind: cost, category: run, label: Run cost, year_index: 4, amount: run_cost_annual}
+          - {kind: cost, category: license, label: Licences, year_index: 4, amount: licence_annual}
+          - {kind: benefit, category: loss_avoidance, label: Stock-out margin recovered, year_index: 4, amount: benefit_stockout}
+          - {kind: benefit, category: loss_avoidance, label: Expedited freight avoided, year_index: 4, amount: benefit_expedite}
+          - {kind: benefit, category: loss_avoidance, label: Corrective transfers avoided, year_index: 4, amount: benefit_transfers}
+          - {kind: benefit, category: loss_avoidance, label: Expiry write-off avoided, year_index: 4, amount: benefit_expiry}
+          - {kind: benefit, category: labour_saving, label: Planner time released, year_index: 4, amount: benefit_planner_time}
+
+    reviews:
+      - reviewed_on: 2026-07-19
+        roi_model_version: 1
+        overall_score: 6.28
+        verdict: >-
+          Conditionally supportable. The problem is real and the architecture
+          is proportionate, but the benefit side rests on a reduction rate
+          borrowed from another sector, and one benefit is not cash at all.
+          Come back with the pilot designed as a measurement, not as a rollout
+          with two extra steps.
+        summary: >-
+          Strongest on narrative and on technical feasibility. Weakest on risk:
+          the case names risks in prose but never sizes them, and there is no
+          stated point at which the programme would be stopped.
+        scores:
+          - criterion: assumption_rigour
+            score: 6.0
+            comment: >-
+              Sources are named and ranges are honest, which is more than most
+              cases manage. Marked down because the three weakest assumptions
+              carry the most weight, and because the 707k gap between the
+              bottom-up total and the claimed 4.2M is displayed but never
+              explained.
+          - criterion: technical_feasibility
+            score: 7.5
+            comment: >-
+              Correctly identifies this as a forecasting and optimisation
+              problem rather than an LLM one, and says so despite the director
+              asking for AI. Data gaps are named as gaps. Loses points for
+              treating product master quality as a risk rather than
+              investigating it before committing to a build estimate.
+          - criterion: roi_credibility
+            score: 5.5
+            comment: >-
+              Run costs, licences and change management are all present, which
+              is unusual and creditable. Undermined by benefit_stockout, whose
+              2.3 point improvement comes from an unrelated sector, and by
+              benefit_planner_time, which is not cash.
+          - criterion: narrative_clarity
+            score: 8.0
+            comment: >-
+              Symptom to cause to solution to number reads cleanly and the
+              recommendation is stated rather than buried.
+          - criterion: risk_management
+            score: 4.0
+            comment: >-
+              Risks are listed, not sized, and none is carried into the
+              financial model. No kill criterion.
+        challenges:
+          - persona: cfo
+            severity: blocking
+            target_assumption: benefit_planner_time
+            challenge: >-
+              Ninety-six thousand euros of "planner time released" is not a
+              saving. Nobody leaves, no overtime budget is cut, and the four
+              planners will fill the time. Remove it from the base case or
+              show me the signed commitment to reduce the overtime budget by
+              that amount.
+            evidence_demanded: >-
+              A written commitment from operations to cut the overtime budget,
+              or the line comes out.
+          - persona: cfo
+            severity: major
+            target_assumption: benefit_stockout
+            challenge: >-
+              The whole case turns on the stock-out rate falling from 6.1% to
+              3.8%. That number comes from a vendor case study in a different
+              sector with different demand volatility. What does it look like
+              at half that improvement?
+            evidence_demanded: >-
+              Either a backtest of the forecast on your own 36 months of
+              history, or the base case rebuilt on a 1 point improvement.
+          - persona: cfo
+            severity: major
+            target_area: Reconciliation to the claimed figure
+            challenge: >-
+              Your tree adds up to 3.49 million. The director said 4.2. You
+              have shown me the gap without explaining it. Either the
+              director's number is wrong, in which case say so, or you are
+              missing 700 thousand euros of causes.
+            evidence_demanded: Where the remaining 707k sits, or a statement that it does not exist.
+          - persona: coo
+            severity: major
+            target_assumption: planner_overtime_hours
+            challenge: >-
+              You have attributed every overtime hour in the planning and
+              depot supervision population to replanning. My supervisors do
+              stock counts, customer escalations and shift cover with those
+              hours. That figure is inflated and you know it — you wrote as
+              much in the rationale.
+            evidence_demanded: A two-week time sample, split by activity.
+          - persona: coo
+            severity: blocking
+            target_area: Adoption
+            challenge: >-
+              Four planners have run this on their own spreadsheet for years.
+              Your plan tells them what to order and asks them to approve it.
+              If they do not trust the first month of proposals they will
+              override every one and you will have built an expensive
+              suggestion box. Where do they appear in your plan before go-live?
+            evidence_demanded: >-
+              A design that has the planners building the safety stock logic
+              with you, not receiving it.
+          - persona: cio
+            severity: major
+            target_area: Data availability
+            challenge: >-
+              Shortage reasons are free text and the portal does not record
+              abandoned orders at all. You have listed both as gaps to close
+              "before build" without costing either. Making a field mandatory
+              at pick confirmation is a WMS change, a training exercise and a
+              month of dirty data. Where is that in the 210 thousand?
+            evidence_demanded: A costed data remediation line in the ROI model.
+          - persona: cio
+            severity: minor
+            target_assumption: run_cost_annual
+            challenge: >-
+              Zero point six FTE to run a forecasting service, two models, a
+              lakehouse and a semantic layer, in an organisation with no data
+              engineers today. That is the run cost of a mature team, not of
+              the first one.
+            evidence_demanded: Run cost benchmarked against a first-platform organisation.
+          - persona: cio
+            severity: minor
+            target_area: Exit criteria
+            challenge: >-
+              The pilot has a success definition and no failure definition.
+              What result at month four stops this?
+            evidence_demanded: A stated kill criterion with a threshold.

@@ -1,0 +1,54 @@
+# The rubric the review board scores against. Weights sum to 1.0.
+#
+# Stored as data rather than baked into the prompt because the prompt file and
+# the front end must score against the same rubric, and because rebalancing
+# the weights later must not silently rewrite past scores — old reviews keep
+# the `overall_score` computed under the weights in force at the time.
+review_criteria:
+  - code: assumption_rigour
+    name: Rigour of assumptions
+    ordinal: 1
+    weight: 0.30
+    definition: >-
+      Is every figure traced to a named assumption with a stated source and an
+      honest range? Are the fragile assumptions identified as fragile by the
+      author, rather than discovered by the board? Unsourced assumptions and
+      suspiciously round numbers are penalised hardest here.
+
+  - code: technical_feasibility
+    name: Technical feasibility
+    ordinal: 2
+    weight: 0.20
+    definition: >-
+      Does the proposed data, architecture and AI component actually exist in
+      the organisation described, and can it be built by the team described in
+      the time described? Are data availability and data quality treated as
+      constraints rather than assumed away?
+
+  - code: roi_credibility
+    name: Credibility of the ROI
+    ordinal: 3
+    weight: 0.25
+    definition: >-
+      Are the benefits real cash or merely notional? Are run costs, licences,
+      change management and the cost of the people doing the work all present?
+      Phantom gains — headcount "freed" but never removed from the payroll —
+      are the primary target of this criterion.
+
+  - code: narrative_clarity
+    name: Clarity of the narrative
+    ordinal: 4
+    weight: 0.15
+    definition: >-
+      Would a director follow the argument from symptom to cause to solution
+      to number without being walked through it? Is the recommendation stated,
+      or buried?
+
+  - code: risk_management
+    name: Risk management
+    ordinal: 5
+    weight: 0.10
+    definition: >-
+      Are the ways this fails named, sized and mitigated? Is there a stated
+      point at which the programme would be stopped? A case with no downside
+      scenario scores zero here regardless of its other qualities.

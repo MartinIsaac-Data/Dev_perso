@@ -1,0 +1,543 @@
+# The skill taxonomy: nodes and edges of the directed acyclic graph.
+#
+# An edge `from -> to` means: `from` must be held at `required_level` before
+# `to` can be meaningfully learned. Edges are claims about learning order, not
+# about topic similarity — `dax` depends on `dimensional_modelling` because
+# writing DAX against a badly modelled dataset teaches you the wrong lessons,
+# not because the two are related subjects.
+#
+# `decay_months` is per skill because decay rates genuinely differ. Hands-on
+# syntax rots in under a year; conceptual and social skills barely rot at all.
+# A taxonomy with one global decay constant flags the wrong things.
+
+domains:
+  - code: data_foundations
+    name: Data foundations
+    ordinal: 1
+  - code: data_engineering
+    name: Data engineering
+    ordinal: 2
+  - code: analytics_bi
+    name: Analytics & BI
+    ordinal: 3
+  - code: ai_ml
+    name: AI & machine learning
+    ordinal: 4
+  - code: cloud_platform
+    name: Cloud & platform engineering
+    ordinal: 5
+  - code: business_finance
+    name: Business & finance
+    ordinal: 6
+  - code: operations_supplychain
+    name: Operations & supply chain
+    ordinal: 7
+  - code: consulting_leadership
+    name: Consulting & leadership
+    ordinal: 8
+
+skills:
+  # --- Data foundations ---------------------------------------------------
+  - code: relational_modelling_basics
+    name: Relational modelling fundamentals
+    domain: data_foundations
+    decay_months: 24
+    description: Keys, normal forms, referential integrity, cardinality.
+  - code: sql_core
+    name: SQL — querying, joins, aggregation
+    domain: data_foundations
+    decay_months: 9
+  - code: sql_set_operations
+    name: SQL — CTEs, set operations, recursion
+    domain: data_foundations
+    decay_months: 9
+  - code: sql_window_functions
+    name: SQL — window functions and frames
+    domain: data_foundations
+    decay_months: 9
+    description: >-
+      The dividing line between reporting SQL and analytical SQL. Ranking,
+      running totals, period comparison, gap and island detection.
+  - code: sql_performance
+    name: SQL — execution plans and indexing
+    domain: data_foundations
+    decay_months: 12
+  - code: data_quality
+    name: Data quality and profiling
+    domain: data_foundations
+    decay_months: 15
+  - code: dimensional_modelling
+    name: Dimensional modelling (star schemas)
+    domain: data_foundations
+    decay_months: 18
+    description: >-
+      Facts, dimensions, grain, conformed dimensions. The single most
+      transferable modelling skill in this entire taxonomy.
+  - code: slowly_changing_dimensions
+    name: Slowly changing dimensions
+    domain: data_foundations
+    decay_months: 18
+  - code: semantic_layer
+    name: Semantic and metrics layer design
+    domain: data_foundations
+    decay_months: 18
+  - code: data_vault
+    name: Data Vault and ensemble modelling
+    domain: data_foundations
+    decay_months: 24
+
+  # --- Data engineering ---------------------------------------------------
+  - code: python_core
+    name: Python — language core
+    domain: data_engineering
+    decay_months: 9
+  - code: python_data
+    name: Python for data (pandas, polars, pyarrow)
+    domain: data_engineering
+    decay_months: 9
+  - code: etl_design
+    name: ETL/ELT pipeline design
+    domain: data_engineering
+    decay_months: 12
+  - code: orchestration
+    name: Pipeline orchestration and scheduling
+    domain: data_engineering
+    decay_months: 12
+  - code: dbt_transformations
+    name: SQL transformation frameworks (dbt-style)
+    domain: data_engineering
+    decay_months: 12
+  - code: file_formats
+    name: Columnar formats and partitioning
+    domain: data_engineering
+    decay_months: 15
+    description: Parquet, Delta, partition strategy, file sizing, compaction.
+  - code: lakehouse_architecture
+    name: Lakehouse architecture
+    domain: data_engineering
+    decay_months: 15
+  - code: streaming_basics
+    name: Streaming and change data capture
+    domain: data_engineering
+    decay_months: 12
+  - code: data_contracts
+    name: Data contracts and schema evolution
+    domain: data_engineering
+    decay_months: 18
+  - code: testing_data_pipelines
+    name: Pipeline testing and observability
+    domain: data_engineering
+    decay_months: 12
+
+  # --- Analytics & BI -----------------------------------------------------
+  - code: excel_advanced
+    name: Excel — advanced modelling
+    domain: analytics_bi
+    decay_months: 24
+  - code: powerbi_desktop
+    name: Power BI — modelling and reports
+    domain: analytics_bi
+    decay_months: 9
+  - code: dax
+    name: DAX
+    domain: analytics_bi
+    decay_months: 9
+    description: >-
+      Filter context, row context, context transition. The part most Power BI
+      users never actually learn, and the part that separates a report author
+      from a data modeller.
+  - code: powerbi_service
+    name: Power BI Service — deployment, workspaces, RLS
+    domain: analytics_bi
+    decay_months: 12
+  - code: report_design
+    name: Analytical report and dashboard design
+    domain: analytics_bi
+    decay_months: 18
+  - code: storytelling_data
+    name: Data storytelling for executives
+    domain: analytics_bi
+    decay_months: 24
+  - code: statistics_core
+    name: Applied statistics
+    domain: analytics_bi
+    decay_months: 18
+  - code: experiment_design
+    name: Experiment design and causal reasoning
+    domain: analytics_bi
+    decay_months: 18
+    description: >-
+      Required to answer "did the intervention work" rather than "did the
+      number move". Directly underpins credible benefit claims in a ROI model.
+  - code: forecasting
+    name: Time series forecasting
+    domain: analytics_bi
+    decay_months: 12
+
+  # --- AI & machine learning ----------------------------------------------
+  - code: ml_fundamentals
+    name: Machine learning fundamentals
+    domain: ai_ml
+    decay_months: 15
+  - code: feature_engineering
+    name: Feature engineering
+    domain: ai_ml
+    decay_months: 12
+  - code: model_evaluation
+    name: Model evaluation and validation
+    domain: ai_ml
+    decay_months: 15
+  - code: mlops
+    name: MLOps — deployment, monitoring, retraining
+    domain: ai_ml
+    decay_months: 12
+  - code: llm_fundamentals
+    name: LLM fundamentals
+    domain: ai_ml
+    decay_months: 9
+  - code: prompt_engineering
+    name: Prompt design and evaluation
+    domain: ai_ml
+    decay_months: 9
+  - code: rag_systems
+    name: Retrieval-augmented generation
+    domain: ai_ml
+    decay_months: 9
+  - code: agent_design
+    name: Agent design and tool use
+    domain: ai_ml
+    decay_months: 9
+  - code: llm_evaluation
+    name: LLM output evaluation and guardrails
+    domain: ai_ml
+    decay_months: 9
+    description: >-
+      The difference between a demo and a system anyone will run unsupervised.
+  - code: ai_risk_governance
+    name: AI risk, ethics and governance
+    domain: ai_ml
+    decay_months: 18
+  - code: optimisation_or
+    name: Operations research and optimisation
+    domain: ai_ml
+    decay_months: 18
+    description: >-
+      Routing, scheduling, allocation. In supply chain, more industrial value
+      sits here than in machine learning, and far fewer people can do it.
+  - code: computer_vision_industrial
+    name: Industrial computer vision
+    domain: ai_ml
+    decay_months: 12
+
+  # --- Cloud & platform ---------------------------------------------------
+  - code: cloud_fundamentals
+    name: Cloud fundamentals
+    domain: cloud_platform
+    decay_months: 18
+  - code: azure_core
+    name: Azure core services
+    domain: cloud_platform
+    decay_months: 12
+  - code: microsoft_fabric
+    name: Microsoft Fabric architecture
+    domain: cloud_platform
+    decay_months: 9
+  - code: azure_data_factory
+    name: Azure Data Factory and pipelines
+    domain: cloud_platform
+    decay_months: 12
+  - code: azure_synapse_sql
+    name: Synapse and SQL analytics endpoints
+    domain: cloud_platform
+    decay_months: 12
+  - code: identity_access
+    name: Identity and access management
+    domain: cloud_platform
+    decay_months: 15
+  - code: security_data
+    name: Data security and privacy
+    domain: cloud_platform
+    decay_months: 18
+  - code: cost_management_cloud
+    name: Cloud cost management (FinOps)
+    domain: cloud_platform
+    decay_months: 15
+  - code: infra_as_code
+    name: Infrastructure as code
+    domain: cloud_platform
+    decay_months: 12
+  - code: containers
+    name: Containers and deployment
+    domain: cloud_platform
+    decay_months: 12
+  - code: git_workflows
+    name: Git and collaborative workflows
+    domain: cloud_platform
+    decay_months: 12
+  - code: api_design
+    name: API design
+    domain: cloud_platform
+    decay_months: 15
+
+  # --- Business & finance -------------------------------------------------
+  - code: corporate_finance
+    name: Corporate finance fundamentals
+    domain: business_finance
+    decay_months: 24
+  - code: cost_accounting
+    name: Cost accounting and unit economics
+    domain: business_finance
+    decay_months: 24
+  - code: npv_discounting
+    name: Discounting, NPV and payback
+    domain: business_finance
+    decay_months: 24
+  - code: roi_modelling
+    name: ROI and investment modelling
+    domain: business_finance
+    decay_months: 18
+    description: >-
+      The skill that makes every technical skill in this taxonomy sellable.
+      Without it the answer to "what will this return" is a shrug.
+  - code: sensitivity_analysis
+    name: Sensitivity and scenario analysis
+    domain: business_finance
+    decay_months: 18
+  - code: business_case_writing
+    name: Business case construction
+    domain: business_finance
+    decay_months: 18
+  - code: pricing_commercial
+    name: Commercial and pricing structures
+    domain: business_finance
+    decay_months: 24
+
+  # --- Operations & supply chain ------------------------------------------
+  - code: supply_chain_core
+    name: Supply chain fundamentals
+    domain: operations_supplychain
+    decay_months: 36
+  - code: inventory_management
+    name: Inventory and replenishment
+    domain: operations_supplychain
+    decay_months: 24
+  - code: demand_planning
+    name: Demand planning
+    domain: operations_supplychain
+    decay_months: 18
+  - code: procurement
+    name: Procurement and supplier management
+    domain: operations_supplychain
+    decay_months: 24
+  - code: warehouse_ops
+    name: Warehouse and logistics operations
+    domain: operations_supplychain
+    decay_months: 24
+  - code: s_and_op
+    name: S&OP and integrated business planning
+    domain: operations_supplychain
+    decay_months: 18
+  - code: process_mapping
+    name: Process mapping and analysis
+    domain: operations_supplychain
+    decay_months: 24
+  - code: lean_six_sigma
+    name: Lean and Six Sigma
+    domain: operations_supplychain
+    decay_months: 24
+  - code: erp_systems
+    name: ERP systems and their data structures
+    domain: operations_supplychain
+    decay_months: 18
+    description: >-
+      Where the data actually lives. Knowing the tables behind the screens is
+      what makes an ERP-to-platform project estimable rather than hopeful.
+  - code: kpi_design_ops
+    name: Operational KPI design
+    domain: operations_supplychain
+    decay_months: 24
+
+  # --- Consulting & leadership --------------------------------------------
+  - code: issue_trees
+    name: Issue trees and hypothesis-driven problem solving
+    domain: consulting_leadership
+    decay_months: 24
+    description: >-
+      Decomposing "we lose 20 million a year" into mutually exclusive,
+      collectively exhaustive branches that can each be sized independently.
+  - code: executive_communication
+    name: Executive communication
+    domain: consulting_leadership
+    decay_months: 24
+  - code: stakeholder_management
+    name: Stakeholder management
+    domain: consulting_leadership
+    decay_months: 24
+  - code: discovery_workshops
+    name: Discovery and requirements workshops
+    domain: consulting_leadership
+    decay_months: 18
+  - code: change_management
+    name: Change management
+    domain: consulting_leadership
+    decay_months: 24
+  - code: data_governance
+    name: Data governance and stewardship
+    domain: consulting_leadership
+    decay_months: 18
+  - code: solution_architecture
+    name: Solution architecture
+    domain: consulting_leadership
+    decay_months: 15
+  - code: enterprise_architecture
+    name: Enterprise architecture
+    domain: consulting_leadership
+    decay_months: 18
+  - code: programme_delivery
+    name: Programme and delivery management
+    domain: consulting_leadership
+    decay_months: 18
+  - code: technical_writing
+    name: Technical writing
+    domain: consulting_leadership
+    decay_months: 12
+  - code: public_speaking
+    name: Public speaking and conference delivery
+    domain: consulting_leadership
+    decay_months: 12
+  - code: community_building
+    name: Community building and mentoring
+    domain: consulting_leadership
+    decay_months: 18
+  - code: consulting_commercial
+    name: Engagement scoping and consulting commercials
+    domain: consulting_leadership
+    decay_months: 18
+
+edges:
+  # Data foundations
+  - {from: relational_modelling_basics, to: sql_core, required_level: 2}
+  - {from: sql_core, to: sql_set_operations, required_level: 3}
+  - {from: sql_core, to: sql_window_functions, required_level: 3}
+  - {from: sql_core, to: sql_performance, required_level: 3}
+  - {from: sql_core, to: data_quality, required_level: 2}
+  - {from: relational_modelling_basics, to: dimensional_modelling, required_level: 3}
+  - {from: sql_window_functions, to: dimensional_modelling, required_level: 3}
+  - {from: sql_set_operations, to: dimensional_modelling, required_level: 3}
+  - {from: dimensional_modelling, to: slowly_changing_dimensions, required_level: 3}
+  - {from: dimensional_modelling, to: semantic_layer, required_level: 3}
+  - {from: dimensional_modelling, to: data_vault, required_level: 4}
+
+  # Data engineering
+  - {from: python_core, to: python_data, required_level: 3}
+  - {from: python_data, to: etl_design, required_level: 2}
+  - {from: sql_core, to: etl_design, required_level: 3}
+  - {from: etl_design, to: orchestration, required_level: 3}
+  - {from: etl_design, to: file_formats, required_level: 2}
+  - {from: etl_design, to: streaming_basics, required_level: 3}
+  - {from: etl_design, to: testing_data_pipelines, required_level: 3}
+  - {from: etl_design, to: data_contracts, required_level: 3}
+  - {from: data_quality, to: data_contracts, required_level: 3}
+  - {from: dimensional_modelling, to: dbt_transformations, required_level: 3}
+  - {from: git_workflows, to: dbt_transformations, required_level: 3}
+  - {from: file_formats, to: lakehouse_architecture, required_level: 3}
+  - {from: sql_performance, to: lakehouse_architecture, required_level: 3}
+  - {from: python_core, to: testing_data_pipelines, required_level: 3}
+
+  # Analytics & BI
+  - {from: excel_advanced, to: powerbi_desktop, required_level: 3}
+  - {from: powerbi_desktop, to: powerbi_service, required_level: 3}
+  - {from: powerbi_desktop, to: report_design, required_level: 3}
+  - {from: powerbi_desktop, to: dax, required_level: 3}
+  - {from: dimensional_modelling, to: dax, required_level: 3}
+  - {from: dax, to: semantic_layer, required_level: 3}
+  - {from: report_design, to: storytelling_data, required_level: 3}
+  - {from: executive_communication, to: storytelling_data, required_level: 3}
+  - {from: statistics_core, to: experiment_design, required_level: 3}
+  - {from: statistics_core, to: forecasting, required_level: 3}
+  - {from: python_data, to: forecasting, required_level: 3}
+  - {from: identity_access, to: powerbi_service, required_level: 2}
+
+  # AI & machine learning
+  - {from: statistics_core, to: ml_fundamentals, required_level: 3}
+  - {from: python_data, to: ml_fundamentals, required_level: 3}
+  - {from: ml_fundamentals, to: feature_engineering, required_level: 3}
+  - {from: ml_fundamentals, to: model_evaluation, required_level: 3}
+  - {from: model_evaluation, to: mlops, required_level: 3}
+  - {from: containers, to: mlops, required_level: 3}
+  - {from: orchestration, to: mlops, required_level: 3}
+  - {from: llm_fundamentals, to: prompt_engineering, required_level: 3}
+  - {from: prompt_engineering, to: rag_systems, required_level: 3}
+  - {from: prompt_engineering, to: agent_design, required_level: 3}
+  - {from: rag_systems, to: agent_design, required_level: 3}
+  - {from: api_design, to: agent_design, required_level: 3}
+  - {from: prompt_engineering, to: llm_evaluation, required_level: 3}
+  - {from: model_evaluation, to: llm_evaluation, required_level: 3}
+  - {from: llm_fundamentals, to: ai_risk_governance, required_level: 3}
+  - {from: data_governance, to: ai_risk_governance, required_level: 3}
+  - {from: statistics_core, to: optimisation_or, required_level: 3}
+  - {from: python_data, to: optimisation_or, required_level: 3}
+  - {from: ml_fundamentals, to: computer_vision_industrial, required_level: 3}
+
+  # Cloud & platform
+  - {from: cloud_fundamentals, to: azure_core, required_level: 3}
+  - {from: azure_core, to: azure_data_factory, required_level: 3}
+  - {from: etl_design, to: azure_data_factory, required_level: 3}
+  - {from: azure_core, to: identity_access, required_level: 3}
+  - {from: azure_core, to: azure_synapse_sql, required_level: 3}
+  - {from: dimensional_modelling, to: azure_synapse_sql, required_level: 3}
+  - {from: azure_core, to: microsoft_fabric, required_level: 3}
+  - {from: lakehouse_architecture, to: microsoft_fabric, required_level: 3}
+  - {from: cloud_fundamentals, to: cost_management_cloud, required_level: 3}
+  - {from: cloud_fundamentals, to: infra_as_code, required_level: 3}
+  - {from: git_workflows, to: infra_as_code, required_level: 3}
+  - {from: git_workflows, to: containers, required_level: 3}
+  - {from: identity_access, to: security_data, required_level: 3}
+  - {from: python_core, to: api_design, required_level: 3}
+
+  # Business & finance
+  - {from: corporate_finance, to: npv_discounting, required_level: 3}
+  - {from: corporate_finance, to: roi_modelling, required_level: 3}
+  - {from: cost_accounting, to: roi_modelling, required_level: 3}
+  - {from: npv_discounting, to: roi_modelling, required_level: 3}
+  - {from: roi_modelling, to: sensitivity_analysis, required_level: 3}
+  - {from: roi_modelling, to: business_case_writing, required_level: 3}
+  - {from: issue_trees, to: business_case_writing, required_level: 3}
+  - {from: executive_communication, to: business_case_writing, required_level: 3}
+  - {from: corporate_finance, to: pricing_commercial, required_level: 3}
+
+  # Operations & supply chain
+  - {from: supply_chain_core, to: inventory_management, required_level: 3}
+  - {from: supply_chain_core, to: demand_planning, required_level: 3}
+  - {from: supply_chain_core, to: procurement, required_level: 3}
+  - {from: supply_chain_core, to: warehouse_ops, required_level: 3}
+  - {from: supply_chain_core, to: process_mapping, required_level: 2}
+  - {from: supply_chain_core, to: erp_systems, required_level: 3}
+  - {from: forecasting, to: demand_planning, required_level: 3}
+  - {from: demand_planning, to: s_and_op, required_level: 3}
+  - {from: inventory_management, to: s_and_op, required_level: 3}
+  - {from: process_mapping, to: lean_six_sigma, required_level: 3}
+  - {from: process_mapping, to: kpi_design_ops, required_level: 3}
+
+  # Consulting & leadership
+  - {from: executive_communication, to: stakeholder_management, required_level: 3}
+  - {from: stakeholder_management, to: discovery_workshops, required_level: 3}
+  - {from: issue_trees, to: discovery_workshops, required_level: 3}
+  - {from: stakeholder_management, to: change_management, required_level: 3}
+  - {from: process_mapping, to: change_management, required_level: 3}
+  - {from: stakeholder_management, to: programme_delivery, required_level: 3}
+  - {from: security_data, to: data_governance, required_level: 3}
+  - {from: data_contracts, to: data_governance, required_level: 3}
+  - {from: lakehouse_architecture, to: solution_architecture, required_level: 3}
+  - {from: microsoft_fabric, to: solution_architecture, required_level: 3}
+  - {from: api_design, to: solution_architecture, required_level: 3}
+  - {from: security_data, to: solution_architecture, required_level: 3}
+  - {from: solution_architecture, to: enterprise_architecture, required_level: 4}
+  - {from: data_governance, to: enterprise_architecture, required_level: 3}
+  - {from: executive_communication, to: technical_writing, required_level: 2}
+  - {from: executive_communication, to: public_speaking, required_level: 3}
+  - {from: public_speaking, to: community_building, required_level: 3}
+  - {from: technical_writing, to: community_building, required_level: 3}
+  - {from: business_case_writing, to: consulting_commercial, required_level: 3}
+  - {from: pricing_commercial, to: consulting_commercial, required_level: 3}
+  - {from: stakeholder_management, to: consulting_commercial, required_level: 3}

@@ -1,0 +1,62 @@
+# One command to a running system: `docker compose up`.
+#
+# The default stack is SQLite only — no database container, no network
+# dependency, nothing to wait for. That is what "local-first" means here.
+#
+# The `postgres` profile exists to prove the portability claim rather than to
+# be used day to day. Running the test suite against it is the honest way to
+# check that the schema really is backend-agnostic:
+#
+#   docker compose --profile postgres up -d db
+#   TOS_DATABASE_URL=postgresql+psycopg://tos:tos@localhost:5432/tos \
+#     python -m alembic upgrade head
+#
+# Deliberately absent: a message broker, a cache, a worker container. Nothing
+# in this application is asynchronous enough to need them, and adding them
+# before there is a queue to drain would be architecture as decoration.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Inside the container the database lives on the mounted volume.
+      TOS_DATABASE_URL: sqlite+pysqlite:////app/data/transformation_os.db
+      # Passed through from the host shell or a .env file; absent by default,
+      # in which case the agent endpoints report themselves as unconfigured
+      # rather than failing at call time.
+      TOS_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./exports:/app/exports
+      # Source is mounted so edits are visible without a rebuild. Remove this
+      # line to run the image as built.
+      - ./backend:/app/backend
+      - ./sql:/app/sql
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+  db:
+    profiles: ["postgres"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tos
+      POSTGRES_PASSWORD: tos
+      POSTGRES_DB: tos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

@@ -1,0 +1,353 @@
+# Demonstration dataset. Entirely fictional.
+#
+# It exists so the application can be shown to somebody without exposing a
+# single real figure, and so the graph, the quota alerts and the market gap
+# have something to say on a fresh install. It is deliberately *not* a
+# flattering dataset: there is a quarter with nothing published, several
+# skills past their decay window, and a business case that scored 6.28.
+# A demo where everything is green demonstrates nothing.
+#
+# Demo "today" is around July 2026.
+
+profile:
+  code: demo
+  display_name: A. Ndiaye (demonstration profile)
+  based_in: Douala, Cameroon
+  currency: EUR
+
+deliverables:
+  - ref: warehouse_dashboard
+    type: project
+    title: Depot throughput dashboard — 4 sites
+    status: published
+    started_on: 2025-06-02
+    published_on: 2025-08-14
+    summary: >-
+      Star-schema model over WMS extracts feeding a Power BI report on picking
+      throughput, dock-to-stock time and order line fill rate. First model
+      built dimensionally rather than as a flat extract.
+    artifact_url: https://github.com/example/depot-throughput
+    skills:
+      - {skill: powerbi_desktop, contribution: 3}
+      - {skill: dimensional_modelling, contribution: 3}
+      - {skill: sql_core, contribution: 2}
+      - {skill: warehouse_ops, contribution: 2}
+    impacts:
+      - {metric: internal_users, value: 14, unit: people, measured_on: 2025-10-01, source: Power BI usage metrics}
+
+  - ref: sql_window_article
+    type: article
+    title: "Window functions against a real WMS extract: seven patterns"
+    status: published
+    started_on: 2025-09-08
+    published_on: 2025-09-29
+    summary: >-
+      Running totals, gap-and-island detection on stock movements, and period
+      comparison without self-joins, written against an anonymised extract.
+    artifact_url: https://example.com/blog/window-functions-wms
+    skills:
+      - {skill: sql_window_functions, contribution: 3}
+      - {skill: technical_writing, contribution: 2}
+    impacts:
+      - {metric: views, value: 2140, unit: views, measured_on: 2026-01-15, source: site analytics}
+      - {metric: views, value: 3480, unit: views, measured_on: 2026-07-01, source: site analytics}
+
+  - ref: pl300
+    type: certification
+    title: Microsoft PL-300 — Power BI Data Analyst
+    status: published
+    started_on: 2025-08-01
+    published_on: 2025-11-21
+    skills:
+      - {skill: powerbi_desktop, contribution: 3}
+      - {skill: dax, contribution: 2}
+      - {skill: powerbi_service, contribution: 2}
+
+  - ref: dax_article
+    type: article
+    title: Context transition, explained with a stock ledger
+    status: published
+    started_on: 2025-11-30
+    published_on: 2025-12-18
+    summary: >-
+      Why CALCULATE behaves the way it does, worked through on a table every
+      supply chain analyst already understands.
+    artifact_url: https://example.com/blog/context-transition-stock-ledger
+    skills:
+      - {skill: dax, contribution: 3}
+      - {skill: technical_writing, contribution: 2}
+    impacts:
+      - {metric: views, value: 5620, unit: views, measured_on: 2026-07-01, source: site analytics}
+
+  # Q1 2026 is deliberately empty. The quarterly quota check must flag it.
+
+  - ref: etl_pipeline
+    type: project
+    title: ERP to lakehouse ingestion — incremental loads
+    status: published
+    started_on: 2026-04-06
+    published_on: 2026-06-12
+    summary: >-
+      Python ingestion of ERP order and stock tables into partitioned Parquet,
+      with watermark-based incremental loading and row count reconciliation
+      against source.
+    artifact_url: https://github.com/example/erp-lakehouse-ingest
+    skills:
+      - {skill: python_data, contribution: 3}
+      - {skill: etl_design, contribution: 3}
+      - {skill: file_formats, contribution: 2}
+      - {skill: erp_systems, contribution: 2}
+      - {skill: testing_data_pipelines, contribution: 2}
+    impacts:
+      - {metric: stars, value: 11, unit: stars, measured_on: 2026-07-20, source: GitHub}
+
+  - ref: meetup_talk
+    type: talk
+    title: "Stop building flat extracts: dimensional modelling for operations teams"
+    status: published
+    started_on: 2026-05-02
+    published_on: 2026-06-27
+    summary: Douala data meetup, roughly 40 attendees.
+    skills:
+      - {skill: dimensional_modelling, contribution: 3}
+      - {skill: public_speaking, contribution: 3}
+      - {skill: storytelling_data, contribution: 2}
+    impacts:
+      - {metric: attendees, value: 41, unit: people, measured_on: 2026-06-27, source: organiser headcount}
+
+  - ref: stockout_case
+    type: case_study
+    title: Distributor stock-out and expedited freight case
+    status: published
+    started_on: 2026-06-15
+    published_on: 2026-07-19
+    summary: >-
+      Fully quantified case with issue tree, five-year ROI model and a review
+      board critique. Scored 6.28 on the first pass.
+    skills:
+      - {skill: issue_trees, contribution: 3}
+      - {skill: roi_modelling, contribution: 3}
+      - {skill: sensitivity_analysis, contribution: 2}
+      - {skill: inventory_management, contribution: 2}
+    impacts: []
+
+  - ref: fabric_project
+    type: project
+    title: Fabric medallion architecture — proof of concept
+    status: in_progress
+    started_on: 2026-07-06
+    summary: >-
+      Bronze/silver/gold layering in Microsoft Fabric over the same ERP
+      extracts, to compare against the hand-rolled Python pipeline.
+    skills:
+      - {skill: microsoft_fabric, contribution: 3}
+      - {skill: lakehouse_architecture, contribution: 2}
+      - {skill: azure_core, contribution: 2}
+
+  - ref: forecasting_project
+    type: project
+    title: Baseline demand forecast for 200 SKUs
+    status: planned
+    skills:
+      - {skill: forecasting, contribution: 3}
+      - {skill: demand_planning, contribution: 2}
+
+# Current position. Levels here must be justifiable by the level_changes
+# below — that is the rule the schema enforces on any promotion.
+skill_states:
+  # Strong, actively practised
+  - {skill: excel_advanced, current_level: 4, target_level: 4, last_practised_on: 2026-06-30}
+  - {skill: powerbi_desktop, current_level: 4, target_level: 5, last_practised_on: 2026-06-12}
+  - {skill: dax, current_level: 3, target_level: 5, last_practised_on: 2026-05-20}
+  - {skill: sql_core, current_level: 4, target_level: 5, last_practised_on: 2026-07-18}
+  - {skill: sql_window_functions, current_level: 3, target_level: 5, last_practised_on: 2026-06-12}
+  - {skill: dimensional_modelling, current_level: 3, target_level: 5, last_practised_on: 2026-06-27}
+  - {skill: relational_modelling_basics, current_level: 4, target_level: 4, last_practised_on: 2026-06-12}
+  - {skill: python_core, current_level: 3, target_level: 5, last_practised_on: 2026-07-22}
+  - {skill: python_data, current_level: 3, target_level: 5, last_practised_on: 2026-07-22}
+  - {skill: etl_design, current_level: 3, target_level: 5, last_practised_on: 2026-06-12}
+  - {skill: file_formats, current_level: 2, target_level: 4, last_practised_on: 2026-06-12}
+  - {skill: git_workflows, current_level: 3, target_level: 4, last_practised_on: 2026-07-22}
+
+  # Operational base — strong but not recently exercised in a data context
+  - {skill: supply_chain_core, current_level: 4, target_level: 5, last_practised_on: 2026-03-14}
+  - {skill: inventory_management, current_level: 4, target_level: 5, last_practised_on: 2026-07-10}
+  - {skill: warehouse_ops, current_level: 4, target_level: 4, last_practised_on: 2025-08-14}
+  - {skill: erp_systems, current_level: 3, target_level: 5, last_practised_on: 2026-06-12}
+  - {skill: procurement, current_level: 3, target_level: 3, last_practised_on: 2025-04-01}
+  - {skill: demand_planning, current_level: 2, target_level: 4, last_practised_on: 2025-11-01}
+  - {skill: process_mapping, current_level: 3, target_level: 4, last_practised_on: 2026-02-20}
+  - {skill: kpi_design_ops, current_level: 3, target_level: 4, last_practised_on: 2025-08-14}
+
+  # Started, well short of target
+  - {skill: sql_set_operations, current_level: 2, target_level: 4, last_practised_on: 2026-01-30}
+  - {skill: sql_performance, current_level: 1, target_level: 4, last_practised_on: 2025-10-05}
+  - {skill: data_quality, current_level: 2, target_level: 4, last_practised_on: 2026-06-12}
+  - {skill: testing_data_pipelines, current_level: 2, target_level: 4, last_practised_on: 2026-06-12}
+  - {skill: powerbi_service, current_level: 2, target_level: 4, last_practised_on: 2025-11-21}
+  - {skill: report_design, current_level: 3, target_level: 4, last_practised_on: 2025-08-14}
+  - {skill: statistics_core, current_level: 2, target_level: 4, last_practised_on: 2025-03-10}
+  - {skill: cloud_fundamentals, current_level: 2, target_level: 4, last_practised_on: 2026-07-06}
+  - {skill: azure_core, current_level: 1, target_level: 4, last_practised_on: 2026-07-06}
+  - {skill: microsoft_fabric, current_level: 1, target_level: 5, last_practised_on: 2026-07-20}
+  - {skill: lakehouse_architecture, current_level: 1, target_level: 4, last_practised_on: 2026-07-06}
+  - {skill: containers, current_level: 1, target_level: 3, last_practised_on: 2026-07-22}
+
+  # Business and consulting side — the actual bottleneck for the target roles
+  - {skill: issue_trees, current_level: 2, target_level: 5, last_practised_on: 2026-07-19}
+  - {skill: roi_modelling, current_level: 2, target_level: 5, last_practised_on: 2026-07-19}
+  - {skill: corporate_finance, current_level: 1, target_level: 4, last_practised_on: 2026-06-20}
+  - {skill: npv_discounting, current_level: 1, target_level: 4, last_practised_on: 2026-07-19}
+  - {skill: cost_accounting, current_level: 2, target_level: 4, last_practised_on: 2026-07-19}
+  - {skill: sensitivity_analysis, current_level: 1, target_level: 4, last_practised_on: 2026-07-19}
+  - {skill: business_case_writing, current_level: 2, target_level: 5, last_practised_on: 2026-07-19}
+  - {skill: executive_communication, current_level: 3, target_level: 5, last_practised_on: 2026-06-27}
+  - {skill: stakeholder_management, current_level: 3, target_level: 5, last_practised_on: 2026-03-14}
+  - {skill: technical_writing, current_level: 3, target_level: 5, last_practised_on: 2025-12-18}
+  - {skill: public_speaking, current_level: 2, target_level: 5, last_practised_on: 2026-06-27}
+  - {skill: storytelling_data, current_level: 2, target_level: 5, last_practised_on: 2026-06-27}
+  - {skill: change_management, current_level: 1, target_level: 4, last_practised_on: 2025-06-01}
+  - {skill: data_governance, current_level: 1, target_level: 5, last_practised_on: 2025-05-01}
+  - {skill: solution_architecture, current_level: 1, target_level: 5}
+  - {skill: enterprise_architecture, current_level: 0, target_level: 5}
+
+  # AI — barely started, and the target roles all demand it
+  - {skill: llm_fundamentals, current_level: 2, target_level: 5, last_practised_on: 2026-07-19}
+  - {skill: prompt_engineering, current_level: 2, target_level: 5, last_practised_on: 2026-07-19}
+  - {skill: ml_fundamentals, current_level: 1, target_level: 4, last_practised_on: 2025-02-01}
+  - {skill: rag_systems, current_level: 0, target_level: 4}
+  - {skill: agent_design, current_level: 0, target_level: 5}
+  - {skill: llm_evaluation, current_level: 0, target_level: 4}
+  - {skill: mlops, current_level: 0, target_level: 4}
+  - {skill: forecasting, current_level: 1, target_level: 4, last_practised_on: 2025-11-01}
+  - {skill: optimisation_or, current_level: 0, target_level: 4}
+  - {skill: ai_risk_governance, current_level: 0, target_level: 4}
+
+# The evidence trail. Every promotion points at a deliverable; the schema
+# rejects any row here that raises a level without one.
+level_changes:
+  - {skill: dimensional_modelling, from_level: 1, to_level: 2, changed_on: 2025-08-14, evidence: warehouse_dashboard,
+     rationale: First star schema built and used by someone other than me.}
+  - {skill: powerbi_desktop, from_level: 3, to_level: 4, changed_on: 2025-11-21, evidence: pl300,
+     rationale: Certification plus a report in daily use across four depots.}
+  - {skill: sql_window_functions, from_level: 2, to_level: 3, changed_on: 2025-09-29, evidence: sql_window_article,
+     rationale: Had to explain the frame clause to write the article; that exposed what I did not know.}
+  - {skill: dax, from_level: 2, to_level: 3, changed_on: 2025-12-18, evidence: dax_article}
+  - {skill: python_data, from_level: 2, to_level: 3, changed_on: 2026-06-12, evidence: etl_pipeline}
+  - {skill: etl_design, from_level: 2, to_level: 3, changed_on: 2026-06-12, evidence: etl_pipeline,
+     rationale: Incremental loading with reconciliation, not a full reload script.}
+  - {skill: dimensional_modelling, from_level: 2, to_level: 3, changed_on: 2026-06-27, evidence: meetup_talk,
+     rationale: Teaching it surfaced the grain questions I had been avoiding.}
+  - {skill: issue_trees, from_level: 1, to_level: 2, changed_on: 2026-07-19, evidence: stockout_case}
+  - {skill: roi_modelling, from_level: 1, to_level: 2, changed_on: 2026-07-19, evidence: stockout_case,
+     rationale: Review board found the model credible enough to argue with, which is a start.}
+  # Decay, recorded without evidence — admitting a level has slipped must
+  # never require paperwork, or it will not be recorded at all.
+  - {skill: statistics_core, from_level: 3, to_level: 2, changed_on: 2026-04-01,
+     rationale: Eighteen months without touching it. Could not derive a confidence interval unaided.}
+
+mentions:
+  - {occurred_on: 2026-02-04, source: LinkedIn — reshared by a regional supply chain group,
+     deliverable: dax_article, note: Roughly 60 reactions, three substantive questions in comments.}
+  - {occurred_on: 2026-07-02, source: Invitation to speak at a national data conference,
+     note: "Declined: no talk ready. Recorded because it is the first inbound invitation."}
+
+job_postings:
+  - target_role: enterprise_data_architect
+    title: Enterprise Data Architect
+    company: Pan-African logistics group (anonymised)
+    location: Abidjan / hybrid
+    seniority_label: Senior
+    source: demo fixture
+    posted_on: 2026-05-12
+    captured_on: 2026-05-14
+    raw_text: >-
+      You will own the target data architecture across ERP, WMS and TMS
+      systems for eleven countries. Required: 8+ years in data, deep
+      dimensional modelling, lakehouse architecture (Databricks or Fabric),
+      strong SQL, data governance frameworks, and demonstrable experience
+      leading architecture decisions with executive stakeholders. Cloud
+      certification expected. Experience with data contracts and schema
+      evolution across acquired subsidiaries is a strong plus.
+    requirements:
+      - {raw_label: dimensional modelling, skill: dimensional_modelling, required_level: 4, importance: must_have}
+      - {raw_label: lakehouse architecture (Databricks or Fabric), skill: lakehouse_architecture, required_level: 4, importance: must_have}
+      - {raw_label: strong SQL, skill: sql_core, required_level: 4, importance: must_have}
+      - {raw_label: data governance frameworks, skill: data_governance, required_level: 4, importance: must_have}
+      - {raw_label: leading architecture decisions with executive stakeholders, skill: executive_communication, required_level: 4, importance: must_have}
+      - {raw_label: cloud certification, skill: azure_core, required_level: 3, importance: must_have}
+      - {raw_label: data contracts and schema evolution, skill: data_contracts, required_level: 3, importance: nice_to_have}
+
+  - target_role: ai_transformation_lead
+    title: AI Transformation Lead — Operations
+    company: FMCG manufacturer (anonymised)
+    location: Casablanca
+    seniority_label: Lead
+    source: demo fixture
+    posted_on: 2026-06-03
+    captured_on: 2026-06-05
+    raw_text: >-
+      Lead the applied AI portfolio across manufacturing and distribution.
+      Identify opportunities, build the business case, and drive delivery to
+      adoption. Required: proven ROI modelling and business case construction
+      at board level, hands-on understanding of LLM and agent architectures,
+      MLOps literacy, and change management across plant teams. You will be
+      measured on realised savings, not on models deployed.
+    requirements:
+      - {raw_label: ROI modelling and business case construction at board level, skill: roi_modelling, required_level: 4, importance: must_have}
+      - {raw_label: business case construction, skill: business_case_writing, required_level: 4, importance: must_have}
+      - {raw_label: LLM and agent architectures, skill: agent_design, required_level: 3, importance: must_have}
+      - {raw_label: MLOps literacy, skill: mlops, required_level: 3, importance: must_have}
+      - {raw_label: change management across plant teams, skill: change_management, required_level: 4, importance: must_have}
+      - {raw_label: measured on realised savings, skill: kpi_design_ops, required_level: 3, importance: must_have}
+
+  - target_role: industrial_ai_consultant
+    title: Industrial AI Consultant
+    company: Consultancy (anonymised)
+    location: Remote — EMEA
+    seniority_label: Manager
+    source: demo fixture
+    posted_on: 2026-06-28
+    captured_on: 2026-06-30
+    raw_text: >-
+      Advise industrial clients on applied AI: feasibility, solution design,
+      and the operating model that keeps it running after we leave. Required:
+      supply chain or manufacturing domain depth, optimisation or forecasting
+      experience, client-facing scoping, and the ability to write a defensible
+      business case. Public technical writing or speaking is valued.
+    requirements:
+      - {raw_label: supply chain or manufacturing domain depth, skill: supply_chain_core, required_level: 4, importance: must_have}
+      - {raw_label: optimisation or forecasting experience, skill: optimisation_or, required_level: 3, importance: must_have}
+      - {raw_label: forecasting experience, skill: forecasting, required_level: 3, importance: must_have}
+      - {raw_label: client-facing scoping, skill: consulting_commercial, required_level: 3, importance: must_have}
+      - {raw_label: defensible business case, skill: business_case_writing, required_level: 4, importance: must_have}
+      - {raw_label: public technical writing or speaking, skill: public_speaking, required_level: 3, importance: nice_to_have}
+
+periodic_reviews:
+  - kind: quarterly
+    period_start: 2026-04-01
+    period_end: 2026-06-30
+    body_md: |
+      **Shipped this quarter:** ERP-to-lakehouse ingestion project, one meetup
+      talk, one business case taken through review. Quota met on projects and
+      talks; article quota missed — zero published against a target of one.
+
+      **Stalled:** Fabric proof of concept opened 6 July, no commits since the
+      13th. Forecasting project has been in `planned` since February.
+
+      **At risk through decay:** warehouse operations and operational KPI
+      design last practised August 2025, both now past their decay window.
+      Statistics was downgraded from 3 to 2 in April and nothing has been done
+      since; it gates machine learning, forecasting and experiment design —
+      three skills the target roles all require.
+
+      **Against the market:** all three captured postings demand ROI modelling
+      or business case construction at level 4. Current level is 2. This is
+      the single largest gap in the profile and it is not a technical one.
+    next_action: >-
+      Take corporate finance and NPV to level 3 before opening another
+      technical project.
+    next_action_rationale: >-
+      Both gate ROI modelling, which every target role demands at level 4 and
+      which the review board scored lowest. Another pipeline project raises no
+      skill that is currently blocking anything.
