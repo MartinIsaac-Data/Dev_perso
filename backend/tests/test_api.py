@@ -271,6 +271,18 @@ class TestQuotaEndpoint:
         keys = [(r["year"], r["quarter"]) for r in rows]
         assert keys == sorted(keys)
 
+    def test_pre_trajectory_quarters_are_marked_out_of_scope(
+        self, client: TestClient
+    ) -> None:
+        rows = client.get(f"/quota-status?as_of={AS_OF}&quarters_back=10").json()
+        before = [r for r in rows if r["phase_code"] is None]
+        assert before
+        assert all(r["in_scope"] is False for r in before)
+        # And the real finding is still reported.
+        q1 = next(r for r in rows if (r["year"], r["quarter"]) == (2026, 1))
+        assert q1["in_scope"] is True
+        assert q1["is_silent"] is True
+
 
 class TestEvidenceEndpoint:
     def test_returns_claims_with_their_artefacts(self, client: TestClient) -> None:

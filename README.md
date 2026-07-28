@@ -23,14 +23,14 @@ not a portfolio.
 
 ## Status
 
-**Phase 1 backend complete.** The skill graph and deliverable engine are
-queryable over HTTP; the front end is next.
+**Phase 1 complete.** The skill graph and deliverable engine are queryable
+over HTTP and usable in a browser.
 
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Repository, Docker, migrations, data model, seeds | **done** |
 | 1a | Skill Graph + Deliverable Engine services and API | **done** |
-| 1b | Minimal front end (Vite + React + TypeScript) | next |
+| 1b | Front end: five views, Vite + React + TypeScript | **done** |
 | 2 | Business Case Lab: ROI model, scenarios, sensitivity | pending |
 | 3 | Agents: review board, posting extraction, periodic review | pending |
 | 4 | Star schema, SQL transformations, Parquet export for Power BI | pending |
@@ -40,8 +40,12 @@ queryable over HTTP; the front end is next.
 ## Getting started
 
 ```bash
-make setup     # dependencies, schema, reference taxonomy, demo profile
-make run       # http://localhost:8000/docs
+make setup        # dependencies, schema, reference taxonomy, demo profile
+make run          # API on http://localhost:8000/docs
+
+# in a second terminal
+make web-install
+make web          # interface on http://localhost:5173
 ```
 
 Or with the container:
@@ -55,7 +59,7 @@ Verify the install:
 ```bash
 make status    # what is in the database
 make graph     # graph integrity and critical path
-make test      # 155 tests
+make check     # lint, 158 backend tests, front-end type check
 ```
 
 Expected output from `make graph` on a fresh install:
@@ -241,12 +245,51 @@ backend/
   seeds/
     reference/      Taxonomy, levels, phases, quotas, rubric — upserted, idempotent
     demo/           Fictional demonstration dataset
-  tests/            155 tests: graph, services, API, schema rules, seeds, portability
+  tests/            158 tests: graph, services, API, schema rules, seeds, portability
+frontend/
+  src/
+    api/            Typed client and hand-written response types
+    components/     Primitives and the skill neighbourhood graph
+    views/          Dashboard, skills, deliverables, quotas, evidence
 sql/
   transformations/  Versioned SQL building the star schema   (Phase 4)
   views/            Clean views for Power BI                 (Phase 4)
 exports/            Parquet output                           (Phase 4)
 ```
+
+---
+
+## Interface
+
+Five views, at `http://localhost:5173`.
+
+| View | What it is for |
+| --- | --- |
+| **Dashboard** | What to work on, what is decaying, which quarters were missed |
+| **Skill graph** | Every skill by domain, with a neighbourhood view per skill |
+| **Deliverables** | The evidence base, and the form to add to it |
+| **Quotas** | Quarter by quarter, silent quarters flagged |
+| **Evidence** | Every claim with its artefacts, undefensible ones marked |
+
+Three decisions worth knowing:
+
+**The graph is drawn one neighbourhood at a time.** A force-directed layout of
+83 nodes and 111 edges is a hairball that looks like a graph and answers no
+question. Selecting a skill shows its direct prerequisites on the left —
+coloured by whether they are satisfied — and its direct dependents on the
+right. That answers "why can I not start this yet", which is the question
+somebody actually has.
+
+**Levels are five segments, not a number.** Filled segments are the current
+level, dashed outlines are the distance to target. The gap is the thing worth
+seeing at a glance and `3/5` does not show it. Colour is a single hue: a skill
+at level 2 is not "bad", it is at level 2. Red is reserved for decay and for
+an undefensible claim.
+
+**A quarter before the trajectory began cannot fail it.** Quarters outside any
+phase are rendered neutrally and excluded from every count. Reporting the
+history that predates the plan as a run of missed quarters would be exactly
+the kind of dishonest metric this system exists to avoid.
 
 ---
 

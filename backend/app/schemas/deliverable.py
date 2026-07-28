@@ -128,6 +128,11 @@ class QuarterStatusOut(BaseModel):
     phase_code: str | None = None
     phase_name: str | None = None
     is_current: bool
+    in_scope: bool = Field(
+        description="Whether the trajectory demanded anything of this quarter. "
+        "`met` and `is_silent` are meaningless when false — a quarter that "
+        "predates the plan cannot fail it."
+    )
     met: bool
     is_silent: bool
     total_published: int

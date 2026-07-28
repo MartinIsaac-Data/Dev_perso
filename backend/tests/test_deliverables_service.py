@@ -128,6 +128,33 @@ class TestQuotaStatus:
         assert statuses[(2025, 4)].phase_code is None
         assert statuses[(2025, 4)].lines == []
 
+    def test_quarters_before_the_trajectory_are_out_of_scope(
+        self, demo_session: Session, demo_profile_id: int
+    ) -> None:
+        """A quarter that predates the plan cannot fail it.
+
+        Without this distinction the history that existed before the
+        trajectory began is reported as a run of silent quarters — a metric
+        that punishes the past for not having had a target.
+        """
+        statuses = {
+            (s.year, s.quarter): s
+            for s in quota_status(demo_session, demo_profile_id, AS_OF, quarters_back=10)
+        }
+        assert statuses[(2025, 2)].is_silent, "factually nothing was published"
+        assert not statuses[(2025, 2)].in_scope, "but nothing was asked of it either"
+        assert not statuses[(2025, 4)].in_scope
+
+    def test_quarters_inside_a_phase_are_in_scope(
+        self, demo_session: Session, demo_profile_id: int
+    ) -> None:
+        statuses = {
+            (s.year, s.quarter): s
+            for s in quota_status(demo_session, demo_profile_id, AS_OF, quarters_back=8)
+        }
+        assert statuses[(2026, 1)].in_scope
+        assert statuses[(2026, 1)].is_silent, "Q1 2026 is the real silent quarter"
+
     def test_unpublished_work_never_counts(
         self, demo_session: Session, demo_profile_id: int
     ) -> None:

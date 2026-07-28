@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-50 text-slate-800 antialiased;
+}
+
+/* Level bars use a single hue with increasing saturation rather than a
+   red-amber-green scale. A skill at level 2 is not "bad" — it is at level 2,
+   and colouring it red teaches the wrong reflex. Red is reserved for the two
+   things that genuinely are problems: decay and an undefensible claim. */

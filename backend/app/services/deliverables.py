@@ -108,12 +108,25 @@ class QuarterStatus:
     total_published: int = 0
 
     @property
+    def in_scope(self) -> bool:
+        """Does the trajectory make any demand of this quarter?
+
+        Quarters before the first phase begins carry no quota, so `met` and
+        `is_silent` say nothing about them: a quarter that predates the plan
+        cannot fail it. Consumers must filter on this before reporting a
+        shortfall, or the history that existed before the trajectory started
+        gets counted as a run of failures.
+        """
+        return self.phase_code is not None and bool(self.lines)
+
+    @property
     def met(self) -> bool:
+        """Only meaningful when `in_scope`. Vacuously true otherwise."""
         return all(line.met for line in self.lines)
 
     @property
     def is_silent(self) -> bool:
-        """Nothing published at all. The signal that matters most."""
+        """Nothing published at all. Only a finding when `in_scope`."""
         return self.total_published == 0
 
 
