@@ -1,4 +1,8 @@
 import type {
+  Assumption,
+  CaseDetail,
+  CauseTree,
+  CaseSummary,
   Deliverable,
   DeliverableInput,
   DeliverableType,
@@ -8,8 +12,13 @@ import type {
   Profile,
   QuarterStatus,
   SkillEvidence,
+  Fragility,
+  ReviewChallenge,
+  RoiResult,
+  ScenarioComparison,
   SkillLevel,
   SkillPosition,
+  TornadoRow,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
@@ -121,6 +130,43 @@ export const api = {
 
   evidenceCv: ({ profile }: Scope, minLevel = 2) =>
     request<SkillEvidence[]>(`/evidence-cv${query({ profile, min_level: minLevel })}`),
+
+  cases: ({ profile }: Scope) => request<CaseSummary[]>(`/cases${query({ profile })}`),
+
+  caseDetail: ({ profile }: Scope, id: number, scenario = "base") =>
+    request<CaseDetail>(`/cases/${id}${query({ profile, scenario })}`),
+
+  causeTree: ({ profile }: Scope, id: number, scenario = "base") =>
+    request<CauseTree>(`/cases/${id}/cause-tree${query({ profile, scenario })}`),
+
+  roiScenarios: ({ profile }: Scope, id: number, version?: number) =>
+    request<ScenarioComparison>(`/cases/${id}/roi/scenarios${query({ profile, version })}`),
+
+  roi: ({ profile }: Scope, id: number, scenario = "base", version?: number) =>
+    request<RoiResult>(`/cases/${id}/roi${query({ profile, scenario, version })}`),
+
+  tornado: ({ profile }: Scope, id: number, version?: number) =>
+    request<TornadoRow[]>(`/cases/${id}/roi/tornado${query({ profile, version })}`),
+
+  fragility: ({ profile }: Scope, id: number, version?: number) =>
+    request<Fragility>(`/cases/${id}/roi/fragility${query({ profile, version })}`),
+
+  answerChallenge: ({ profile }: Scope, caseId: number, challengeId: number, response: string) =>
+    request<ReviewChallenge>(
+      `/cases/${caseId}/challenges/${challengeId}/response${query({ profile })}`,
+      { method: "POST", body: JSON.stringify({ response }) },
+    ),
+
+  updateAssumption: (
+    { profile }: Scope,
+    caseId: number,
+    code: string,
+    patch: Record<string, string | null>,
+  ) =>
+    request<Assumption>(`/cases/${caseId}/assumptions/${code}${query({ profile })}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
 
   setTarget: ({ profile }: Scope, code: string, targetLevel: number) =>
     request<SkillPosition>(`/skills/${code}/target${query({ profile })}`, {

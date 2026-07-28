@@ -252,6 +252,29 @@ does not touch the schema.
 
 ---
 
+## ADR-012 — Two kinds of fragility, reported separately
+
+**Context.** A sensitivity analysis that only ranks assumptions by how far they
+move the NPV answers "which number is biggest", not "should we do this".
+
+**Decision.** The fragility report separates an assumption whose own range
+flips the sign of the NPV (`decision_flipping`) from a case where no single
+assumption flips it but the pessimistic scenario is negative
+(`only_fails_in_combination`). Each gets its own headline sentence.
+
+**Alternative rejected.** A single robustness score. It would collapse two
+findings that demand completely different responses: a flipping assumption is
+a research task — go and measure that one number — while a case that survives
+every assumption alone and fails when they all land badly is a question about
+whether those risks are correlated. In supply chain they usually are, which is
+why a model that passes the tornado can still be the wrong recommendation.
+
+**Cost accepted.** More surface to explain, and a report a reader has to
+actually read rather than glance at. That is the intended trade for a module
+whose purpose is training judgement.
+
+---
+
 ## Deliberately not built
 
 Each of these was considered and left out. Listing them is part of the

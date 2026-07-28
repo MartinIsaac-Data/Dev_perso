@@ -23,15 +23,15 @@ not a portfolio.
 
 ## Status
 
-**Phase 1 complete.** The skill graph and deliverable engine are queryable
-over HTTP and usable in a browser.
+**Phase 2 complete.** The Business Case Lab computes discounted cash flow,
+scenarios and sensitivity, and the review board's objections are queryable.
 
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Repository, Docker, migrations, data model, seeds | **done** |
 | 1a | Skill Graph + Deliverable Engine services and API | **done** |
 | 1b | Front end: five views, Vite + React + TypeScript | **done** |
-| 2 | Business Case Lab: ROI model, scenarios, sensitivity | pending |
+| 2 | Business Case Lab: ROI model, scenarios, sensitivity | **done** |
 | 3 | Agents: review board, posting extraction, periodic review | pending |
 | 4 | Star schema, SQL transformations, Parquet export for Power BI | pending |
 
@@ -59,7 +59,7 @@ Verify the install:
 ```bash
 make status    # what is in the database
 make graph     # graph integrity and critical path
-make check     # lint, 158 backend tests, front-end type check
+make check     # lint, 231 backend tests, front-end type check
 ```
 
 Expected output from `make graph` on a fresh install:
@@ -211,6 +211,12 @@ so the whole system can be asked what it would have said on any past date.
 | `GET /quota-status` | Per-quarter compliance, silent quarters flagged |
 | `GET /evidence-cv` | Claimable skills with the artefacts behind them |
 | `GET /phases` | The trajectory and its quarterly quotas |
+| `GET /cases/{id}/cause-tree` | Bottom-up total, reconciled against the claim |
+| `GET /cases/{id}/roi` | Discounted cash flow, NPV, payback, benefit-cost ratio |
+| `GET /cases/{id}/roi/scenarios` | All three scenarios side by side |
+| `GET /cases/{id}/roi/tornado` | One assumption varied at a time, ranked by swing |
+| `GET /cases/{id}/roi/fragility` | Where the case breaks, and whether it breaks at all |
+| `GET /cases/{id}/audit` | Unsourced, unused and point-estimate assumptions |
 
 Three behaviours worth knowing before reading the code:
 
@@ -245,7 +251,7 @@ backend/
   seeds/
     reference/      Taxonomy, levels, phases, quotas, rubric — upserted, idempotent
     demo/           Fictional demonstration dataset
-  tests/            158 tests: graph, services, API, schema rules, seeds, portability
+  tests/            231 tests: graph, ROI, cause tree, API, schema rules, seeds
 frontend/
   src/
     api/            Typed client and hand-written response types
@@ -269,6 +275,7 @@ Five views, at `http://localhost:5173`.
 | **Skill graph** | Every skill by domain, with a neighbourhood view per skill |
 | **Deliverables** | The evidence base, and the form to add to it |
 | **Quotas** | Quarter by quarter, silent quarters flagged |
+| **Business cases** | Cause tree, cash flow, tornado, and the review board's objections |
 | **Evidence** | Every claim with its artefacts, undefensible ones marked |
 
 Three decisions worth knowing:
@@ -290,6 +297,43 @@ an undefensible claim.
 phase are rendered neutrally and excluded from every count. Reporting the
 history that predates the plan as a run of missed quarters would be exactly
 the kind of dishonest metric this system exists to avoid.
+
+---
+
+## The ROI engine
+
+Nothing it produces is stored (ADR-008). NPV, payback, branch totals and the
+tornado are recomputed from the assumptions on every request, because a cached
+headline figure eventually contradicts its own workings.
+
+**A scenario is a rule, not three sets of numbers** (ADR-007). Each assumption
+carries a low, base and high value; the pessimistic case takes the
+*unfavourable* end, which is the high value for a cost and the low value for a
+benefit. Storing three amounts per line would let the base case be revised
+while the other two silently went stale.
+
+**The tornado varies one assumption at a time**, everything else at base, so
+the resulting swing is attributable to that assumption rather than to an
+interaction. A bar crossing zero is drawn red: within that one assumption's
+own stated range, the recommendation changes.
+
+The most useful output distinguishes two kinds of fragility:
+
+```
+No single assumption breaks the case, but the pessimistic scenario does.
+The question is whether these risks are independent — if they arrive
+together, the base case is optimistic.
+```
+
+One flipping assumption is a research task: go and measure that number. A case
+that survives every assumption individually but fails when they all land badly
+is a question about *correlation*, and in this domain those risks usually
+arrive together. A model that passes the tornado can still be the wrong call,
+and saying so is the point.
+
+Money is `Decimal` end to end. Year 0 is undiscounted by convention. Payback is
+discounted and interpolated within the crossing year — 1.92 years, not 2 —
+and is `None` rather than the horizon length when the case never pays back.
 
 ---
 

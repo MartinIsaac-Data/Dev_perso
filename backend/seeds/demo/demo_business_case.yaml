@@ -145,27 +145,28 @@ business_cases:
       - code: build_cost
         label: One-off build cost — platform, models, integration
         unit: EUR
-        base_value: 210000
-        low_value: 180000
-        high_value: 310000
+        base_value: 480000
+        low_value: 380000
+        high_value: 720000
         confidence: medium
         source: >-
-          Two vendor estimates plus 0.5 FTE internal for nine months. The high
-          bound reflects the larger of the two vendor quotes.
+          Two vendor estimates for the integration across ERP, WMS and TMS,
+          plus 1.0 FTE internal for nine months. The high bound reflects the
+          larger of the two quotes with the ERP write-back included.
       - code: change_cost_y0
         label: Change management, year 0 — training and process redesign
         unit: EUR
-        base_value: 45000
-        low_value: 35000
-        high_value: 80000
+        base_value: 95000
+        low_value: 70000
+        high_value: 160000
         confidence: low
         source: Comparable rollout at a previous employer, scaled by headcount.
       - code: change_cost_y1
         label: Change management, year 1 — reinforcement and rework
         unit: EUR
-        base_value: 22000
-        low_value: 15000
-        high_value: 60000
+        base_value: 48000
+        low_value: 30000
+        high_value: 95000
         confidence: low
         source: >-
           Assumed at half of year 0. No local evidence base; the high bound
@@ -173,17 +174,20 @@ business_cases:
       - code: run_cost_annual
         label: Annual run cost — support, monitoring, model maintenance
         unit: EUR/year
-        base_value: 64000
-        low_value: 55000
-        high_value: 95000
+        base_value: 118000
+        low_value: 95000
+        high_value: 190000
         confidence: medium
-        source: 0.4 FTE data engineer plus 0.2 FTE analyst at local loaded rates.
+        source: >-
+          0.8 FTE data engineer plus 0.3 FTE analyst at local loaded rates.
+          The high bound assumes the first year of a platform in an
+          organisation with no data engineers today.
       - code: licence_annual
         label: Annual platform and tooling licences
         unit: EUR/year
-        base_value: 38000
-        low_value: 34000
-        high_value: 46000
+        base_value: 52000
+        low_value: 46000
+        high_value: 64000
         confidence: high
         source: Published list pricing for the capacity tier sized in the design.
 
@@ -191,48 +195,48 @@ business_cases:
       - code: benefit_stockout
         label: Annual margin recovered from fewer stock-outs
         unit: EUR/year
-        base_value: 430000
-        low_value: 180000
-        high_value: 620000
+        base_value: 285000
+        low_value: 110000
+        high_value: 470000
         confidence: low
         source: >-
-          Assumes the stock-out rate falls from 6.1% to 3.8% at steady state.
+          Assumes the stock-out rate falls from 6.1% to 4.5% at steady state.
         rationale: >-
-          The 2.3 point reduction comes from a vendor case study in a different
+          The 1.6 point reduction comes from a vendor case study in a different
           sector, not from anything measured here. Flagged as the most fragile
           benefit in the model.
       - code: benefit_expedite
         label: Annual reduction in expedited freight premium
         unit: EUR/year
-        base_value: 310000
-        low_value: 120000
-        high_value: 470000
+        base_value: 205000
+        low_value: 75000
+        high_value: 340000
         confidence: low
-        source: Assumes 30% of emergency shipments become avoidable.
+        source: Assumes 20% of emergency shipments become avoidable.
       - code: benefit_transfers
         label: Annual reduction in corrective transfers
         unit: EUR/year
-        base_value: 135000
-        low_value: 60000
-        high_value: 200000
+        base_value: 95000
+        low_value: 40000
+        high_value: 150000
         confidence: medium
-        source: Assumes 30% fewer transfers from better initial allocation.
+        source: Assumes 20% fewer transfers from better initial allocation.
       - code: benefit_expiry
         label: Annual reduction in expiry write-offs
         unit: EUR/year
-        base_value: 240000
-        low_value: 140000
-        high_value: 330000
+        base_value: 165000
+        low_value: 90000
+        high_value: 250000
         confidence: medium
         source: >-
-          Assumes 35% of write-offs are attributable to misallocation that
+          Assumes 24% of write-offs are attributable to misallocation that
           shelf-life-aware allocation would prevent.
       - code: benefit_planner_time
         label: Planner time released
         unit: EUR/year
-        base_value: 96000
+        base_value: 72000
         low_value: 0
-        high_value: 96000
+        high_value: 72000
         confidence: low
         source: >-
           60% of recorded replanning overtime, valued at the loaded rate.
@@ -476,7 +480,7 @@ business_cases:
             severity: blocking
             target_assumption: benefit_planner_time
             challenge: >-
-              Ninety-six thousand euros of "planner time released" is not a
+              Seventy-two thousand euros of "planner time released" is not a
               saving. Nobody leaves, no overtime budget is cut, and the four
               planners will fill the time. Remove it from the base case or
               show me the signed commitment to reduce the overtime budget by
@@ -489,7 +493,7 @@ business_cases:
             target_assumption: benefit_stockout
             challenge: >-
               The whole case turns on the stock-out rate falling from 6.1% to
-              3.8%. That number comes from a vendor case study in a different
+              4.5%. That number comes from a vendor case study in a different
               sector with different demand volatility. What does it look like
               at half that improvement?
             evidence_demanded: >-
@@ -534,16 +538,16 @@ business_cases:
               abandoned orders at all. You have listed both as gaps to close
               "before build" without costing either. Making a field mandatory
               at pick confirmation is a WMS change, a training exercise and a
-              month of dirty data. Where is that in the 210 thousand?
+              month of dirty data. Where is that in the 480 thousand?
             evidence_demanded: A costed data remediation line in the ROI model.
           - persona: cio
             severity: minor
             target_assumption: run_cost_annual
             challenge: >-
-              Zero point six FTE to run a forecasting service, two models, a
+              One point one FTE to run a forecasting service, two models, a
               lakehouse and a semantic layer, in an organisation with no data
-              engineers today. That is the run cost of a mature team, not of
-              the first one.
+              engineers today. That is the run cost of a team that already
+              knows the platform, not of the first one.
             evidence_demanded: Run cost benchmarked against a first-platform organisation.
           - persona: cio
             severity: minor
