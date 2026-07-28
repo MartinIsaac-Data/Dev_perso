@@ -174,10 +174,12 @@ skill_states:
   - {skill: inventory_management, current_level: 4, target_level: 5, last_practised_on: 2026-07-10}
   - {skill: warehouse_ops, current_level: 4, target_level: 4, last_practised_on: 2025-08-14}
   - {skill: erp_systems, current_level: 3, target_level: 5, last_practised_on: 2026-06-12}
-  - {skill: procurement, current_level: 3, target_level: 3, last_practised_on: 2025-04-01}
+  # Past its 24-month window: left the procurement side of the job in 2024.
+  - {skill: procurement, current_level: 3, target_level: 3, last_practised_on: 2024-03-01}
   - {skill: demand_planning, current_level: 2, target_level: 4, last_practised_on: 2025-11-01}
   - {skill: process_mapping, current_level: 3, target_level: 4, last_practised_on: 2026-02-20}
-  - {skill: kpi_design_ops, current_level: 3, target_level: 4, last_practised_on: 2025-08-14}
+  # Past its window too, and nobody had noticed — which is the point.
+  - {skill: kpi_design_ops, current_level: 3, target_level: 4, last_practised_on: 2024-02-20}
 
   # Started, well short of target
   - {skill: sql_set_operations, current_level: 2, target_level: 4, last_practised_on: 2026-01-30}
@@ -185,8 +187,9 @@ skill_states:
   - {skill: data_quality, current_level: 2, target_level: 4, last_practised_on: 2026-06-12}
   - {skill: testing_data_pipelines, current_level: 2, target_level: 4, last_practised_on: 2026-06-12}
   - {skill: powerbi_service, current_level: 2, target_level: 4, last_practised_on: 2025-11-21}
-  - {skill: report_design, current_level: 3, target_level: 4, last_practised_on: 2025-08-14}
-  - {skill: statistics_core, current_level: 2, target_level: 4, last_practised_on: 2025-03-10}
+  # Level 3 claimed, nothing since October 2024. An interviewer would find this.
+  - {skill: report_design, current_level: 3, target_level: 4, last_practised_on: 2024-10-01}
+  - {skill: statistics_core, current_level: 2, target_level: 4, last_practised_on: 2024-11-01}
   - {skill: cloud_fundamentals, current_level: 2, target_level: 4, last_practised_on: 2026-07-06}
   - {skill: azure_core, current_level: 1, target_level: 4, last_practised_on: 2026-07-06}
   - {skill: microsoft_fabric, current_level: 1, target_level: 5, last_practised_on: 2026-07-20}
@@ -335,8 +338,9 @@ periodic_reviews:
       **Stalled:** Fabric proof of concept opened 6 July, no commits since the
       13th. Forecasting project has been in `planned` since February.
 
-      **At risk through decay:** warehouse operations and operational KPI
-      design last practised August 2025, both now past their decay window.
+      **At risk through decay:** operational KPI design, report design and
+      procurement are all past their decay window, and report design is still
+      claimed at level 3 with nothing published behind it since October 2024.
       Statistics was downgraded from 3 to 2 in April and nothing has been done
       since; it gates machine learning, forecasting and experiment design —
       three skills the target roles all require.

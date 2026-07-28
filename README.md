@@ -23,14 +23,14 @@ not a portfolio.
 
 ## Status
 
-**Phase 0 complete — the foundation.** Schema, migrations, seeds, CLI, test
-suite, container. Phases 1 to 4 add the API surface, the front end, the ROI
-engine, the agents and the analytical layer.
+**Phase 1 backend complete.** The skill graph and deliverable engine are
+queryable over HTTP; the front end is next.
 
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Repository, Docker, migrations, data model, seeds | **done** |
-| 1 | Skill Graph + Deliverable Engine + API + minimal front end | next |
+| 1a | Skill Graph + Deliverable Engine services and API | **done** |
+| 1b | Minimal front end (Vite + React + TypeScript) | next |
 | 2 | Business Case Lab: ROI model, scenarios, sensitivity | pending |
 | 3 | Agents: review board, posting extraction, periodic review | pending |
 | 4 | Star schema, SQL transformations, Parquet export for Power BI | pending |
@@ -55,7 +55,7 @@ Verify the install:
 ```bash
 make status    # what is in the database
 make graph     # graph integrity and critical path
-make test      # 59 tests
+make test      # 155 tests
 ```
 
 Expected output from `make graph` on a fresh install:
@@ -186,6 +186,47 @@ require paperwork, or it will simply go unrecorded.
 
 ---
 
+## API
+
+Full interactive documentation at `/docs`. Every read endpoint takes an
+optional `?profile=` (defaults to the demo profile) and an optional `?as_of=`
+so the whole system can be asked what it would have said on any past date.
+
+| Endpoint | What it answers |
+| --- | --- |
+| `GET /skills/graph` | The taxonomy: nodes, edges, acyclicity, longest chain |
+| `GET /skills/positions` | Every skill with this profile's position on it |
+| `GET /skills/critical-path` | What to work on, ranked by what it unblocks |
+| `GET /skills/available` | Startable today — nothing missing upstream |
+| `GET /skills/blocked` | Gated, with the specific unmet prerequisites named |
+| `GET /skills/decayed` | Past the decay window, worst overrun first |
+| `GET /skills/learning-order` | A sequence that never precedes a prerequisite |
+| `PUT /skills/{code}/target` | Set a target level |
+| `POST /skills/{code}/level` | Record a level change — evidence enforced |
+| `GET/POST/PATCH /deliverables` | The evidence base |
+| `GET /quota-status` | Per-quarter compliance, silent quarters flagged |
+| `GET /evidence-cv` | Claimable skills with the artefacts behind them |
+| `GET /phases` | The trajectory and its quarterly quotas |
+
+Three behaviours worth knowing before reading the code:
+
+**The critical path counts only wanted skills.** A prerequisite scores by how
+many *below-target* skills it gates, not by how central it is in the taxonomy.
+A foundational skill whose dependents are all satisfied scores zero, and
+correctly disappears from the recommendation.
+
+**Promotion is refused unless the evidence holds up.** The database guarantees
+a level rise carries a deliverable; the service checks the three things a
+`CHECK` cannot see — that the deliverable belongs to this profile, that it is
+published, and that it is linked to the skill being claimed. All three return
+422, not 500.
+
+**`evidence-cv` reports what it cannot defend.** A skill at level 3 or above
+with nothing published behind it comes back with `is_defensible: false`. On the
+demo profile that is eleven of them — the gaps an interviewer finds first.
+
+---
+
 ## Repository layout
 
 ```
@@ -200,7 +241,7 @@ backend/
   seeds/
     reference/      Taxonomy, levels, phases, quotas, rubric — upserted, idempotent
     demo/           Fictional demonstration dataset
-  tests/            59 tests: graph, schema rules, seed integrity, portability
+  tests/            155 tests: graph, services, API, schema rules, seeds, portability
 sql/
   transformations/  Versioned SQL building the star schema   (Phase 4)
   views/            Clean views for Power BI                 (Phase 4)

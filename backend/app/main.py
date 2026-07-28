@@ -1,8 +1,8 @@
 """FastAPI application.
 
-Phase 0 exposes only what is needed to prove the stack is wired end to end:
-health, and a metadata endpoint that reports what the database actually
-contains. The domain routers arrive in Phase 1.
+Routers are mounted per bounded area, and every endpoint that reads profile
+data takes the profile through one shared dependency. The Business Case Lab
+and the Gap Radar arrive in Phases 2 and 3.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api import deliverables, profiles, skills
 from app.config import get_settings
 from app.db import get_db
 from app.models import Deliverable, Profile, Skill, SkillEdge
@@ -35,6 +36,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(profiles.router)
+app.include_router(skills.router)
+app.include_router(deliverables.router)
 
 
 @app.get("/health", tags=["meta"])

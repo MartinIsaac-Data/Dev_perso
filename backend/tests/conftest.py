@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -63,3 +64,32 @@ def demo_session(seeded_session: Session) -> Session:
     seed_demo(seeded_session, SEEDS_DIR)
     seeded_session.commit()
     return seeded_session
+
+
+@pytest.fixture
+def demo_profile_id(demo_session: Session) -> int:
+    from sqlalchemy import select
+
+    from app.models import Profile
+
+    return demo_session.scalar(select(Profile.id).where(Profile.code == "demo"))
+
+
+@pytest.fixture
+def client(demo_session: Session) -> Iterator[TestClient]:
+    """API client bound to the in-memory demo database.
+
+    `get_db` is overridden rather than the engine being swapped globally, so
+    the application under test is the real one — same routers, same
+    dependencies, same validation — just pointed at a throwaway database.
+    """
+    from app.db import get_db
+    from app.main import app
+
+    def _override() -> Iterator[Session]:
+        yield demo_session
+
+    app.dependency_overrides[get_db] = _override
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
