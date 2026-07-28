@@ -27,7 +27,13 @@ RUN mkdir -p /app/data /app/exports
 
 EXPOSE 8000
 
-# Migrations run on start rather than in the image build: the database lives
-# on a volume that does not exist at build time. `upgrade head` is a no-op
-# when the schema is already current, so this is safe on every restart.
-CMD ["sh", "-c", "python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Migrations and seeding run on start rather than in the image build: the
+# database lives on a volume that does not exist at build time.
+#
+# `upgrade head` is a no-op when the schema is current, and `seed ensure` does
+# nothing when the taxonomy is already loaded — so both are safe on every
+# restart. Without the seed step a fresh `docker compose up` serves an empty
+# taxonomy, which looks like a broken application rather than an unseeded one.
+CMD ["sh", "-c", "python -m alembic upgrade head \
+  && python -m app.cli seed ensure \
+  && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]

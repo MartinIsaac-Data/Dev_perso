@@ -107,6 +107,30 @@ def seed_all_cmd(
     typer.secho("reference + demo + owner profile ready", fg=typer.colors.GREEN)
 
 
+@seed_app.command("ensure")
+def seed_ensure_cmd(
+    owner_code: str = typer.Option("owner"),
+    owner_name: str = typer.Option("Owner"),
+) -> None:
+    """Seed only if the database is empty. Safe to run on every start.
+
+    This is what the container runs before serving. `seed all` would rebuild
+    the demonstration profile on every restart, discarding anything entered
+    against it; doing nothing at all leaves a fresh `docker compose up`
+    serving an empty taxonomy, which looks like a broken application rather
+    than an unseeded one.
+    """
+    with session_scope() as session:
+        existing = session.scalar(select(func.count()).select_from(Skill)) or 0
+        if existing:
+            typer.echo(f"  database already holds {existing} skills — nothing to do")
+            return
+        seed_reference(session)
+        seed_demo(session)
+        ensure_owner_profile(session, owner_code, owner_name)
+    typer.secho("empty database seeded", fg=typer.colors.GREEN)
+
+
 @graph_app.command("check")
 def graph_check() -> None:
     """Verify the stored skill graph is acyclic and report its shape."""
