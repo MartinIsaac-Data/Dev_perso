@@ -275,6 +275,50 @@ whose purpose is training judgement.
 
 ---
 
+## ADR-013 — An explicit unknown member instead of a null dimension key
+
+**Context.** A job requirement the extractor could not map to the taxonomy has
+no skill to point at, and those rows are the most valuable output of the Gap
+Radar: they mean the market has moved somewhere the taxonomy has not.
+
+**Decision.** `dim_skill` carries a row at `skill_key = -1` labelled "Not in
+the taxonomy", and `fact_market_requirement` points unmapped rows at it. No
+fact in this schema carries a null dimension key.
+
+**Alternative rejected.** A nullable foreign key. It forces every query to
+remember an outer join, and an inner join — which is what a report builder
+writes by default — silently drops exactly the rows that matter most. The
+failure is invisible: the report renders, the total is just quietly wrong.
+
+**Cost accepted.** One synthetic row per dimension that needs it, and a
+`is_unknown_member` flag reports have to filter on when they genuinely want
+only real skills.
+
+---
+
+## ADR-014 — Two implementations of the decay rule, cross-checked
+
+**Context.** Skill decay is computed twice: in `services/skill_graph.py` with
+calendar months, for the interface, and in `110_fact_skill_state.sql` with
+integer day arithmetic, for reporting.
+
+**Decision.** Keep both, and assert in a test that they identify the same set
+of decayed skills.
+
+**Alternative rejected.** Compute it once and have the star schema read the
+service's answer. That would make the analytical build depend on the
+application layer, which defeats the purpose of a SQL transformation someone
+can read and run on its own — and the SQL is the artefact worth having here.
+
+**Cost accepted.** The two do not agree exactly at the boundary: calendar
+months and a 30-day approximation differ by a day or two. The test asserts
+they agree on *which skills* are decayed, not on the day count, and the
+approximation is documented in the SQL. If they ever diverge on membership,
+the test fails — which is the point, because a system that tells two different
+stories about itself is worse than one that tells a slightly rough one.
+
+---
+
 ## Deliberately not built
 
 Each of these was considered and left out. Listing them is part of the

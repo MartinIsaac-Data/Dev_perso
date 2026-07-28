@@ -23,8 +23,8 @@ not a portfolio.
 
 ## Status
 
-**Phase 3 complete.** Three agents — review board, posting extraction,
-periodic review — with versioned, hashed prompts and a full execution log.
+**All five phases complete.** Schema, skill graph, deliverable engine,
+business case lab, agents, and an analytical layer that exports to Power BI.
 
 | Phase | Scope | State |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ periodic review — with versioned, hashed prompts and a full execution log.
 | 1b | Front end: five views, Vite + React + TypeScript | **done** |
 | 2 | Business Case Lab: ROI model, scenarios, sensitivity | **done** |
 | 3 | Agents: review board, posting extraction, periodic review | **done** |
-| 4 | Star schema, SQL transformations, Parquet export for Power BI | pending |
+| 4 | Star schema, SQL transformations, Parquet export for Power BI | **done** |
 
 ---
 
@@ -59,7 +59,7 @@ Verify the install:
 ```bash
 make status    # what is in the database
 make graph     # graph integrity and critical path
-make check     # lint, 302 backend tests, front-end type check
+make check     # lint, 377 backend tests, front-end type check
 ```
 
 Expected output from `make graph` on a fresh install:
@@ -294,6 +294,50 @@ than a 500. Everything else in the application works unchanged.
 
 ---
 
+## The analytical layer
+
+Two storage layers, and the split is the point. The normalised tables are the
+source of truth and hold no derived value. The star schema is rebuilt from them
+by numbered SQL files, and is where aggregates live.
+
+```bash
+make export     # rebuild the star schema, then write Parquet
+```
+
+```
+  dim_date                        4,749
+  dim_skill                          84     (83 + one unknown member)
+  fact_activity                      23
+  fact_skill_state                   58
+  fact_market_requirement            19
+```
+
+**Every transformation states its grain in its header comment**, and a test
+fails if one does not. `fact_activity` is one row per deliverable *per skill*,
+so `COUNT(*)` counts skill-applications and deliverables need
+`COUNT(DISTINCT deliverable_id)`. A fact table whose grain cannot be stated in
+one sentence is a fact table that will be double-counted — and a broken grain
+does not raise, it just makes a report quietly wrong.
+
+**`dim_skill` carries an unknown member at key -1.** A job requirement the
+taxonomy cannot express has no skill to point at, and the three options are: a
+null foreign key that every inner join silently drops, discarding the row, or
+an explicit unknown member. Only the third keeps the most interesting rows in
+the warehouse visible.
+
+**The SQL is portable and a test proves it.** No `strftime`, no `julianday`,
+no `EXTRACT` — every fact conforms on `dim_date` and every date difference is
+integer arithmetic on its sequential `day_number`. The one thing that genuinely
+cannot be written portably, generating a calendar, is done in Python instead
+and says so.
+
+One test is worth singling out: `test_decay_agrees_with_the_service_layer`
+checks that the Python service and the SQL transformation identify the same
+decayed skills. Two independent implementations of one rule is exactly where
+a system starts telling two different stories about itself.
+
+---
+
 ## Repository layout
 
 ```
@@ -308,16 +352,16 @@ backend/
   seeds/
     reference/      Taxonomy, levels, phases, quotas, rubric — upserted, idempotent
     demo/           Fictional demonstration dataset
-  tests/            302 tests: graph, ROI, cause tree, agents, API, seeds
+  tests/            377 tests: graph, ROI, agents, star schema, API, seeds
 frontend/
   src/
     api/            Typed client and hand-written response types
     components/     Primitives and the skill neighbourhood graph
     views/          Dashboard, skills, deliverables, quotas, evidence
 sql/
-  transformations/  Versioned SQL building the star schema   (Phase 4)
-  views/            Clean views for Power BI                 (Phase 4)
-exports/            Parquet output                           (Phase 4)
+  transformations/  Numbered SQL building the star schema — each states its grain
+  views/            v_* reporting views, the contract Power BI binds to
+exports/            Parquet output, one file per star table
 ```
 
 ---

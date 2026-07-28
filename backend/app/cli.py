@@ -26,10 +26,12 @@ db_app = typer.Typer(help="Database migrations")
 seed_app = typer.Typer(help="Seed loading")
 graph_app = typer.Typer(help="Skill graph inspection")
 agent_app = typer.Typer(help="Agents: review board, extraction, periodic review")
+analytics_app = typer.Typer(help="Star schema build and Parquet export")
 app.add_typer(db_app, name="db")
 app.add_typer(seed_app, name="seed")
 app.add_typer(graph_app, name="graph")
 app.add_typer(agent_app, name="agent")
+app.add_typer(analytics_app, name="analytics")
 
 
 def _alembic(*args: str) -> None:
@@ -309,6 +311,60 @@ def agent_runs(limit: int = 15) -> None:
             )
             if run.error:
                 typer.echo(f"      {run.error[:120]}")
+
+
+# --------------------------------------------------------------------------
+# Analytics
+# --------------------------------------------------------------------------
+
+
+@analytics_app.command("build")
+def analytics_build() -> None:
+    """Rebuild the star schema from the normalised tables."""
+    from app.services.analytics import build_star
+
+    with session_scope() as session:
+        result = build_star(session)
+    for name, count in result.tables.items():
+        typer.echo(f"  {name:<28} {count:>8,}")
+    typer.secho(f"star schema rebuilt as at {result.build_date}", fg=typer.colors.GREEN)
+
+
+@analytics_app.command("export")
+def analytics_export() -> None:
+    """Write every star table to Parquet for Power BI."""
+    from app.db import get_engine
+    from app.services.analytics import export_parquet
+
+    with session_scope() as session:
+        try:
+            written = export_parquet(session, get_engine())
+        except RuntimeError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(2) from exc
+    for name, path in sorted(written.items()):
+        typer.echo(f"  {name:<28} {path.stat().st_size:>9,} bytes")
+    typer.secho(f"{len(written)} files written", fg=typer.colors.GREEN)
+
+
+@analytics_app.command("refresh")
+def analytics_refresh() -> None:
+    """Build then export. The command to run before opening Power BI."""
+    analytics_build()
+    typer.echo("")
+    analytics_export()
+
+
+@analytics_app.command("drop")
+def analytics_drop() -> None:
+    """Remove the analytical layer. The normalised tables are untouched."""
+    from app.db import get_engine
+    from app.services.analytics import drop_star
+
+    with session_scope() as session:
+        dropped = drop_star(session, get_engine())
+    typer.echo(f"  dropped {len(dropped)} tables")
+    typer.secho("analytical layer removed", fg=typer.colors.GREEN)
 
 
 @app.command("status")

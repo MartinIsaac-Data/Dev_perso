@@ -1,5 +1,5 @@
 .PHONY: help install setup migrate seed demo reset test lint fmt run graph status docker \
-        web web-install web-build web-check check
+        web web-install web-build web-check check analytics export
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -58,6 +58,12 @@ graph:  ## Verify the skill graph and show its critical path
 	@echo ""
 	@echo "Skills gating the most others:"
 	@python -m app.cli graph critical
+
+analytics:  ## Rebuild the star schema from the normalised tables
+	python -m app.cli analytics build
+
+export:  ## Build the star schema and write Parquet for Power BI
+	python -m app.cli analytics refresh
 
 status:  ## Show what is currently in the database
 	python -m app.cli status
