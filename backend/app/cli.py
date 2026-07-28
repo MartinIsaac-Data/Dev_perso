@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 import typer
 from sqlalchemy import func, select
 
 from app.config import REPO_ROOT, get_settings
 from app.db import session_scope
-from app.models import Profile, Skill, SkillEdge
+from app.models import AgentRun, BusinessCase, Profile, Skill, SkillEdge
 from app.services.graph import descendants, find_cycle, topological_order
 from app.services.seeding import ensure_owner_profile, seed_demo, seed_reference
 
@@ -24,9 +25,11 @@ app = typer.Typer(help="Transformation OS — operational commands", no_args_is_
 db_app = typer.Typer(help="Database migrations")
 seed_app = typer.Typer(help="Seed loading")
 graph_app = typer.Typer(help="Skill graph inspection")
+agent_app = typer.Typer(help="Agents: review board, extraction, periodic review")
 app.add_typer(db_app, name="db")
 app.add_typer(seed_app, name="seed")
 app.add_typer(graph_app, name="graph")
+app.add_typer(agent_app, name="agent")
 
 
 def _alembic(*args: str) -> None:
@@ -157,6 +160,155 @@ def graph_critical(limit: int = 12) -> None:
     )
     for count, code in ranked[:limit]:
         typer.echo(f"  {count:>3}  {code}")
+
+
+# --------------------------------------------------------------------------
+# Agents
+# --------------------------------------------------------------------------
+
+
+def _resolve_profile(session, code: str):  # noqa: ANN001
+    profile = session.scalar(select(Profile).where(Profile.code == code))
+    if profile is None:
+        known = ", ".join(p.code for p in session.scalars(select(Profile)))
+        typer.secho(f"unknown profile '{code}'. Known: {known}", fg=typer.colors.RED)
+        raise typer.Exit(1)
+    return profile
+
+
+@agent_app.command("review-case")
+def agent_review_case(
+    case_id: int,
+    version: int | None = typer.Option(None, help="ROI model version. Defaults to latest."),
+    profile: str = typer.Option("demo", help="Profile owning the case."),
+) -> None:
+    """Run the adversarial review board against a business case."""
+    from app.services.agents.client import AgentError, default_client
+    from app.services.agents.review_board import review_case
+
+    try:
+        client = default_client()
+    except AgentError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(2) from exc
+
+    with session_scope() as session:
+        owner = _resolve_profile(session, profile)
+        case = session.get(BusinessCase, case_id)
+        if case is None or case.profile_id != owner.id:
+            typer.secho(f"no business case {case_id} on profile '{profile}'", fg=typer.colors.RED)
+            raise typer.Exit(1)
+
+        model = None
+        if version is not None:
+            model = next((m for m in case.roi_models if m.version == version), None)
+            if model is None:
+                typer.secho(f"no ROI model version {version}", fg=typer.colors.RED)
+                raise typer.Exit(1)
+
+        try:
+            review = review_case(session, case, client, roi_model=model)
+        except AgentError as exc:
+            typer.secho(f"the review failed: {exc}", fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+
+        typer.echo(f"  score        {review.overall_score}/10")
+        typer.echo(f"  challenges   {len(review.challenges)}")
+        blocking = sum(1 for c in review.challenges if c.severity == "blocking")
+        typer.echo(f"  blocking     {blocking}")
+        typer.echo("")
+        typer.echo(f"  {review.verdict}")
+    typer.secho("review recorded", fg=typer.colors.GREEN)
+
+
+@agent_app.command("extract")
+def agent_extract(
+    path: str = typer.Argument(..., help="File containing the raw advert text."),
+    role: str | None = typer.Option(None, help="Target role code to attach it to."),
+    source: str | None = typer.Option(None, help="Where the advert came from."),
+) -> None:
+    """Turn a job advert into structured requirements."""
+    from app.services.agents.client import AgentError, default_client
+    from app.services.agents.extraction import extract_posting
+
+    text = Path(path).read_text(encoding="utf-8")
+    try:
+        client = default_client()
+    except AgentError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(2) from exc
+
+    with session_scope() as session:
+        try:
+            posting = extract_posting(
+                session, text, client, target_role_code=role, source=source
+            )
+        except AgentError as exc:
+            typer.secho(f"extraction failed: {exc}", fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+
+        mapped = sum(1 for r in posting.requirements if r.skill_id is not None)
+        typer.echo(f"  title        {posting.title}")
+        typer.echo(f"  requirements {len(posting.requirements)}")
+        typer.echo(f"  mapped       {mapped}")
+        typer.echo(f"  unmapped     {len(posting.requirements) - mapped}")
+        for requirement in posting.requirements:
+            if requirement.skill_id is None:
+                typer.echo(f"    ? {requirement.raw_label}")
+    typer.secho("posting recorded", fg=typer.colors.GREEN)
+
+
+@agent_app.command("review")
+def agent_periodic_review(
+    kind: str = typer.Argument("weekly", help="weekly or quarterly"),
+    profile: str = typer.Option("demo"),
+) -> None:
+    """Generate the weekly or quarterly review."""
+    from app.services.agents.client import AgentError, default_client
+    from app.services.agents.periodic_review import generate_review
+
+    try:
+        client = default_client()
+    except AgentError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(2) from exc
+
+    with session_scope() as session:
+        owner = _resolve_profile(session, profile)
+        try:
+            review = generate_review(session, owner, kind, client)
+        except (AgentError, ValueError) as exc:
+            typer.secho(f"the review failed: {exc}", fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+
+        typer.echo("")
+        typer.echo(review.body_md)
+        typer.echo("")
+        typer.secho(f"  NEXT: {review.next_action}", fg=typer.colors.CYAN)
+        typer.echo(f"  because {review.next_action_rationale}")
+
+
+@agent_app.command("runs")
+def agent_runs(limit: int = 15) -> None:
+    """Recent agent calls, with whether their prompt has changed since."""
+    from app.services.agents.runner import verify_prompt
+
+    with session_scope() as session:
+        runs = list(
+            session.scalars(select(AgentRun).order_by(AgentRun.started_at.desc()).limit(limit))
+        )
+        if not runs:
+            typer.echo("  no agent runs recorded")
+            return
+        for run in runs:
+            fresh = "prompt unchanged" if verify_prompt(run) else "PROMPT HAS CHANGED"
+            tokens = f"{run.input_tokens or 0}/{run.output_tokens or 0}"
+            typer.echo(
+                f"  {run.started_at:%Y-%m-%d %H:%M}  {run.agent_name:<24} "
+                f"{run.status:<10} {tokens:>12}  {fresh}"
+            )
+            if run.error:
+                typer.echo(f"      {run.error[:120]}")
 
 
 @app.command("status")

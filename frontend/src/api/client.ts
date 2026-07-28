@@ -12,7 +12,11 @@ import type {
   Profile,
   QuarterStatus,
   SkillEvidence,
+  AgentRunRow,
   Fragility,
+  MarketGapReport,
+  PeriodicReview,
+  Posting,
   ReviewChallenge,
   RoiResult,
   ScenarioComparison,
@@ -98,6 +102,7 @@ export const api = {
   levels: () => request<SkillLevel[]>("/skills/levels"),
   graph: () => request<Graph>("/skills/graph"),
   deliverableTypes: () => request<DeliverableType[]>("/deliverable-types"),
+  targetRoles: () => request<{ code: string; name: string; description: string | null }[]>("/target-roles"),
 
   positions: ({ profile, asOf }: Scope) =>
     request<SkillPosition[]>(`/skills/positions${query({ profile, as_of: asOf })}`),
@@ -167,6 +172,16 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
+
+  marketGaps: ({ profile }: Scope, targetRole?: string) =>
+    request<MarketGapReport>(`/market/gaps${query({ profile, target_role: targetRole })}`),
+
+  postings: () => request<Posting[]>("/postings"),
+
+  agentRuns: () => request<AgentRunRow[]>("/agent-runs"),
+
+  periodicReviews: ({ profile }: Scope) =>
+    request<PeriodicReview[]>(`/periodic-reviews${query({ profile })}`),
 
   setTarget: ({ profile }: Scope, code: string, targetLevel: number) =>
     request<SkillPosition>(`/skills/${code}/target${query({ profile })}`, {

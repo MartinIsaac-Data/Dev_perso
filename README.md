@@ -23,8 +23,8 @@ not a portfolio.
 
 ## Status
 
-**Phase 2 complete.** The Business Case Lab computes discounted cash flow,
-scenarios and sensitivity, and the review board's objections are queryable.
+**Phase 3 complete.** Three agents — review board, posting extraction,
+periodic review — with versioned, hashed prompts and a full execution log.
 
 | Phase | Scope | State |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ scenarios and sensitivity, and the review board's objections are queryable.
 | 1a | Skill Graph + Deliverable Engine services and API | **done** |
 | 1b | Front end: five views, Vite + React + TypeScript | **done** |
 | 2 | Business Case Lab: ROI model, scenarios, sensitivity | **done** |
-| 3 | Agents: review board, posting extraction, periodic review | pending |
+| 3 | Agents: review board, posting extraction, periodic review | **done** |
 | 4 | Star schema, SQL transformations, Parquet export for Power BI | pending |
 
 ---
@@ -59,7 +59,7 @@ Verify the install:
 ```bash
 make status    # what is in the database
 make graph     # graph integrity and critical path
-make check     # lint, 231 backend tests, front-end type check
+make check     # lint, 302 backend tests, front-end type check
 ```
 
 Expected output from `make graph` on a fresh install:
@@ -217,6 +217,11 @@ so the whole system can be asked what it would have said on any past date.
 | `GET /cases/{id}/roi/tornado` | One assumption varied at a time, ranked by swing |
 | `GET /cases/{id}/roi/fragility` | Where the case breaks, and whether it breaks at all |
 | `GET /cases/{id}/audit` | Unsourced, unused and point-estimate assumptions |
+| `GET /market/gaps` | What postings demand, against what the profile holds |
+| `GET /postings` | Captured adverts with their extracted requirements |
+| `GET /agent-runs` | Every model call, and whether its prompt has changed since |
+| `POST /postings/extract` | Extract requirements from an advert (needs a key) |
+| `POST /periodic-reviews` | Generate the weekly or quarterly review (needs a key) |
 
 Three behaviours worth knowing before reading the code:
 
@@ -237,6 +242,58 @@ demo profile that is eleven of them — the gaps an interviewer finds first.
 
 ---
 
+## Agents
+
+Three, and all of them adversarial or mechanical. **None of them writes
+anything for the portfolio** — a test asserts that no prompt asks a model to
+draft a case, an article or a solution.
+
+| Agent | What it does |
+| --- | --- |
+| **Review board** | Plays a sceptical CFO, COO and CIO against a quantified case. Attacks assumptions, hunts phantom benefits and missing costs, scores against the stored rubric. |
+| **Posting extraction** | Turns a job advert into structured requirements, mapped to the taxonomy where one genuinely fits and left unmapped where none does. |
+| **Periodic review** | Reports what shipped, what stalled, what is decaying and where the market gap widened. Says so plainly when nothing shipped. |
+
+Prompts live in versioned `.md` files, not Python strings, and
+`agent_run.prompt_sha256` records the hash of the file actually read. A prompt
+edited afterwards will not match, so it cannot pass for the one that produced
+a result — `tos agent runs` flags exactly that.
+
+Three design decisions carry most of the value:
+
+**The overall review score is computed here, not taken from the model.** The
+agent scores each criterion; the weighting is the rubric's, and the rubric
+lives in the database. Trusting a model's weighted arithmetic would make every
+stored score depend on it multiplying correctly, and would break silently the
+first time the weights were rebalanced.
+
+**An unmappable requirement stays unmapped.** It is the most valuable row the
+extractor produces: the market is asking for something the taxonomy does not
+describe. Forcing it into the nearest existing code destroys that signal, and
+a skill code the model invents is treated the same way.
+
+**The context assembler is a pure function, tested on its own.** A critique
+built without the sensitivity analysis reads exactly as convincing as one built
+with it, so no assertion on the output would catch the omission. Several tests
+assert on what the agent was *asked*, not only on what it replied.
+
+Everything above is tested against a stub client. **Nothing in the test suite
+reaches the network**, and a test asserts no agent module constructs a real
+client by itself.
+
+```bash
+# needs TOS_ANTHROPIC_API_KEY in .env
+tos agent review-case 1        # run the board against the demo case
+tos agent extract advert.txt   # structure a job advert
+tos agent review quarterly     # generate the quarterly review
+tos agent runs                 # the execution log
+```
+
+Without a key, every agent endpoint returns 503 with that instruction rather
+than a 500. Everything else in the application works unchanged.
+
+---
+
 ## Repository layout
 
 ```
@@ -251,7 +308,7 @@ backend/
   seeds/
     reference/      Taxonomy, levels, phases, quotas, rubric — upserted, idempotent
     demo/           Fictional demonstration dataset
-  tests/            231 tests: graph, ROI, cause tree, API, schema rules, seeds
+  tests/            302 tests: graph, ROI, cause tree, agents, API, seeds
 frontend/
   src/
     api/            Typed client and hand-written response types
@@ -276,6 +333,7 @@ Five views, at `http://localhost:5173`.
 | **Deliverables** | The evidence base, and the form to add to it |
 | **Quotas** | Quarter by quarter, silent quarters flagged |
 | **Business cases** | Cause tree, cash flow, tornado, and the review board's objections |
+| **Gap radar** | Market demand against the profile, captured postings, agent runs |
 | **Evidence** | Every claim with its artefacts, undefensible ones marked |
 
 Three decisions worth knowing:

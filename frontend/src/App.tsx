@@ -7,6 +7,7 @@ import { CasesView } from "./views/CasesView";
 import { Dashboard } from "./views/Dashboard";
 import { DeliverablesView } from "./views/DeliverablesView";
 import { EvidenceView } from "./views/EvidenceView";
+import { MarketView } from "./views/MarketView";
 import { QuotasView } from "./views/QuotasView";
 import { SkillsView } from "./views/SkillsView";
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: "skills", label: "Skill graph" },
   { key: "deliverables", label: "Deliverables" },
   { key: "cases", label: "Business cases" },
+  { key: "market", label: "Gap radar" },
   { key: "quotas", label: "Quotas" },
   { key: "evidence", label: "Evidence" },
 ] as const;
@@ -28,7 +30,7 @@ function isTab(value: string): value is TabKey {
 /**
  * Navigation is the URL hash, not a router library.
  *
- * Six views with no nested routes and no route parameters beyond a skill
+ * Seven views with no nested routes and no route parameters beyond a skill
  * code. React Router would be a dependency, a provider and a concept to carry
  * for something the platform already does — and the hash keeps deep links
  * working, which is the only feature actually needed here.
@@ -140,6 +142,7 @@ export default function App() {
             )}
             {tab === "deliverables" && <DeliverablesView scope={scope} />}
             {tab === "cases" && <CasesView scope={scope} />}
+            {tab === "market" && <MarketView scope={scope} />}
             {tab === "quotas" && <QuotasView scope={scope} />}
             {tab === "evidence" && <EvidenceView scope={scope} />}
           </>

@@ -24,6 +24,7 @@ dev = [
 ]
 postgres = ["psycopg[binary]>=3.2"]
 analytics = ["pyarrow>=18.0"]
+agents = ["anthropic>=0.69"]
 
 [project.scripts]
 tos = "app.cli:app"

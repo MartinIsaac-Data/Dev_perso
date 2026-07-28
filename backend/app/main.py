@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api import cases, deliverables, profiles, skills
+from app.api import cases, deliverables, market, profiles, skills
 from app.config import get_settings
 from app.db import get_db
 from app.models import Deliverable, Profile, Skill, SkillEdge
@@ -42,6 +42,7 @@ app.include_router(profiles.router)
 app.include_router(skills.router)
 app.include_router(deliverables.router)
 app.include_router(cases.router)
+app.include_router(market.router)
 
 
 @app.get("/health", tags=["meta"])

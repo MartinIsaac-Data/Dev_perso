@@ -436,3 +436,68 @@ export interface CaseDetail {
   reviews: CaseReview[];
   audit: AssumptionAudit;
 }
+
+// --- Gap Radar and agents --------------------------------------------------
+
+export interface SkillDemand {
+  skill_code: string;
+  skill_name: string;
+  domain_name: string;
+  demand_count: number;
+  must_have_count: number;
+  demanded_level: number | null;
+  current_level: number;
+  target_level: number;
+  market_gap: number;
+  is_critical: boolean;
+}
+
+export interface MarketGapReport {
+  target_role_code: string | null;
+  postings_analysed: number;
+  demands: SkillDemand[];
+  unmapped: [string, number][];
+}
+
+export interface PostingRequirement {
+  raw_label: string;
+  skill_id: number | null;
+  required_level: number | null;
+  importance: string;
+  evidence_quote: string | null;
+}
+
+export interface Posting {
+  id: number;
+  title: string;
+  company: string | null;
+  location: string | null;
+  seniority_label: string | null;
+  source: string | null;
+  posted_on: string | null;
+  captured_on: string;
+  requirements: PostingRequirement[];
+}
+
+export interface AgentRunRow {
+  id: number;
+  agent_name: string;
+  model: string;
+  status: string;
+  prompt_path: string;
+  prompt_sha256: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  error: string | null;
+  prompt_unchanged: boolean;
+}
+
+export interface PeriodicReview {
+  id: number;
+  kind: string;
+  period_start: string;
+  period_end: string;
+  body_md: string;
+  next_action: string | null;
+  next_action_rationale: string | null;
+}
