@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { api } from "./api/client";
+import { IS_STATIC, api, snapshotMeta } from "./api/client";
 import { ErrorNote } from "./components/primitives";
 import { useApi } from "./hooks/useApi";
 import { CasesView } from "./views/CasesView";
@@ -45,6 +45,12 @@ export default function App() {
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
 
   const profiles = useApi(() => api.profiles(), []);
+  const [snapshotDate, setSnapshotDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!IS_STATIC) return;
+    snapshotMeta().then((meta) => setSnapshotDate(meta?.generated_at.slice(0, 10) ?? null));
+  }, []);
 
   useEffect(() => {
     window.location.hash = tab;
@@ -126,6 +132,17 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {IS_STATIC && (
+        <div className="border-b border-amber-200 bg-amber-50">
+          <p className="mx-auto max-w-7xl px-4 py-2 text-xs text-amber-900">
+            <strong>Static demonstration.</strong> A recording of the fictional demo
+            profile{snapshotDate ? ` as at ${snapshotDate}` : ""}, with no backend behind it —
+            nothing here can be changed, and no real data is published. Run it locally to use
+            it for real: <code className="font-mono">docker compose up</code>.
+          </p>
+        </div>
+      )}
 
       <main className="mx-auto max-w-7xl px-4 py-5">
         {profiles.error ? (

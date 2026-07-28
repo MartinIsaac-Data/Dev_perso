@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ApiError, api, type Scope } from "../api/client";
+import { ApiError, IS_STATIC, api, type Scope } from "../api/client";
 import type { CaseDetail, CauseNode, ReviewChallenge, RoiResult } from "../api/types";
 import { Tornado } from "../components/Tornado";
 import { Badge, Card, Empty, ErrorNote, Loading, Stat } from "../components/primitives";
@@ -598,7 +598,7 @@ function ChallengeCard({
             </button>
           </div>
         </div>
-      ) : (
+      ) : IS_STATIC ? null : (
         <button
           onClick={() => setAnswering(true)}
           className="mt-1.5 text-xs text-sky-700 underline underline-offset-2"

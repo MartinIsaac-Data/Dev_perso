@@ -391,6 +391,44 @@ def analytics_drop() -> None:
     typer.secho("analytical layer removed", fg=typer.colors.GREEN)
 
 
+@app.command("snapshot")
+def snapshot_cmd(
+    profile: str = typer.Option("demo", help="Must be a demonstration profile."),
+    output: str = typer.Option(
+        "frontend/public/snapshot.json", help="Where to write the snapshot."
+    ),
+) -> None:
+    """Record the demo profile's API responses for the static public site.
+
+    The application has no authentication, so the public demo publishes a
+    recording rather than the API. Writes become impossible rather than merely
+    discouraged, because there is nothing to write to.
+    """
+    from app.services.snapshot import generate
+
+    destination = Path(output)
+    if not destination.is_absolute():
+        destination = REPO_ROOT / destination
+
+    with session_scope() as session:
+        try:
+            result = generate(session, destination, profile)
+        except ValueError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+
+    typer.echo(f"  profile      {result.profile}")
+    typer.echo(f"  responses    {result.entries}")
+    typer.echo(f"  size         {result.bytes_written:,} bytes")
+    typer.echo(f"  written to   {result.path}")
+    if result.failures:
+        typer.secho(f"  {len(result.failures)} request(s) did not return 200:", fg=typer.colors.RED)
+        for url, code in result.failures.items():
+            typer.echo(f"    {code}  {url}")
+        raise typer.Exit(1)
+    typer.secho("snapshot written", fg=typer.colors.GREEN)
+
+
 @app.command("status")
 def status() -> None:
     """One-line summary of what is in the database."""

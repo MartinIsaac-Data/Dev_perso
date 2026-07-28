@@ -27,6 +27,49 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
+/**
+ * Static mode: serve every read from a recorded snapshot instead of the API.
+ *
+ * The application has no authentication and is local-first by design, so the
+ * public demonstration site publishes a recording of the demo profile rather
+ * than the API itself. Writes are then impossible rather than merely hidden,
+ * because there is nothing behind the interface to write to.
+ */
+export const IS_STATIC = import.meta.env.VITE_STATIC_SNAPSHOT === "true";
+
+const READ_ONLY_MESSAGE =
+  "This is a static demonstration. It is a recording of the demo profile, " +
+  "with no backend behind it, so nothing can be changed here.";
+
+interface Snapshot {
+  generated_at: string;
+  profile: string;
+  read_only: boolean;
+  responses: Record<string, unknown>;
+}
+
+let snapshotPromise: Promise<Snapshot> | null = null;
+
+function loadSnapshot(): Promise<Snapshot> {
+  if (snapshotPromise === null) {
+    // BASE_URL rather than a leading slash, so the site works when served
+    // from a sub-path as well as from a domain root.
+    snapshotPromise = fetch(`${import.meta.env.BASE_URL}snapshot.json`).then((response) => {
+      if (!response.ok) {
+        throw new ApiError(response.status, "The demonstration snapshot could not be loaded.");
+      }
+      return response.json() as Promise<Snapshot>;
+    });
+  }
+  return snapshotPromise;
+}
+
+export async function snapshotMeta(): Promise<{ generated_at: string; profile: string } | null> {
+  if (!IS_STATIC) return null;
+  const snapshot = await loadSnapshot();
+  return { generated_at: snapshot.generated_at, profile: snapshot.profile };
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -61,6 +104,20 @@ function readDetail(body: unknown, fallback: string): string {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (IS_STATIC) {
+    const method = init?.method ?? "GET";
+    if (method !== "GET") throw new ApiError(405, READ_ONLY_MESSAGE);
+
+    const snapshot = await loadSnapshot();
+    if (!(path in snapshot.responses)) {
+      // Named explicitly rather than rendering an empty view: a missing key
+      // means the generator and this client disagree about the canonical URL,
+      // and that is a build problem, not a data problem.
+      throw new ApiError(404, `Not recorded in the demonstration snapshot: ${path}`);
+    }
+    return snapshot.responses[path] as T;
+  }
+
   let response: Response;
   try {
     response = await fetch(`${BASE}${path}`, {
@@ -82,11 +139,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+/**
+ * Build a query string with parameters in a stable, sorted order.
+ *
+ * The order matters because the static snapshot is keyed by the full URL, and
+ * `?limit=8&profile=demo` and `?profile=demo&limit=8` are the same request.
+ * Sorting here and sorting in `snapshot.py` is what keeps the two agreeing.
+ */
 function query(params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== "") search.set(key, String(value));
-  }
+  const entries = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  for (const [key, value] of entries) search.set(key, String(value));
   const rendered = search.toString();
   return rendered ? `?${rendered}` : "";
 }

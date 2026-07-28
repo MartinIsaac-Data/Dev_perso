@@ -59,7 +59,7 @@ Verify the install:
 ```bash
 make status    # what is in the database
 make graph     # graph integrity and critical path
-make check     # lint, 377 backend tests, front-end type check
+make check     # lint, 396 backend tests, front-end type check
 ```
 
 Expected output from `make graph` on a fresh install:
@@ -294,6 +294,38 @@ than a 500. Everything else in the application works unchanged.
 
 ---
 
+## Publishing a demonstration
+
+The API has **no authentication**, and that is deliberate rather than
+unfinished: the application is local-first (ADR-001) and runs on one machine.
+Publishing it would expose read *and write* access to anyone with the URL.
+
+So the public demo does not publish the API. `make demo-site` records the
+demonstration profile's responses into a single JSON file and builds a front
+end that reads it instead of making requests:
+
+```bash
+make demo-site     # snapshot + static build into frontend/dist
+```
+
+The result is entirely static — no backend, no database, no credentials,
+nothing to attack — and it deploys to Netlify from `netlify.toml` as-is. Writes
+are impossible rather than merely hidden, because there is nothing behind the
+interface to write to, and a banner says so.
+
+Two guards, both tested. The generator **refuses any profile not flagged as
+demo**, and it **strips every other profile out of the published responses** —
+which is a privacy measure and a correctness one at once: a visitor offered
+"Owner" in the profile selector could pick it, and every request after that
+would be a key the snapshot does not hold.
+
+The snapshot is keyed by the full request URL with query parameters sorted, and
+the same sorting rule lives in `client.ts` and in `snapshot.py`. A test reads
+the TypeScript source to check the sort is still there, because if the two
+disagree the site breaks silently.
+
+---
+
 ## The analytical layer
 
 Two storage layers, and the split is the point. The normalised tables are the
@@ -352,7 +384,7 @@ backend/
   seeds/
     reference/      Taxonomy, levels, phases, quotas, rubric — upserted, idempotent
     demo/           Fictional demonstration dataset
-  tests/            377 tests: graph, ROI, agents, star schema, API, seeds
+  tests/            396 tests: graph, ROI, agents, star schema, snapshot, API
 frontend/
   src/
     api/            Typed client and hand-written response types

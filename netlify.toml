@@ -1,0 +1,39 @@
+# Netlify configuration for the static demonstration site.
+#
+# Only the front end is published, and only as a recording. The API has no
+# authentication and is local-first by design (ADR-001), so publishing it would
+# expose read and write access to anyone with the URL. `tos snapshot` records
+# the demo profile's responses into frontend/public/snapshot.json, and
+# VITE_STATIC_SNAPSHOT makes the client read that file instead of making
+# requests — so the published site has no backend to attack and carries no real
+# data.
+#
+# The snapshot is committed rather than generated during the Netlify build,
+# because generating it needs Python, the database and the seeds. Regenerate it
+# locally with `make snapshot` whenever the demo data changes.
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  VITE_STATIC_SNAPSHOT = "true"
+
+# Single-page application: every path serves index.html so the hash router
+# works on a hard refresh and on a shared deep link.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/snapshot.json"
+  [headers.values]
+    Cache-Control = "public, max-age=300, must-revalidate"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

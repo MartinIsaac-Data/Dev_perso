@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ApiError, api, type Scope } from "../api/client";
+import { ApiError, IS_STATIC, api, type Scope } from "../api/client";
 import type { Deliverable } from "../api/types";
 import { Badge, Card, Empty, ErrorNote, Loading } from "../components/primitives";
 import { useApi } from "../hooks/useApi";
@@ -31,12 +31,14 @@ export function DeliverablesView({ scope }: { scope: Scope }) {
         <p className="text-sm text-slate-600">
           {published.length} published · {open.length} open
         </p>
-        <button
-          onClick={() => setCreating((value) => !value)}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
-        >
-          {creating ? "Cancel" : "Record a deliverable"}
-        </button>
+        {!IS_STATIC && (
+          <button
+            onClick={() => setCreating((value) => !value)}
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
+          >
+            {creating ? "Cancel" : "Record a deliverable"}
+          </button>
+        )}
       </div>
 
       {creating && (
