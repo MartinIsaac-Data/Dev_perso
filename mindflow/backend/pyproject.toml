@@ -1,0 +1,91 @@
+[project]
+name = "mindflow-backend"
+version = "0.1.0"
+description = "MindFlow AI — voice capture, transcription and structured extraction"
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "httpx>=0.28.0",
+    "pyjwt[crypto]>=2.10.0",
+    "structlog>=24.4.0",
+    "arq>=0.26.0",
+    "redis>=5.2.0",
+    "prometheus-client>=0.21.0",
+    "python-multipart>=0.0.20",
+    "email-validator>=2.2.0",
+]
+
+[project.optional-dependencies]
+# Self-hosted STT (ADR-007). Heavy (CTranslate2 + model weights); the API and the
+# test suite never import it — it is loaded lazily by the faster-whisper adapter.
+whisper = ["faster-whisper>=1.1.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "respx>=0.22.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "import-linter>=2.1",
+    "types-redis>=4.6.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "ASYNC", "S"]
+ignore = [
+    "S101",  # assert — used in tests
+    "B008",  # function call in default argument — the FastAPI Depends() idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test credentials, temp paths and literal SQL are intentional inside tests.
+"tests/*" = ["S105", "S106", "S108", "S607", "S608"]
+# Migrations build DDL from a fixed, code-controlled table list — never user input.
+"migrations/*" = ["E501", "N999", "S608"]
+# `UUID as PgUUID` disambiguates the dialect type from uuid.UUID; N811 misreads it.
+"app/infra/db/models/*" = ["N811"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+exclude = ["migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = ["arq.*", "faster_whisper.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "integration: requires a live PostgreSQL database",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/observability/tracing.py"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

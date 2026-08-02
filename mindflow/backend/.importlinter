@@ -1,0 +1,49 @@
+; Architecture contracts — enforced in CI (Architecture.md §8.2).
+; A violation fails the build. These contracts exist so that the modular monolith
+; (ADR-001) stays modular: without them it becomes a plain monolith within months.
+
+[importlinter]
+root_package = app
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = Layered architecture: api -> services -> domain, infra at the edge
+type = layers
+layers =
+    app.api
+    app.services
+    app.domain
+exhaustive = False
+
+[importlinter:contract:domain-purity]
+name = The domain is pure — no framework, no I/O, no driver
+type = forbidden
+source_modules =
+    app.domain
+forbidden_modules =
+    sqlalchemy
+    fastapi
+    httpx
+    arq
+    redis
+    alembic
+    app.infra
+    app.api
+    app.services
+
+[importlinter:contract:infra-does-not-know-callers]
+name = Infrastructure implements ports; it never calls the API or services layer
+type = forbidden
+source_modules =
+    app.infra
+forbidden_modules =
+    app.api
+    app.services
+
+[importlinter:contract:workers-do-not-import-api]
+name = Workers share services and domain, never HTTP routing
+type = forbidden
+source_modules =
+    app.workers
+forbidden_modules =
+    app.api.v1

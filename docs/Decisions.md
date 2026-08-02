@@ -47,6 +47,11 @@
 | [026](#adr-026) | Le quota ne bloque jamais une capture | ✅ | 0 |
 | [027](#adr-027) | L'édition utilisateur prime toujours sur le retraitement IA | ✅ | 0 |
 | [028](#adr-028) | Suppression d'une capture sans cascade par défaut | ✅ | 0 |
+| [029](#adr-029) | Supabase Auth remplace l'authentification auto-hébergée | ✅ | 1 |
+| [030](#adr-030) | Supabase Storage comme magasin d'objets | ✅ | 1 |
+| [031](#adr-031) | OpenAI par défaut, architecture interchangeable | ⚠️ | 1 |
+| [032](#adr-032) | Python 3.11 au lieu de 3.13 | ✅ | 1 |
+| [033](#adr-033) | Rôle applicatif non-superutilisateur, obligatoire | ✅ | 1 |
 
 ---
 
@@ -996,3 +1001,123 @@ phase respective.
 - Contrat d'API → `API.md`
 - Architecture IA → `AI.md`
 - Trajectoire → `Roadmap.md`
+
+---
+
+# Amendements — Phase 1
+
+Ces ADR amendent des décisions de la phase 0. Ils sont ajoutés plutôt que
+substitués : l'ADR d'origine reste lisible, avec son raisonnement, et l'amendement
+dit ce qui change et pourquoi.
+
+<a id="adr-029"></a>
+## ADR-029 — Supabase Auth remplace l'authentification auto-hébergée
+
+**Statut** ✅ Acceptée · Phase 1 · **Amende** `API.md` §4 (lien magique auto-hébergé)
+
+**Contexte.** La phase 0 spécifiait un lien magique implémenté en interne, avec
+rotation de jeton de rafraîchissement et détection de rejeu (`API.md` §4.2). La
+stack de la phase 1 impose Supabase Auth.
+
+**Décision.** Supabase Auth devient le fournisseur d'identité. Le backend ne délivre
+plus de jetons : il **vérifie** ceux de Supabase (HS256 avec le secret projet, ou
+asymétrique via JWKS) et projette chaque `auth.users.id` sur une ligne `app_user`
+via la colonne `auth_subject`.
+
+**Alternative écartée.** Conserver l'implémentation maison. Elle reste défendable —
+elle évite une dépendance sur le chemin critique de connexion — mais représente
+plusieurs semaines de travail sur un problème résolu, et la rotation de jeton avec
+détection de rejeu est précisément le genre de code où une erreur subtile est une
+faille.
+
+**Coût accepté.**
+- Dépendance d'un tiers sur le chemin de connexion : Supabase indisponible = personne
+  ne se connecte. Les sessions en cours survivent (le jeton est vérifié localement).
+- La révocation immédiate d'une session n'est plus sous notre contrôle direct.
+- L'identité vit à deux endroits (Supabase et `app_user`) : la synchronisation est un
+  point de défaillance, traité par un approvisionnement paresseux au premier appel.
+- **La RLS ne change pas.** Le contexte reste posé par `SET LOCAL app.account_id`
+  depuis le backend, et non par `auth.uid()` : le motif Supabase natif supposerait
+  que le client parle directement à PostgreSQL, ce que cette architecture ne fait pas.
+  ADR-005 est préservé intégralement.
+
+<a id="adr-030"></a>
+## ADR-030 — Supabase Storage comme magasin d'objets
+
+**Statut** ✅ Acceptée · Phase 1 · **Précise** ADR-018
+
+**Contexte.** ADR-018 exige un stockage objet compatible S3 avec URL présignées.
+
+**Décision.** Supabase Storage. C'est une implémentation de ce qu'ADR-018 décrivait ;
+la décision d'origine n'est pas modifiée, seulement instanciée. Un adaptateur local
+sur disque sert au développement et aux tests.
+
+**Coût accepté.** Les URL signées de Supabase ont leur propre format et leur propre
+politique d'expiration ; l'adaptateur absorbe la différence. Le chiffrement par clé
+de locataire (ADR-005, `Architecture.md` §11.4) n'est pas fourni nativement et est
+reporté — **c'est un écart réel par rapport à la phase 0**, consigné dans `TODO.md`.
+
+<a id="adr-031"></a>
+## ADR-031 — OpenAI comme fournisseur par défaut, architecture interchangeable
+
+**Statut** ⚠️ Provisoire · Phase 1 · **Amende** ADR-008 et ADR-019
+
+**Contexte.** ADR-008 retenait Claude (`claude-opus-5`) pour l'extraction, sur un
+critère de respect strict du schéma. La stack de la phase 1 impose OpenAI, avec la
+mention explicite « architecture interchangeable ».
+
+**Décision.** OpenAI (`gpt-4o-mini` par défaut) devient le fournisseur configuré ;
+Claude reste implémenté comme adaptateur alternatif. Le choix se fait par
+configuration (`MINDFLOW_LLM_BACKEND`), sans redéploiement de code. Le schéma de
+sortie (`app/domain/analysis.py`) est indépendant du fournisseur et c'est lui, et non
+le prompt, qui constitue le contrat.
+
+**Alternative écartée.** Conserver Claude comme défaut. Le raisonnement d'ADR-008
+reste valable, mais il n'a jamais été vérifié par une mesure : la question Q1 de la
+phase 0 est toujours ouverte, et aucune donnée ne permet aujourd'hui de trancher.
+
+**Coût accepté.**
+- **Le raisonnement d'ADR-008 n'est pas invalidé, il est simplement mis de côté sans
+  preuve.** L'affirmation « la qualité d'extraction structurée est décisive » reste
+  non mesurée. Le dispositif d'évaluation (`AI.md` §8) est le seul moyen de trancher,
+  et il doit comparer les deux adaptateurs sur le même jeu.
+- Deux adaptateurs à maintenir et à évaluer.
+- Les estimations de coût de `Architecture.md` §15.2 sont caduques : elles étaient
+  calculées sur les tarifs Claude. À recalculer.
+
+**Réexamen.** Sprint 3, sur le jeu d'évaluation, exactement comme le prévoyait Q1.
+
+<a id="adr-032"></a>
+## ADR-032 — Python 3.11 au lieu de 3.13
+
+**Statut** ✅ Acceptée · Phase 1 · **Amende** ADR-003
+
+**Contexte.** ADR-003 visait Python 3.13 ; l'environnement de développement fournit
+3.11.
+
+**Décision.** Cibler `>=3.11`. Aucune fonctionnalité de 3.12 ou 3.13 n'est utilisée.
+
+**Coût accepté.** On se prive de quelques améliorations de performance et de messages
+d'erreur. La montée de version sera un changement de `requires-python` et d'image de
+base, sans modification de code.
+
+<a id="adr-033"></a>
+## ADR-033 — Rôle applicatif non-superutilisateur, obligatoire
+
+**Statut** ✅ Acceptée · Phase 1 · **Complète** ADR-005
+
+**Contexte.** Découvert à l'implémentation : `FORCE ROW LEVEL SECURITY` fait
+s'appliquer les politiques au propriétaire de la table, mais **un superutilisateur
+contourne toujours la RLS**. Une application connectée en `postgres` rend donc
+inertes toutes les politiques de la migration 0002 — la garantie d'isolation serait
+purement décorative.
+
+**Décision.** Trois rôles (`mindflow_app`, `mindflow_readonly`,
+`mindflow_maintenance`) créés par la migration 0003. L'application se connecte
+obligatoirement avec `mindflow_app` : `NOSUPERUSER`, `NOBYPASSRLS`. Un test
+(`test_the_app_role_cannot_bypass_rls`) vérifie cette propriété à chaque exécution
+de la suite.
+
+**Coût accepté.** Un rôle de plus à provisionner dans chaque environnement, et une
+configuration de connexion qui ne peut pas être « simplifiée » en superutilisateur
+sans faire échouer les tests — ce qui est l'effet recherché.
