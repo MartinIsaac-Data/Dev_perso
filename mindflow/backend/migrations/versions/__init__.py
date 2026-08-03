@@ -21,6 +21,7 @@ from pathlib import Path
 POLICY_SOURCES: tuple[tuple[str, str], ...] = (
     ("0002_row_level_security.py", "TENANT_TABLES"),
     ("0005_planning_reminders_notifications_history.py", "NEW_TENANT_TABLES"),
+    ("0006_ai_layer_vectors_entities_conversations.py", "NEW_TENANT_TABLES"),
 )
 
 

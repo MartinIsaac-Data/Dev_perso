@@ -1,5 +1,15 @@
 """SQLAlchemy models. Importing this package registers every table on Base.metadata."""
 
+from app.infra.db.models.ai import (
+    AI_TENANT_TABLES,
+    Chunk,
+    Conversation,
+    ConversationMessage,
+    Digest,
+    Entity,
+    EntityMention,
+    Memory,
+)
 from app.infra.db.models.base import Base
 from app.infra.db.models.core import (
     TENANT_TABLES,
@@ -26,6 +36,7 @@ from app.infra.db.models.core import (
 )
 
 __all__ = [
+    "AI_TENANT_TABLES",
     "TENANT_TABLES",
     "Account",
     "AiRun",
@@ -33,12 +44,19 @@ __all__ = [
     "AuditLog",
     "Base",
     "Capture",
+    "Chunk",
+    "Conversation",
+    "ConversationMessage",
     "CorrectionEvent",
     "Device",
+    "Digest",
+    "Entity",
+    "EntityMention",
     "Entry",
     "EntryLink",
     "EntryTag",
     "JobRun",
+    "Memory",
     "Outbox",
     "Plan",
     "Project",

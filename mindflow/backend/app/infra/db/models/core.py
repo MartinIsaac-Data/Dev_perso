@@ -1061,4 +1061,14 @@ TENANT_TABLES: tuple[str, ...] = (
     "notification",
     "saved_filter",
     "activity_event",
+    # Phase 3. Defined in `app.infra.db.models.ai`, listed here because this
+    # tuple is the single list the RLS migration and the isolation test both
+    # walk — splitting it would let a table be added to one and not the other.
+    "chunk",
+    "entity",
+    "entity_mention",
+    "conversation",
+    "conversation_message",
+    "memory",
+    "digest",
 )

@@ -8,6 +8,7 @@ Anthropic, is an adapter change and touches nothing else.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -206,6 +207,138 @@ class PushSenderPort(ABC):
 
     @abstractmethod
     async def send(self, tokens: list[str], message: PushMessage) -> PushResult: ...
+
+    async def health(self) -> bool:
+        return True
+
+
+# --------------------------------------------------------------------------- #
+# Embeddings (Phase 3)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True, slots=True)
+class EmbeddingResult:
+    """Vectors, plus what it cost to make them.
+
+    `dimensions` travels with the result rather than being assumed: a store that
+    silently accepts a 768-vector into a 1024-column, or compares vectors made by
+    two different models, returns nonsense that looks like a ranking. The caller
+    checks.
+    """
+
+    vectors: tuple[tuple[float, ...], ...]
+    model: str
+    dimensions: int
+    usage: AiUsage
+
+    def __post_init__(self) -> None:
+        for vector in self.vectors:
+            if len(vector) != self.dimensions:
+                raise ValueError(
+                    f"embedding of {len(vector)} dimensions, expected {self.dimensions}"
+                )
+
+
+class EmbedderPort(ABC):
+    """Text in, vectors out.
+
+    Batched by construction: every provider charges and rate-limits per request,
+    and embedding a hundred chunks one at a time is a hundred round trips for
+    work that costs the same in one.
+    """
+
+    name: str = "unknown"
+    model: str = "unknown"
+    dimensions: int = 0
+
+    @abstractmethod
+    async def embed(self, texts: list[str], *, kind: str = "document") -> EmbeddingResult:
+        """Embed a batch.
+
+        `kind` is `document` or `query`. Several families (E5, BGE, Gemini) score
+        materially better when the two are prefixed differently, and a provider
+        that ignores the distinction simply ignores the argument.
+        """
+
+    async def health(self) -> bool:
+        return True
+
+
+# --------------------------------------------------------------------------- #
+# Chat (Phase 3)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True, slots=True)
+class ChatMessage:
+    """One turn. `role` is `system`, `user` or `assistant`.
+
+    Deliberately not a provider's message type: OpenAI, Anthropic and Gemini each
+    shape this differently — content blocks, `parts`, a separate `system`
+    parameter — and letting any one of those shapes reach the service layer is
+    how a codebase acquires a favourite vendor.
+    """
+
+    role: str
+    content: str
+
+
+@dataclass(frozen=True, slots=True)
+class ChatRequest:
+    messages: tuple[ChatMessage, ...]
+    system: str | None = None
+    temperature: float = 0.2
+    max_output_tokens: int = 1200
+    # A JSON schema when the caller needs a typed answer. Providers that support
+    # constrained decoding use it; the others get it appended to the system
+    # prompt and their output is validated the same way either side.
+    json_schema: dict[str, Any] | None = None
+    stop: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ChatChunk:
+    """A streamed fragment. `done` marks the final one, which carries the usage."""
+
+    text: str = ""
+    done: bool = False
+    usage: AiUsage | None = None
+    finish_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ChatResponse:
+    text: str
+    usage: AiUsage
+    finish_reason: str = "stop"
+    # True when the model declined. A refusal is a legitimate outcome, not an
+    # error: the caller degrades the answer rather than retrying (ADR-030).
+    refused: bool = False
+
+
+class ChatPort(ABC):
+    """A conversation with a model. One interface, five providers.
+
+    Streaming is the primary method and `complete` is derived from it, not the
+    other way round: an assistant that shows nothing for eight seconds feels
+    broken even when it is fast, and a provider that cannot stream is a provider
+    whose adapter yields one chunk.
+    """
+
+    name: str = "unknown"
+    model: str = "unknown"
+    supports_json_schema: bool = False
+
+    @abstractmethod
+    def stream(self, request: ChatRequest) -> AsyncIterator[ChatChunk]: ...
+
+    async def complete(self, request: ChatRequest) -> ChatResponse:
+        parts: list[str] = []
+        usage = AiUsage(model=self.model)
+        finish = "stop"
+        async for chunk in self.stream(request):
+            parts.append(chunk.text)
+            if chunk.done:
+                usage = chunk.usage or usage
+                finish = chunk.finish_reason or finish
+        return ChatResponse(text="".join(parts), usage=usage, finish_reason=finish)
 
     async def health(self) -> bool:
         return True

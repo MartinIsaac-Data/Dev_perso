@@ -31,6 +31,21 @@ forbidden_modules =
     app.api
     app.services
 
+[importlinter:contract:prompts-are-provider-neutral]
+name = Prompts are text, not integrations — no provider, no framework, no I/O
+type = forbidden
+source_modules =
+    app.prompts
+forbidden_modules =
+    sqlalchemy
+    fastapi
+    httpx
+    openai
+    anthropic
+    app.infra
+    app.api
+    app.services
+
 [importlinter:contract:infra-does-not-know-callers]
 name = Infrastructure implements ports; it never calls the API or services layer
 type = forbidden

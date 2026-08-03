@@ -56,8 +56,65 @@ def test_production_accepts_a_complete_configuration() -> None:
         openai_api_key="sk-test",
         push_backend="real",
         fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+        embedding_backend="openai",
+        chat_backend="openai",
     )
     assert settings.is_production_like
+
+
+def test_production_refuses_a_fake_embedding_backend() -> None:
+    """The fake embedder is not inert the way a fake push sender is.
+
+    It returns hash-derived vectors that index and retrieve *successfully* and
+    rank nonsense. Semantic search would look like it works while quietly
+    returning the wrong notes — the hardest class of bug to notice from outside.
+    """
+    with pytest.raises(ValidationError, match="embedding_backend"):
+        Settings(
+            env="prod",
+            supabase_jwt_secret="secret",
+            stt_backend="faster_whisper",
+            llm_backend="openai",
+            openai_api_key="sk-test",
+            push_backend="real",
+            fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+            embedding_backend="fake",
+            chat_backend="openai",
+        )
+
+
+def test_production_requires_the_credential_of_whichever_provider_is_chosen() -> None:
+    # The point of ADR-043: adding Mistral changed a factory branch and this
+    # check, and nothing else.
+    with pytest.raises(ValidationError, match="mistral_api_key"):
+        Settings(
+            env="prod",
+            supabase_jwt_secret="secret",
+            stt_backend="faster_whisper",
+            llm_backend="openai",
+            openai_api_key="sk-test",
+            push_backend="real",
+            fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+            embedding_backend="mistral",
+            chat_backend="openai",
+        )
+
+
+def test_a_self_hosted_llama_needs_no_credential() -> None:
+    # Requiring a key would make the one provider running entirely on your own
+    # hardware the hardest of the five to configure.
+    settings = Settings(
+        env="prod",
+        supabase_jwt_secret="secret",
+        stt_backend="faster_whisper",
+        llm_backend="openai",
+        openai_api_key="sk-test",
+        push_backend="real",
+        fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+        embedding_backend="llama",
+        chat_backend="llama",
+    )
+    assert settings.chat_backend == "llama"
 
 
 def test_production_refuses_a_fake_push_backend() -> None:

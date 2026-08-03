@@ -80,6 +80,52 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_base_url: str = "https://api.anthropic.com/v1"
 
+    # -- Additional providers (Phase 3) ------------------------------------
+    # Mistral, Gemini and Llama arrive here rather than in a plugin because the
+    # ports they implement already existed; adding a provider is a factory
+    # branch and a credential, never a change to a caller (ADR-043).
+    mistral_api_key: str = ""
+    mistral_base_url: str = "https://api.mistral.ai/v1"
+    gemini_api_key: str = ""
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    # Llama has no single vendor. Anything speaking the OpenAI wire format —
+    # Ollama, vLLM, llama.cpp's server, Together, Groq — is reached by pointing
+    # this at it, which is why there is a URL and no product name.
+    llama_base_url: str = "http://localhost:11434/v1"
+    llama_api_key: str = ""
+
+    # -- Embeddings (Phase 3) ----------------------------------------------
+    embedding_backend: Literal["openai", "mistral", "gemini", "llama", "fake"] = "fake"
+    embedding_model: str = "text-embedding-3-small"
+    # This is a *schema* decision, not merely a client one: the `chunk.embedding`
+    # column is `vector(N)` and N is fixed at migration time. Changing provider
+    # to one with a different width therefore means a migration plus a full
+    # re-embed — which is required anyway, since two models' vectors live in
+    # different spaces and comparing them is meaningless (ADR-045).
+    embedding_dimensions: int = 1536
+    embedding_timeout_seconds: float = 30.0
+    # Providers cap request size; 64 chunks is comfortably inside every cap we
+    # target and keeps a failed batch cheap to retry.
+    embedding_batch_size: int = 64
+
+    # -- Assistant (Phase 3) -----------------------------------------------
+    chat_backend: Literal["openai", "anthropic", "gemini", "mistral", "llama", "fake"] = "fake"
+    chat_model: str = "gpt-4o-mini"
+    chat_timeout_seconds: float = 90.0
+    chat_max_output_tokens: int = 1200
+    # How much retrieved text the answer prompt may carry. Larger is not better:
+    # past roughly this size, recall stops improving and the model starts
+    # answering from the middle of the context, which reads as ignoring the
+    # question.
+    chat_context_token_budget: int = 6000
+
+    # -- Retrieval (Phase 3) -----------------------------------------------
+    # Candidates pulled from *each* retriever before fusion. Fusion needs depth
+    # to find consensus; showing depth to the user does not.
+    retrieval_candidate_limit: int = 40
+    retrieval_context_chunks: int = 8
+    retrieval_min_similarity: float = 0.15
+
     # -- Push notifications (Phase 2) --------------------------------------
     # `fake` records instead of sending, which is what lets the whole reminder
     # path be exercised in tests and in `docker compose up` without a Firebase
@@ -166,12 +212,43 @@ class Settings(BaseSettings):
         ):
             missing.append("fcm_service_account_json or wns_client_id")
 
+        # Phase 3. `fake` here is not inert like a fake push: the fake embedder
+        # produces hash-derived vectors that index and retrieve *successfully*
+        # and rank nonsense. Semantic search would appear to work and quietly
+        # return the wrong notes, which is the hardest class of bug to notice.
+        if self.embedding_backend == "fake":
+            missing.append("embedding_backend (must not be 'fake')")
+        if self.chat_backend == "fake":
+            missing.append("chat_backend (must not be 'fake')")
+        for backend in dict.fromkeys((self.embedding_backend, self.chat_backend)):
+            key = _missing_provider_key(backend, self)
+            if key and key not in missing:
+                missing.append(key)
+
         if missing:
             raise ValueError(
                 f"environment '{self.env}' requires: {', '.join(missing)}. "
                 "Refusing to start with an incomplete configuration."
             )
         return self
+
+
+def _missing_provider_key(backend: str, settings: Settings) -> str:
+    """The credential a backend needs but does not have, if any.
+
+    `llama` is deliberately absent: it points at a self-hosted OpenAI-compatible
+    server, which normally needs no key. Requiring one would make the one
+    provider that runs entirely on your own hardware the hardest to configure.
+    """
+    required: dict[str, str] = {
+        "openai": settings.openai_api_key,
+        "anthropic": settings.anthropic_api_key,
+        "mistral": settings.mistral_api_key,
+        "gemini": settings.gemini_api_key,
+    }
+    if backend in required and not required[backend]:
+        return f"{backend}_api_key"
+    return ""
 
 
 @lru_cache(maxsize=1)

@@ -141,18 +141,23 @@ def json_schema_for_llm() -> dict[str, object]:
     nullable unions rather than omitted keys.
     """
     schema = NoteAnalysis.model_json_schema()
-    _harden(schema)
+    harden_schema(schema)
     return schema
 
 
-def _harden(node: object) -> None:
-    """Walk the generated schema and make every object strict."""
+def harden_schema(node: object) -> None:
+    """Walk a generated schema in place and make every object strict.
+
+    Public because phase 3 added more constrained-decoding contracts
+    (`app.domain.knowledge`) and every one of them needs the same treatment:
+    providers reject a strict schema that omits `additionalProperties: false`.
+    """
     if isinstance(node, dict):
         if node.get("type") == "object" and "properties" in node:
             node["additionalProperties"] = False
             node["required"] = list(node["properties"].keys())
         for value in node.values():
-            _harden(value)
+            harden_schema(value)
     elif isinstance(node, list):
         for value in node:
-            _harden(value)
+            harden_schema(value)
