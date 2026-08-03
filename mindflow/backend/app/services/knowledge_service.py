@@ -130,9 +130,20 @@ class KnowledgeService:
         if not candidates:
             return ExtractionOutcome(topics=extraction.topics, empty=True)
 
+        # Which entities this entry pointed at before. Kept because an entity
+        # that is *no longer* named must have its count refreshed too — and it
+        # is absent from the new extraction, so nothing else would revisit it.
+        # Without this its `mention_count` stays at yesterday's number forever.
+        previously_linked = set(
+            (
+                await self._session.execute(
+                    select(EntityMention.entity_id).where(EntityMention.entry_id == entry.id)
+                )
+            ).scalars()
+        )
+
         # Every mention this entry made previously goes first. Re-extraction
-        # must *replace*, and an entity that is no longer named must stop being
-        # counted.
+        # must *replace*, never accumulate.
         await self._session.execute(delete(EntityMention).where(EntityMention.entry_id == entry.id))
 
         outcome = ExtractionOutcome(topics=extraction.topics)
@@ -159,7 +170,7 @@ class KnowledgeService:
             metrics.entities_extracted_total.labels(candidate.kind.value).inc()
 
         await self._session.flush()
-        await self._recount({entity.id for entity in outcome.entities})
+        await self._recount(previously_linked | {entity.id for entity in outcome.entities})
         return outcome
 
     async def _resolve(

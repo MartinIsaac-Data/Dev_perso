@@ -18,6 +18,7 @@ from app.observability.logging import configure_logging, get_logger
 from app.workers.outbox_dispatcher import dispatch_outbox
 from app.workers.pipeline.runner import PROCESS_CAPTURE, process_capture
 from app.workers.scheduled.digester import generate_due_digests
+from app.workers.scheduled.extractor import extract_entities
 from app.workers.scheduled.indexer import embed_backlog
 from app.workers.scheduled.reminder_dispatcher import dispatch_due_reminders, sweep_snoozed
 from app.workers.scheduled.sweeper import sweep_stuck_captures
@@ -73,6 +74,10 @@ async def digest_job(ctx: dict[str, Any]) -> int:
     return await generate_due_digests(ctx["settings"])
 
 
+async def extract_job(ctx: dict[str, Any]) -> int:
+    return await extract_entities(ctx["settings"])
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [process_capture_job]
     cron_jobs: ClassVar[list[Any]] = [
@@ -95,6 +100,11 @@ class WorkerSettings:
         # Hourly, because "21:00" means twenty-four different instants and
         # each tick asks which users have just reached theirs.
         cron(digest_job, minute={2}),
+        # Entity extraction costs a model call per entry, so it runs at a
+        # far slower cadence than indexing and works newest-first: a
+        # knowledge graph current at the edges beats one complete at the
+        # beginning.
+        cron(extract_job, minute={7, 27, 47}),
     ]
     on_startup = startup
     on_shutdown = shutdown
