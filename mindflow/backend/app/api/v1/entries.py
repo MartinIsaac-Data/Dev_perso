@@ -19,9 +19,11 @@ from app.api.schemas.entries import (
     TransformEntryRequest,
     UpdateEntryRequest,
 )
-from app.domain.enums import EntryStatus, EntryType
+from app.domain.enums import ActivityAction, EntryStatus, EntryType
 from app.infra.db.models.core import Entry, EntryTag, Tag, Task
+from app.services.activity_service import ActivityService
 from app.services.entry_service import EntryService
+from app.services.reminder_service import ReminderService
 
 router = APIRouter(prefix="/entries", responses=ERROR_RESPONSES)
 
@@ -65,6 +67,10 @@ def entry_view(entry: Entry, task: Task | None = None, tags: list[str] | None = 
 
 
 async def _hydrate(session, entry: Entry) -> EntryView:  # type: ignore[no-untyped-def]
+    # Refreshed before reading: a flush earlier in the request expires the
+    # server-computed columns, and an expired attribute read during response
+    # building triggers a lazy load with no greenlet to run in.
+    await session.refresh(entry)
     task = await session.get(Task, entry.id)
     tags = (
         (
@@ -132,6 +138,13 @@ async def create_entry(
         due_expression=payload.due_expression,
         priority=payload.priority,
     )
+    # A deadline without a reminder is a deadline nobody is told about. The
+    # automatic set is derived here and re-derived whenever the date moves
+    # (services.reminder_service); reminders the user set by hand are never
+    # touched by that.
+    task = await session.get(Task, entry.id)
+    if task is not None and task.due_at is not None:
+        await ReminderService(session, principal=principal).sync_automatic(entry, task)
     return Envelope(data=await _hydrate(session, entry))
 
 
@@ -215,4 +228,11 @@ async def complete_entry(
     "/{entry_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Supprimer une entrée"
 )
 async def delete_entry(entry_id: uuid.UUID, principal: PrincipalDep, session: SessionDep) -> None:
-    await EntryService(session, principal=principal).delete(entry_id)
+    service = EntryService(session, principal=principal)
+    entry = await service.get(entry_id)
+    ActivityService(session, principal=principal).record(
+        ActivityAction.DELETED, entry_id=entry.id, label=entry.title
+    )
+    # A notification about something the user just deleted is noise at best.
+    await ReminderService(session, principal=principal).cancel_for_entry(entry_id)
+    await service.delete(entry_id)

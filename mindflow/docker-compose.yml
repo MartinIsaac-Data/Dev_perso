@@ -94,6 +94,13 @@ services:
       MINDFLOW_REDIS_URL: redis://redis:6379/0
       MINDFLOW_STORAGE_BACKEND: local
       MINDFLOW_LOG_FORMAT: console
+      # The worker runs the cross-tenant jobs. Locally the app owns the schema,
+      # so the same DSN works; in production this points at the
+      # NOBYPASSRLS-exempt maintenance role (ADR-042).
+      MINDFLOW_MAINTENANCE_DATABASE_URL: postgresql+asyncpg://mindflow:mindflow@postgres:5432/mindflow
+      # `fake` records pushes instead of sending them, so the whole reminder
+      # path is exercisable without a Firebase project.
+      MINDFLOW_PUSH_BACKEND: fake
     volumes:
       # Shares the object root with the API: the worker reads the audio the API
       # never touched. With Supabase Storage this volume is not needed.

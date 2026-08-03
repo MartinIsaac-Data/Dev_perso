@@ -6,9 +6,12 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app.dart';
+import 'core/design/command_palette.dart';
 import 'core/api/client.dart';
+import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_repository.dart';
 import 'core/auth/local_auth_repository.dart';
+import 'core/notifications/notification_bootstrap.dart';
 import 'core/time/device_timezone.dart';
 
 /// Supabase project credentials, injected at build time. The anon key is a
@@ -20,6 +23,10 @@ const kSupabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('fr_FR');
+  // The timezone database has to be loaded before any local notification can be
+  // scheduled: `zonedSchedule` needs a `TZDateTime`, and a toast scheduled in
+  // the wrong zone fires at the wrong hour, which is worse than not firing.
+  await initialiseNotificationTimezone();
 
   if (!kLocalAuthEnabled) {
     if (kSupabaseUrl.isEmpty || kSupabaseAnonKey.isEmpty) {
@@ -54,6 +61,9 @@ Future<void> main() async {
           final auth = ref.watch(authRepositoryProvider);
           return MindflowApi(tokenProvider: auth.accessToken);
         }),
+        // The palette needs to open things; the router lives in `app/`. Injected
+        // here so neither has to import the other.
+        paletteNavigationProvider.overrideWithValue(openQuickHit),
       ],
       child: const _Bootstrap(child: MindflowApp()),
     ),
@@ -78,6 +88,14 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(ref.read(deviceTimezoneProvider).refresh());
+    });
+
+    // Device registration and the local reminder mirror both need a signed-in
+    // user, so they wait for one rather than running at startup.
+    ref.listenManual(authUserProvider, (previous, next) {
+      if (next.valueOrNull != null && previous?.valueOrNull == null) {
+        unawaited(bootstrapNotifications(ref));
+      }
     });
   }
 

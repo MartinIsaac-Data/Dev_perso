@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # conversion at every call site for no added safety. The scheme check below
     # keeps the useful part of the validation.
     database_url: str = "postgresql+asyncpg://postgres@localhost:5432/mindflow"
+    # Cross-tenant jobs (the sweeper, the outbox dispatcher, the reminder
+    # dispatcher) need a connection that RLS does not filter. The application
+    # role deliberately cannot do that — it is `NOBYPASSRLS`, which is the whole
+    # point of ADR-033 — so those jobs use a second DSN pointing at
+    # `mindflow_maintenance` (ADR-042). Empty means "same as database_url",
+    # which is right for local development where the app owns the schema.
+    maintenance_database_url: str = ""
     database_pool_size: int = 10
     database_max_overflow: int = 5
     redis_url: str = "redis://localhost:6379/0"
@@ -73,6 +80,26 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_base_url: str = "https://api.anthropic.com/v1"
 
+    # -- Push notifications (Phase 2) --------------------------------------
+    # `fake` records instead of sending, which is what lets the whole reminder
+    # path be exercised in tests and in `docker compose up` without a Firebase
+    # project or a Microsoft Partner Center account.
+    push_backend: Literal["real", "fake"] = "fake"
+    push_timeout_seconds: float = 10.0
+    # Batch ceiling per dispatcher tick. Keeps one very active account from
+    # monopolising the worker for a minute.
+    push_batch_size: int = 200
+
+    # Firebase: the service account JSON, verbatim. Kept as a string rather than
+    # a file path so it can come from a secret manager without touching disk.
+    fcm_service_account_json: str = ""
+    fcm_project_id: str = ""
+
+    # Windows Notification Service, for packaged (MSIX) builds. Unpackaged
+    # Windows builds schedule their toasts locally instead (ADR-040).
+    wns_client_id: str = ""
+    wns_client_secret: str = ""
+
     # -- Pipeline ----------------------------------------------------------
     # A capture longer than this is rejected at declaration time; the plan's own
     # limit is applied on top of it (Database.md, plan.max_capture_duration_ms).
@@ -97,6 +124,10 @@ class Settings(BaseSettings):
         if not value.startswith(("redis://", "rediss://", "unix://")):
             raise ValueError("redis_url must be a redis:// URL")
         return value
+
+    @property
+    def effective_maintenance_url(self) -> str:
+        return self.maintenance_database_url or self.database_url
 
     @property
     def sync_database_url(self) -> str:
@@ -125,6 +156,15 @@ class Settings(BaseSettings):
             missing.append("openai_api_key")
         if self.llm_backend == "anthropic" and not self.anthropic_api_key:
             missing.append("anthropic_api_key")
+        # A production build with `push_backend="fake"` would accept reminders,
+        # schedule them, mark them sent and deliver nothing — a silent failure
+        # far worse than a refusal to start.
+        if self.push_backend == "fake":
+            missing.append("push_backend (must not be 'fake')")
+        if self.push_backend == "real" and not (
+            self.fcm_service_account_json or self.wns_client_id
+        ):
+            missing.append("fcm_service_account_json or wns_client_id")
 
         if missing:
             raise ValueError(

@@ -56,13 +56,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(CorrelationMiddleware)
     register_error_handlers(app)
 
-    from app.api.v1 import captures, entries, health, me, projects, storage
+    from app.api.v1 import (
+        captures,
+        entries,
+        health,
+        insights,
+        me,
+        notifications,
+        planning,
+        projects,
+        storage,
+    )
 
     app.include_router(health.router, tags=["health"])
     app.include_router(me.router, prefix=settings.api_prefix, tags=["me"])
     app.include_router(captures.router, prefix=settings.api_prefix, tags=["captures"])
     app.include_router(entries.router, prefix=settings.api_prefix, tags=["entries"])
     app.include_router(projects.router, prefix=settings.api_prefix, tags=["projects"])
+    # Phase 2. Split by concern rather than by resource: the planning surface
+    # spans entries, subtasks and the calendar, and one router per table would
+    # scatter a single feature across four files.
+    app.include_router(planning.router, prefix=settings.api_prefix, tags=["planning"])
+    app.include_router(notifications.router, prefix=settings.api_prefix, tags=["notifications"])
+    app.include_router(insights.router, prefix=settings.api_prefix, tags=["insights"])
     if settings.storage_backend == "local":
         # Local-only: lets the client follow the same signed-URL flow it will use
         # against Supabase Storage in production.

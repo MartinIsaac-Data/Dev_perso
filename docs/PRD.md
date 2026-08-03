@@ -992,3 +992,42 @@ Ce que MindFlow AI **ne fera pas**, et pourquoi c'est un choix et non un manque 
 - Architecture IA et RAG → `AI.md`
 - Trajectoire de versions → `Roadmap.md`
 - Découpage en sprints → `Sprint01.md`, `Sprint02.md`, `Sprint03.md`
+
+
+---
+
+## 31. Fonctionnalités livrées en phase 2
+
+| Fonctionnalité | Ce qu'elle règle | Décision structurante |
+| --- | --- | --- |
+| **Agenda** | « Qu'est-ce qui m'attend cette semaine ? » | Fenêtres calculées dans le fuseau de l'utilisateur ; les retards ont leur propre section, jamais enfouis dans un jour scrollé |
+| **Calendrier** | « Quelles journées sont chargées ? » | Densité en points, pas en nombres : la question est « lourd ou léger », pas « combien exactement » |
+| **Sous-tâches** | Découper une tâche sans créer un projet | Un seul niveau. Deux niveaux, c'est un projet (ADR-043) |
+| **Récurrence** | « Tous les lundis » devient une vraie tâche récurrente | Calculée depuis l'échéance, pas la complétion (ADR-044) |
+| **Rappels** | Être prévenu, séparément de l'échéance | « Dû vendredi, préviens-moi jeudi soir » est une phrase ordinaire qu'un seul horodatage ne peut pas exprimer |
+| **Report** | Masquer sans mentir | Reporter ne déplace pas l'échéance : ce sont deux affirmations différentes |
+| **Notifications** | Push Android/iOS/web, WNS ou programmation locale sur poste | Le centre en base est l'enregistrement durable ; le push est une courtoisie |
+| **Priorités** | Trier ce qui compte | Rendues par une flèche et un mot, jamais par la couleur seule |
+| **Filtres et tags** | Retrouver par sa propre organisation | Renommer un tag vers un nom existant les **fusionne** — sans quoi les quasi-doublons s'accumulent jusqu'à l'abandon |
+| **Filtres enregistrés** | Nommer une recherche qu'on refait | Stocke la chaîne, pas un prédicat compilé |
+| **Recherche plein texte** | Retrouver un mot dit il y a six mois | Colonne générée + GIN ; lemmatisation française |
+| **Recherche rapide (⌘K)** | Atteindre n'importe quoi sans navigation | Actions avant contenu : « cap » veut dire capturer |
+| **Statistiques** | « Est-ce que ça marche ? » | Inclut les chiffres qui dérangent — taux de correction, captures sans résultat |
+| **Historique / Timeline** | « Qu'est-il arrivé à cette tâche ? » | Libellé dénormalisé : l'historique survit à la suppression de son sujet |
+
+### 31.1 Ce que l'interface emprunte, et à qui
+
+| Source | Ce qui est repris | Ce qui ne l'est pas |
+| --- | --- | --- |
+| **Linear** | Densité, bordures d'un pixel, un seul accent, hiérarchie portée par la typographie | Le suivi de cycles et d'estimations : ce produit n'est pas un outil d'équipe |
+| **Notion** | Interlignage généreux dans les contextes de lecture (une transcription est de la prose) | Les blocs déplaçables : la structure vient de l'extraction, pas de la mise en page |
+| **Raycast** | La palette de commandes comme navigation principale, indices clavier visibles | Les extensions et le lanceur système |
+| **ChatGPT** | Une colonne de lecture qui cesse de s'élargir bien avant la fenêtre | La conversation comme interface principale |
+
+### 31.2 Un principe que la phase 2 rend explicite
+
+**Le tableau de bord ne flatte pas.** La section « Ce qui ne va pas » affiche le
+taux de correction, les captures dont rien n'a été tiré et les éléments en
+attente de vérification, avec la même importance visuelle que les compteurs
+flatteurs. Un produit qui ne compte que ses succès n'apprend rien à personne — ni
+à son utilisateur, ni à ceux qui le construisent.

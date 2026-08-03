@@ -54,8 +54,37 @@ def test_production_accepts_a_complete_configuration() -> None:
         stt_backend="faster_whisper",
         llm_backend="openai",
         openai_api_key="sk-test",
+        push_backend="real",
+        fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
     )
     assert settings.is_production_like
+
+
+def test_production_refuses_a_fake_push_backend() -> None:
+    """A prod build with `push_backend="fake"` would accept reminders, schedule
+    them, mark them sent and deliver nothing — a silent failure far worse than a
+    refusal to start."""
+    with pytest.raises(ValidationError, match="push_backend"):
+        Settings(
+            env="prod",
+            supabase_jwt_secret="secret",
+            stt_backend="faster_whisper",
+            llm_backend="openai",
+            openai_api_key="sk-test",
+            push_backend="fake",
+        )
+
+
+def test_production_requires_push_credentials() -> None:
+    with pytest.raises(ValidationError, match="fcm_service_account_json"):
+        Settings(
+            env="prod",
+            supabase_jwt_secret="secret",
+            stt_backend="faster_whisper",
+            llm_backend="openai",
+            openai_api_key="sk-test",
+            push_backend="real",
+        )
 
 
 def test_sync_database_url_strips_the_async_driver() -> None:

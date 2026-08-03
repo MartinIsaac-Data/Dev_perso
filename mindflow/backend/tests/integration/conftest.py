@@ -14,7 +14,7 @@ from app.infra.auth.supabase import make_local_token
 from app.infra.db.session import dispose_engine, init_engine
 from app.main import create_app
 from app.workers.pipeline.runner import reset_inline_queue
-from tests.conftest import APP_DATABASE_URL
+from tests.conftest import APP_DATABASE_URL, TEST_DATABASE_URL
 
 
 @pytest_asyncio.fixture
@@ -22,6 +22,9 @@ async def api_settings(tmp_path_factory) -> Settings:  # type: ignore[no-untyped
     return Settings(
         env="test",
         database_url=APP_DATABASE_URL,
+        # Cross-tenant jobs need a role RLS does not filter (ADR-042). In tests
+        # that is the owner connection; in production it is `mindflow_maintenance`.
+        maintenance_database_url=TEST_DATABASE_URL,
         storage_backend="local",
         storage_local_root=str(tmp_path_factory.mktemp("objects")),
         stt_backend="fake",

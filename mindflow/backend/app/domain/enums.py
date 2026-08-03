@@ -128,3 +128,115 @@ class AiRunStatus(StrEnum):
     REFUSED = "refused"
     SCHEMA_VIOLATION = "schema_violation"
     TIMEOUT = "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# Phase 2 — planning, reminders, notifications, history
+# --------------------------------------------------------------------------- #
+class DevicePlatform(StrEnum):
+    IOS = "ios"
+    ANDROID = "android"
+    WEB = "web"
+    WATCHOS = "watchos"
+    WEAROS = "wearos"
+    WINDOWS = "windows"
+    MACOS = "macos"
+    LINUX = "linux"
+
+
+class PushProvider(StrEnum):
+    """Which service actually delivers the payload.
+
+    Kept separate from the platform: an Android phone and a Chrome tab both go
+    through FCM, and a Windows desktop can be reached either by WNS (packaged
+    app) or by a local scheduled toast (unpackaged). The platform says *what the
+    device is*; the provider says *how to reach it*.
+    """
+
+    FCM = "fcm"
+    WNS = "wns"
+    LOCAL = "local"
+    NONE = "none"
+
+
+class ReminderChannel(StrEnum):
+    PUSH = "push"
+    # Scheduled by the device itself; the server records it so the two views of
+    # "what is scheduled" cannot drift apart.
+    LOCAL = "local"
+    EMAIL = "email"
+
+
+class ReminderStatus(StrEnum):
+    SCHEDULED = "scheduled"
+    SENT = "sent"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    DISMISSED = "dismissed"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in _TERMINAL_REMINDER_STATUSES
+
+
+_TERMINAL_REMINDER_STATUSES = frozenset(
+    {
+        ReminderStatus.SENT,
+        ReminderStatus.CANCELLED,
+        ReminderStatus.DISMISSED,
+    }
+)
+
+
+class NotificationKind(StrEnum):
+    REMINDER = "reminder"
+    DUE_SOON = "due_soon"
+    OVERDUE = "overdue"
+    CAPTURE_READY = "capture_ready"
+    CAPTURE_FAILED = "capture_failed"
+    REVIEW_PENDING = "review_pending"
+    DIGEST = "digest"
+    SYSTEM = "system"
+
+
+class ActivityAction(StrEnum):
+    """The user-visible history (Timeline).
+
+    Distinct from `audit_log`, which is a security record nobody browses, and
+    from `correction_event`, which measures model quality. This one exists to
+    answer "what happened to this task?" — and its vocabulary is chosen for that
+    question, not for compliance.
+    """
+
+    CREATED = "created"
+    EDITED = "edited"
+    COMPLETED = "completed"
+    REOPENED = "reopened"
+    ARCHIVED = "archived"
+    DELETED = "deleted"
+    RESTORED = "restored"
+    SNOOZED = "snoozed"
+    RESCHEDULED = "rescheduled"
+    PRIORITY_CHANGED = "priority_changed"
+    PROJECT_CHANGED = "project_changed"
+    TAGGED = "tagged"
+    UNTAGGED = "untagged"
+    SUBTASK_ADDED = "subtask_added"
+    SUBTASK_COMPLETED = "subtask_completed"
+    REMINDER_SET = "reminder_set"
+    REMINDER_FIRED = "reminder_fired"
+    RECURRED = "recurred"
+    CAPTURED = "captured"
+
+
+class AgendaView(StrEnum):
+    DAY = "day"
+    WEEK = "week"
+    MONTH = "month"
+
+
+class Recurrence(StrEnum):
+    DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"

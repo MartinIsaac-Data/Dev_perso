@@ -1202,3 +1202,166 @@ Supabase. Cela déplace le secret dans le dépôt au lieu de le supprimer.
 règle à ne jamais assouplir : si un jour le back-end acceptait des jetons non
 vérifiés hors `local`/`test`, ce mode deviendrait une porte ouverte. Le test
 `test_production_requires_an_auth_verification_method` garde cette propriété.
+
+<a id="adr-037"></a>
+## ADR-037 — La recherche plein texte s'appuie sur une colonne générée
+
+**Statut** ✅ Acceptée · Phase 2
+
+**Contexte.** La recherche doit trouver « budget » dans « les budgets annuels »,
+sur un corpus qui atteint plusieurs dizaines de milliers d'entrées après deux ans.
+`ILIKE '%budget%'` ne lemmatise pas et impose un balayage complet ; un index
+maintenu par l'application dérive dès qu'un chemin d'écriture l'oublie.
+
+**Décision.** `entry.search_vector` est une **colonne générée et stockée**,
+calculée par PostgreSQL à partir de `title` (poids A) et `body` (poids B), avec
+un index GIN. La configuration `french` lemmatise. Les requêtes passent par
+`websearch_to_tsquery`, pas `to_tsquery`.
+
+**Alternative écartée.** Un trigger. Il fait le même travail, mais il peut être
+désactivé, oublié dans une migration, ou contourné par un `COPY` — une colonne
+générée ne le peut pas.
+
+**Coût accepté.** La colonne est recalculée à chaque écriture d'`entry` et occupe
+de l'espace. Changer de configuration textuelle imposera une reconstruction de
+toute la colonne. `websearch_to_tsquery` est moins expressif que `to_tsquery` —
+c'est le prix de la propriété qui compte ici : **il ne peut pas lever
+d'exception**. Une barre de recherche ne doit pas pouvoir renvoyer un 500.
+
+<a id="adr-038"></a>
+## ADR-038 — Le fournisseur de notification est stocké par appareil
+
+**Statut** ✅ Acceptée · Phase 2
+
+**Contexte.** On pourrait déduire le canal de livraison de la plateforme. C'est
+faux dans les deux sens : un téléphone Android et un onglet Chrome passent tous
+deux par FCM, et un poste Windows est joignable par WNS (application empaquetée)
+ou par une notification programmée localement (exécutable simple).
+
+**Décision.** `device.push_provider` (`fcm`, `wns`, `local`, `none`) est
+enregistré à l'inscription de l'appareil, à côté de `platform`. Le répartiteur
+groupe par fournisseur et demande l'adaptateur correspondant.
+
+**Coût accepté.** Une colonne de plus, et un client qui doit dire la vérité sur
+ce qu'il sait faire. En échange, « ajouter Windows » est un adaptateur, pas une
+branche supplémentaire dans le planificateur.
+
+<a id="adr-039"></a>
+## ADR-039 — Une notification push est un pointeur, jamais une copie
+
+**Statut** ✅ Acceptée · Phase 2 · **Complète** [ADR-021](#adr-021)
+
+**Contexte.** Une charge push transite par un tiers (Google, Microsoft) et est
+stockée en clair sur l'appareil. Elle est aussi figée : une notification envoyée
+hier montre le titre d'hier.
+
+**Décision.** La charge contient un titre, une ligne et les identifiants
+nécessaires pour ouvrir le bon écran. Jamais la transcription, jamais le corps
+d'une entrée. Le contenu est lu depuis l'API à l'ouverture.
+
+**Coût accepté.** L'aperçu sur l'écran verrouillé est moins riche. C'est
+exactement l'arbitrage voulu pour un produit qui traite de la parole privée.
+
+<a id="adr-040"></a>
+## ADR-040 — Windows non empaqueté programme ses notifications localement
+
+**Statut** ✅ Acceptée · Phase 2
+
+**Contexte.** `flutter build windows` produit un exécutable simple, pas un MSIX.
+Un exécutable simple n'a **pas de canal WNS** : il n'existe aucune URI vers
+laquelle pousser. Traiter Windows comme Android donnerait un rappel qui n'arrive
+jamais, sans erreur nulle part.
+
+**Décision.** Deux chemins, choisis par `push_provider` :
+
+* application empaquetée → `wns`, le serveur pousse ;
+* exécutable simple → `local`, le client lit sa propre liste de rappels via
+  `GET /v1/reminders` et programme les toasts lui-même.
+
+Le serveur **enregistre quand même** les rappels du canal `local` : ils sont
+l'intention, l'appareil n'en est que l'exécutant. Deux vues de « ce qui est
+programmé » qui ne peuvent pas être comparées finissent toujours par diverger.
+
+**Coût accepté.** Un rappel local n'arrive que si l'application a été lancée
+depuis sa programmation, et le répartiteur ne pousse pas sur ce canal pour ne pas
+afficher deux fois la même chose. Le centre de notifications reste, dans tous les
+cas, l'enregistrement durable.
+
+<a id="adr-041"></a>
+## ADR-041 — Tous les horodatages sont `timestamptz`
+
+**Statut** ✅ Acceptée · Phase 2 · **Corrige** un défaut de la Phase 1
+
+**Contexte.** `created_at`, `updated_at` et quelques autres étaient
+`timestamp without time zone`. Découvert en implémentant les statistiques : une
+telle colonne se compare comme une heure **locale**, si bien que la filtrer
+contre un datetime aware lève une erreur au niveau du pilote et — plus grave — la
+grouper par jour dans un rapport donne une réponse décalée du fuseau.
+
+**Décision.** Migration 0005 convertit les 32 colonnes concernées en
+`timestamptz`, avec `USING colonne AT TIME ZONE 'UTC'` : les valeurs avaient été
+écrites par `now()` sous une session UTC, elles sont donc réinterprétées comme
+UTC et non comme l'heure locale du serveur.
+
+**Coût accepté.** Une réécriture de table par colonne convertie. Acceptable
+maintenant, coûteux dans un an — raison de plus pour le faire tout de suite.
+
+<a id="adr-042"></a>
+## ADR-042 — Les travaux inter-tenants ont leur propre connexion
+
+**Statut** ✅ Acceptée · Phase 2 · **Corrige** un défaut de la Phase 1
+
+**Contexte.** `privileged_session()` prétendait traverser les tenants pour le
+balayeur, le répartiteur d'outbox et désormais celui des rappels. Elle utilisait
+le moteur applicatif — donc le rôle `mindflow_app`, **`NOBYPASSRLS` par
+construction** (ADR-033). Conséquence : ces travaux ne voyaient **aucune ligne**.
+Pas d'erreur, pas de log, aucun symptôme jusqu'à ce que quelqu'un remarque que ses
+rappels n'arrivent jamais. Aucun test ne le couvrait.
+
+**Décision.** Un second DSN, `MINDFLOW_MAINTENANCE_DATABASE_URL`, pointant sur
+`mindflow_maintenance` (`BYPASSRLS`, créé dès la migration 0003 mais jamais
+utilisé). `privileged_session()` a son propre moteur, avec un pool réduit. Deux
+tests gardent la propriété : l'un vérifie l'attribut du rôle, l'autre lit
+réellement la ligne d'un tenant jamais nommé.
+
+**Alternative écartée.** Une politique RLS acceptant un réglage
+`app.maintenance = on`. Plus faible : n'importe quel porteur du rôle applicatif
+pourrait le poser.
+
+**Coût accepté.** Une variable d'environnement de plus, et un rôle à provisionner.
+En développement local, le défaut retombe sur `database_url`, ce qui est correct
+puisque l'application y possède le schéma.
+
+<a id="adr-043"></a>
+## ADR-043 — Une sous-tâche n'est pas une entrée
+
+**Statut** ✅ Acceptée · Phase 2
+
+**Contexte.** Modéliser une sous-tâche comme une `entry` avec un parent est
+tentant : le typage, les tags et la provenance existent déjà.
+
+**Décision.** Table `subtask` distincte, **un seul niveau**. Une sous-tâche a un
+titre, une position et un état ; ni type, ni confiance, ni provenance, ni tags.
+
+**Coût accepté.** On ne peut pas taguer une sous-tâche ni la retrouver par
+recherche plein texte. En échange, aucune requête de liste du produit n'a besoin
+de se souvenir d'exclure les enfants — et une seule qui l'oublie afficherait à
+l'utilisateur sa propre liste de courses au milieu de ses décisions. Deux niveaux
+d'imbrication, c'est un projet ; les projets existent déjà.
+
+<a id="adr-044"></a>
+## ADR-044 — L'occurrence suivante se calcule depuis l'échéance, pas depuis la complétion
+
+**Statut** ✅ Acceptée · Phase 2
+
+**Contexte.** Une tâche « tous les lundis » terminée un mercredi. Deux calculs
+possibles : lundi prochain, ou mercredi prochain.
+
+**Décision.** Depuis l'échéance précédente. Et une planification en retard
+rattrape le futur **en une seule étape** : rouvrir l'application après trois
+semaines d'absence ne doit pas créer trois copies en retard de la même corvée.
+
+**Coût accepté.** Une tâche récurrente jamais terminée n'engendre rien — c'est
+voulu : la récurrence décrit un rythme, pas une file d'attente. Le sous-ensemble
+de RFC 5545 pris en charge est volontairement petit (`FREQ`, `INTERVAL`, `BYDAY`,
+`COUNT`, `UNTIL`) et **rejette** ce qu'il ne comprend pas au lieu de l'approximer.

@@ -2,8 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:go_router/go_router.dart';
+
+import '../core/api/planning_models.dart';
+import '../core/design/theme.dart';
+import '../features/planning/planning_providers.dart';
 import 'router.dart';
-import 'theme.dart';
+
+/// Opens whatever the command palette selected.
+///
+/// Lives here rather than in the palette so that widget stays free of route
+/// knowledge — it is a list, not a navigator.
+void openQuickHit(BuildContext context, QuickHit hit) {
+  // The container rather than a `WidgetRef`: this is invoked from the palette's
+  // row callback, which has a context but no ref of its own.
+  final container = ProviderScope.containerOf(context, listen: false);
+  switch (hit.kind) {
+    case 'entry':
+      context.push(Routes.note(hit.id));
+    case 'capture':
+      context.push(Routes.capture(hit.id));
+    case 'project':
+      container.read(searchQueryProvider.notifier).state =
+          '@${hit.title.toLowerCase()}';
+      context.go(Routes.search);
+    case 'tag':
+      container.read(searchQueryProvider.notifier).state = hit.title;
+      context.go(Routes.search);
+  }
+}
 
 class MindflowApp extends ConsumerWidget {
   const MindflowApp({super.key});
@@ -14,8 +41,8 @@ class MindflowApp extends ConsumerWidget {
       title: 'MindFlow AI',
       debugShowCheckedModeBanner: false,
       routerConfig: ref.watch(routerProvider),
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
+      theme: buildAppTheme(Brightness.light),
+      darkTheme: buildAppTheme(Brightness.dark),
       // The product speaks French; dates, relative times and pluralisation must
       // follow, otherwise "in 2 days" leaks through in a French sentence.
       locale: const Locale('fr', 'FR'),
@@ -51,7 +78,7 @@ class ConfigurationErrorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(Brightness.light),
+      theme: buildAppTheme(Brightness.light),
       home: Scaffold(
         body: Padding(
           padding: const EdgeInsets.all(24),

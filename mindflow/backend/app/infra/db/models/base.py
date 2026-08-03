@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import MetaData, func
+from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -29,9 +29,21 @@ def uuid_pk() -> Mapped[uuid.UUID]:
 
 
 class TimestampMixin:
+    """Creation and modification instants.
+
+    `timezone=True` is not decorative. A naive `timestamp` column silently
+    compares as *local time*, so filtering it against an aware datetime raises at
+    the driver, and — worse — grouping it by day in a report gives an answer that
+    is wrong by the UTC offset. Everything in this schema is an instant, so
+    everything is `timestamptz` (Database.md §5.2, ADR-041).
+    """
+
     created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False, index=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )

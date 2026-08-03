@@ -36,6 +36,14 @@ dependencies:
   # date resolution the backend performs (ADR-020).
   flutter_timezone: ^3.0.1
 
+  # Notifications (Phase 2). Firebase covers Android, iOS and web; the desktop
+  # builds have no push channel and schedule their toasts locally (ADR-040),
+  # which is what `flutter_local_notifications` does on Windows, macOS and Linux.
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.5
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+
   intl: ^0.19.0
   uuid: ^4.5.1
 

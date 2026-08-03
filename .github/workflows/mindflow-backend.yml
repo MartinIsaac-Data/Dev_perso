@@ -73,6 +73,10 @@ jobs:
       # semantics are exactly what the tests need to prove (Sprint01 DoD).
       MINDFLOW_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/mindflow_test
       MINDFLOW_ENV: test
+      # Cross-tenant jobs need a role RLS does not filter (ADR-042). The tests
+      # point it at the owner connection; production points it at
+      # `mindflow_maintenance`.
+      MINDFLOW_MAINTENANCE_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/mindflow_test
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

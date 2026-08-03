@@ -85,6 +85,63 @@ async def test_the_app_role_cannot_bypass_rls(session_factory) -> None:
     assert row[1] is False, "the application role must not have BYPASSRLS"
 
 
+async def test_the_maintenance_role_can_cross_tenants(session_factory, two_tenants) -> None:
+    """The counterpart of the test above, and the one that was missing.
+
+    Cross-tenant jobs — the capture sweeper, the outbox dispatcher, the reminder
+    dispatcher — run on `privileged_session()`. If that session used the
+    application role, every one of them would return zero rows: no error, no log
+    line, no symptom until someone notices their reminders never arrive. So the
+    maintenance role must exist *and* be able to see past the policies (ADR-042).
+    """
+    admin = create_async_engine(TEST_DATABASE_URL, echo=False)
+    async with admin.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT rolsuper, rolbypassrls FROM pg_roles "
+                    "WHERE rolname = 'mindflow_maintenance'"
+                )
+            )
+        ).one_or_none()
+    await admin.dispose()
+
+    assert row is not None, "the maintenance role must exist"
+    assert row[0] is False, "maintenance is not superuser — BYPASSRLS is enough"
+    assert row[1] is True, "maintenance must bypass RLS or every scheduled job is a no-op"
+
+
+async def test_a_privileged_session_actually_sees_across_tenants(two_tenants) -> None:
+    """The behavioural half: not "the role has the flag" but "the session can
+    read a row belonging to a tenant it never named"."""
+    from app.config import Settings
+    from app.infra.db.session import dispose_engine, init_engine, privileged_session
+    from tests.conftest import APP_DATABASE_URL
+
+    _alpha, beta = two_tenants
+    capture_id = await _seed_capture(beta["account_id"], beta["user_id"])
+
+    await dispose_engine()
+    init_engine(
+        Settings(
+            env="test",
+            database_url=APP_DATABASE_URL,
+            maintenance_database_url=TEST_DATABASE_URL,
+        )
+    )
+    try:
+        async with privileged_session() as session:
+            found = (
+                await session.execute(
+                    text("SELECT id FROM capture WHERE id = :cid"), {"cid": capture_id}
+                )
+            ).one_or_none()
+    finally:
+        await dispose_engine()
+
+    assert found is not None
+
+
 async def test_tenant_cannot_read_another_tenants_capture(session_factory, two_tenants) -> None:
     alpha, beta = two_tenants
     beta_capture = await _seed_capture(beta["account_id"], beta["user_id"])

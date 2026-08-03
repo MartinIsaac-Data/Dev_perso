@@ -21,6 +21,7 @@ import '../../app/theme.dart';
 import '../../core/api/errors.dart';
 import '../../core/api/models.dart';
 import '../../core/ui/formatting.dart';
+import '../planning/task_panels.dart';
 import 'notes_providers.dart';
 
 class NoteDetailScreen extends ConsumerWidget {
@@ -295,6 +296,17 @@ class _DetailState extends ConsumerState<_Detail> {
             label: const Text("Écouter l'enregistrement d'origine"),
           ),
         ],
+
+        // Phase 2. Only for tasks: a note has no subtasks, no recurrence and
+        // nothing to be reminded about, and showing empty panels on one would
+        // be noise on every screen to serve one type.
+        if (entry.type == EntryType.task) ...[
+          const SizedBox(height: 8),
+          TaskControls(entry: entry),
+          SubtaskPanel(entryId: entry.id),
+          ReminderPanel(entryId: entry.id),
+        ],
+        EntryHistoryPanel(entryId: entry.id),
       ],
     );
   }

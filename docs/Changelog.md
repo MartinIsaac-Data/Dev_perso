@@ -26,7 +26,120 @@ back-end, client, infrastructure et modèles IA. Les versions de documentation
 
 ## [Non publié]
 
-Rien pour l'instant. La phase 2 n'a pas démarré.
+Rien pour l'instant. La phase 3 n'a pas démarré.
+
+---
+
+## [0.3.0] — 2026-08-03
+
+**Phase 2 — Planification, recherche et mesure.** Le produit passe de « capturer
+et consulter » à « capturer, planifier, retrouver et mesurer ». Aucune décision
+des phases précédentes n'a été renversée ; deux défauts silencieux de la phase 1
+ont été corrigés (ADR-041, ADR-042).
+
+### Ajouté — Back-end
+
+| Domaine | Contenu |
+| --- | --- |
+| Agenda | Vues jour / semaine / mois, bornes calculées dans le fuseau de l'utilisateur, retards dans leur propre section |
+| Calendrier | Densité par jour agrégée en base, grille de semaines entières |
+| Tâches avancées | Sous-tâches ordonnées, récurrence RRULE (sous-ensemble), report, replanification, épinglage, opérations groupées |
+| Rappels | Décalages automatiques (`-1d@18:00`, `-15m`) re-dérivés à chaque changement d'échéance, rappels manuels jamais réécrits |
+| Notifications | Centre en base écrit **avant** toute tentative de push, FCM (HTTP v1) et WNS, adaptateurs derrière un port |
+| Recherche | Colonne générée `tsvector` + index GIN, grammaire `is:` `p:` `#tag` `@projet` `due:`, palette de commandes |
+| Statistiques | Complétion, délai médian, séries, répartitions, et les chiffres qui dérangent |
+| Historique | Table `activity_event` avec libellé dénormalisé, distincte de l'audit et des corrections IA |
+| Bibliothèque | Tags avec fusion, projets avec compteurs, filtres enregistrés |
+
+5 tables, 22 colonnes, 12 index et 1 conversion de type dans la migration 0005.
+25 nouveaux points d'API. 311 tests passent ; `ruff`, `mypy --strict` (84
+fichiers) et `lint-imports` (4/4) sont propres.
+
+### Ajouté — Client Flutter
+
+| Écran | Rôle |
+| --- | --- |
+| Agenda | Slivers par jour, en-têtes collants, retards en tête |
+| Calendrier | Grille mensuelle, densité en points, anneau pour les retards |
+| Palette de commandes | ⌘K : actions puis contenu, navigation au clavier |
+| Recherche | Filtres rendus en chips, y compris ceux que le serveur a ignorés |
+| Statistiques | Graphiques peints à la main, section « Ce qui ne va pas » |
+| Historique | Timeline avec rail, verbes au passé |
+| Notifications | Centre, marquage lu, badge dans la navigation |
+| Bibliothèque | Projets, tags (fusion par renommage), filtres enregistrés |
+| Détail d'une tâche | Sous-tâches, rappels, récurrence, priorité, report, historique |
+
+Nouveau système de design (jetons, palette, thème clair/sombre conçus
+séparément), coque adaptative (barre latérale ou barre basse). 90 tests passent,
+`flutter analyze` est propre.
+
+### Corrigé
+
+Deux défauts de la phase 1, tous deux silencieux, tous deux trouvés en
+implémentant la phase 2 :
+
+- **Les travaux inter-tenants ne voyaient rien** (ADR-042). `privileged_session()`
+  utilisait le rôle applicatif, `NOBYPASSRLS` par construction : le balayeur de
+  captures et le répartiteur d'outbox traitaient zéro ligne depuis le premier
+  jour, sans erreur ni log. Deux tests gardent désormais la propriété.
+- **Les horodatages étaient naïfs** (ADR-041). 32 colonnes en `timestamp`
+  comparées comme de l'heure locale : filtrage impossible contre un datetime
+  aware, et regroupement par jour décalé du fuseau. Converties en `timestamptz`.
+
+Et un défaut introduit puis corrigé pendant la phase : la seconde clé étrangère
+de `task` vers `entry` rendait la relation ORM ambiguë et faisait échouer toute
+la suite d'intégration jusqu'à ce que `foreign_keys` soit déclaré explicitement.
+
+### Décisions
+
+| ADR | Décision | Coût accepté principal |
+| --- | --- | --- |
+| ADR-037 | Recherche sur colonne générée `tsvector`, `websearch_to_tsquery` | Moins expressif qu'un `to_tsquery`, mais ne peut pas lever d'exception |
+| ADR-038 | Le fournisseur de push est stocké par appareil, pas déduit | Une colonne de plus, et un client qui doit dire la vérité |
+| ADR-039 | Une charge push est un pointeur, jamais une copie du contenu | Aperçu moins riche sur l'écran verrouillé |
+| ADR-040 | Windows non empaqueté programme ses notifications localement | Un rappel local n'arrive que si l'application a tourné depuis |
+| ADR-041 | Tous les horodatages en `timestamptz` | Une réécriture de table par colonne convertie |
+| ADR-042 | Connexion dédiée pour les travaux inter-tenants | Une variable d'environnement et un rôle à provisionner |
+| ADR-043 | Une sous-tâche n'est pas une entrée ; un seul niveau | On ne peut ni taguer ni rechercher une sous-tâche |
+| ADR-044 | L'occurrence suivante part de l'échéance, pas de la complétion | Une tâche jamais terminée n'engendre rien |
+
+### Compromis retenus
+
+| Compromis | Gagné | Payé |
+| --- | --- | --- |
+| Agrégation en SQL plutôt qu'en Python | Le calendrier et les statistiques restent rapides à 50 000 entrées | Des requêtes plus difficiles à lire |
+| Graphiques peints à la main | Aucune dépendance de plus, un seul passage de peinture | Deux types de graphiques, pas davantage |
+| Palette de commandes plutôt qu'une navigation qui grandit | Ajouter un écran ne coûte pas un onglet | Une fonctionnalité invisible à qui n'essaie jamais ⌘K |
+| Ordonnancement clairsemé (100, 200, 300) | Un déplacement réécrit une ligne | Une renumérotation quand l'espace manque |
+| Réordonnancement par liste complète | Idempotent sur un lien instable | Une charge un peu plus grosse |
+| Notification écrite avant le push | Rien n'est perdu si l'appareil est injoignable | Des notifications non lues qui s'accumulent |
+| Deux chemins de notification Windows | Le poste de travail est réellement servi | Deux comportements à documenter et à tester |
+
+### Améliorations proposées pour la phase 3
+
+1. **Reprise automatique du mode dégradé** — toujours pas faite, et toujours la
+   dette la plus coûteuse : les captures traitées quota atteint ne sont jamais
+   reprises.
+2. **Corpus d'évaluation annoté** (AI.md §7). La phase 2 mesure le taux de
+   correction ; sans corpus, on ne sait toujours pas si une modification de
+   prompt l'améliore.
+3. **Pagination par curseur exposée au client** — la recherche et l'agenda
+   chargent une page fixe.
+4. **Synchronisation multi-appareils** (API.md §9), maintenant que plusieurs
+   appareils sont réellement enregistrés.
+5. **RAG** pour le rattachement aux projets, qui repose encore sur une
+   correspondance floue de libellés.
+6. **Tests de bout en bout du client** contre un back-end réel.
+7. **Budget de coût par compte** — le coût est affiché, aucun plafond n'est
+   appliqué.
+
+### Non fait, sciemment
+
+- **`docker compose up` n'a toujours pas été exécuté** : pas de démon Docker dans
+  l'environnement de développement. Seule la CI valide ce chemin.
+- **Aucun build Android, iOS ou Windows produit.** La CI les compile ; le chemin
+  de notification Windows n'a donc jamais été exécuté sur un vrai poste.
+- **Le graphe d'activité ne propose pas de zoom** ni d'export : hors périmètre.
 
 ---
 

@@ -17,6 +17,7 @@ from app.infra.queue.arq_queue import redis_settings
 from app.observability.logging import configure_logging, get_logger
 from app.workers.outbox_dispatcher import dispatch_outbox
 from app.workers.pipeline.runner import PROCESS_CAPTURE, process_capture
+from app.workers.scheduled.reminder_dispatcher import dispatch_due_reminders, sweep_snoozed
 from app.workers.scheduled.sweeper import sweep_stuck_captures
 
 log = get_logger("worker")
@@ -54,6 +55,14 @@ async def dispatch_job(ctx: dict[str, Any]) -> int:
     return await dispatch_outbox(ctx["settings"])
 
 
+async def reminder_job(ctx: dict[str, Any]) -> int:
+    return await dispatch_due_reminders(ctx["settings"])
+
+
+async def snooze_job(ctx: dict[str, Any]) -> int:
+    return await sweep_snoozed(ctx["settings"])
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [process_capture_job]
     cron_jobs: ClassVar[list[Any]] = [
@@ -61,6 +70,13 @@ class WorkerSettings:
         # commit and enqueue). The database is the source of truth, not the queue.
         cron(sweep_job, minute=set(range(0, 60, 5)), run_at_startup=True),
         cron(dispatch_job, second={0, 10, 20, 30, 40, 50}),
+        # Every minute: the finest granularity a reminder needs, and the
+        # coarsest a user tolerates. At five minutes, "remind me at 14:00" would
+        # arrive at 14:04, which is late enough to miss the meeting it was for.
+        cron(reminder_job, second={5}, run_at_startup=True),
+        # Waking a snoozed task is not urgent to the minute; a quarter-hour
+        # cadence keeps the query cheap.
+        cron(snooze_job, minute=set(range(0, 60, 15))),
     ]
     on_startup = startup
     on_shutdown = shutdown

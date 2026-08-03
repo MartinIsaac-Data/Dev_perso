@@ -1,10 +1,10 @@
 # MindFlow AI — TODO
 
-> État à la clôture de la **phase 1 (MVP)**. Ce document recense ce qui reste
+> État à la clôture de la **phase 2 (planification, recherche, mesure)**. Ce document recense ce qui reste
 > à faire, ce qui reste à décider, et ce qui a été délibérément laissé de côté.
 > Il est mis à jour à chaque fin de phase.
 
-**Dernière mise à jour** : 2026-08-03 · Clôture de la phase 1
+**Dernière mise à jour** : 2026-08-03 · Clôture de la phase 2
 
 **Légende de priorité**
 
@@ -17,23 +17,41 @@
 
 ---
 
-## 0. Dette ouverte par la phase 1
+## 0. Dette ouverte par la phase 2
+
+| # | Élément | Priorité | Pourquoi maintenant |
+| --- | --- | --- | --- |
+| E1 | Reprise automatique du mode dégradé | 🔴 | Reportée depuis la phase 1. Une capture traitée quota atteint n'est **jamais** reprise : le report est en pratique un abandon |
+| E2 | Corpus d'évaluation annoté (AI.md §7) | 🔴 | La phase 2 mesure le taux de correction ; sans corpus on ne sait toujours pas si une modification de prompt l'améliore |
+| E3 | Pagination par curseur exposée au client | 🟠 | La recherche et l'agenda chargent une page fixe. Au-delà de 200 résultats, l'utilisateur ne voit pas le reste |
+| E4 | Chemin de notification Windows jamais exécuté sur un vrai poste | 🟠 | Testé par adaptateur et par contrat, jamais de bout en bout : ni MSIX, ni exécutable Windows produit ici |
+| E5 | Budget de coût par compte | 🟠 | Le coût IA est désormais **affiché** sur le tableau de bord ; aucun plafond n'est appliqué |
+| E6 | Synchronisation multi-appareils (API.md §9) | 🟠 | Plusieurs appareils sont maintenant réellement enregistrés, ce qui rend la divergence possible |
+| E7 | RAG pour le rattachement aux projets | 🟠 | Toujours une correspondance floue de libellés |
+| E8 | Tests de bout en bout du client | 🟠 | 90 tests couvrent la logique, aucun l'assemblage |
+| E9 | Purge des rappels `sent` anciens | 🟡 | La table `reminder` croît sans borne ; rien ne l'élague |
+| E10 | Zoom et export du graphe d'activité | ⚪ | Hors périmètre, consigné pour ne pas être redemandé |
+| E11 | Traduction de l'interface | ⚪ | Tout est en français en dur, y compris les verbes de la timeline |
+
+---
+
+## 0 bis. Dette ouverte par la phase 1 (état)
 
 Ce que le MVP laisse en l'état, constaté à la livraison plutôt qu'anticipé.
 
 | # | Élément | Priorité | Pourquoi maintenant |
 | --- | --- | --- | --- |
 | D1 | Corpus d'évaluation annoté (AI.md §7) | 🔴 | Sans lui, toute modification de prompt est un pari. Préalable à Q1 et Q2 |
-| D2 | Reprise automatique des captures en mode dégradé | 🔴 | Elles ne sont aujourd'hui **jamais** reprises : le quota différé devient un abandon |
+| D2 | Reprise automatique des captures en mode dégradé | 🔴 | **Toujours ouverte**, reprise en E1 |
 | D3 | Budget de coût par compte | 🟠 | Le prix par jeton est instrumenté, aucun plafond n'est appliqué |
 | D4 | RAG (AI.md §6) | 🟠 | Le rattachement à un projet repose sur une correspondance floue de libellés ; cela plafonnera |
-| D5 | Notifications d'échéance | 🟠 | Une tâche extraite mais jamais rappelée n'a presque aucune valeur d'usage |
+| D5 | Notifications d'échéance | ✅ | **Faite en phase 2** : rappels, FCM, WNS, programmation locale |
 | D6 | Synchronisation multi-appareils (API.md §9) | 🟠 | La file locale ne couvre que « pas encore parti », pas « modifié ailleurs » |
 | D7 | Tests de bout en bout du client contre un back-end réel | 🟠 | Les tests actuels couvrent la logique, pas l'assemblage |
-| D8 | Pagination par curseur exposée au client | 🟡 | L'API la fournit ; le client charge une page fixe |
+| D8 | Pagination par curseur exposée au client | 🟠 | **Toujours ouverte**, reprise en E3 |
 | D9 | Purge des fichiers audio orphelins du stockage objet | 🟡 | Une suppression de capture retire la ligne ; un échec de suppression d'objet n'est pas retenté |
-| D10 | Exécution locale de `docker compose` | 🟡 | Jamais lancée faute de démon Docker en environnement de développement ; seule la CI la valide |
-| D11 | Traduction des messages d'erreur | ⚪ | Tout est en français en dur ; à reprendre au premier marché non francophone |
+| D10 | Exécution locale de `docker compose` | 🟡 | Toujours jamais lancée faute de démon Docker ; seule la CI la valide |
+| D11 | Traduction des messages d'erreur | ⚪ | **Toujours ouverte**, reprise en E11 |
 
 ---
 

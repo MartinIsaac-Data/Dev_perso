@@ -26,9 +26,16 @@ from app.config import Settings
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
+# A second engine for cross-tenant work (ADR-042). It exists because the
+# application role is `NOBYPASSRLS` by design: without a separate connection,
+# `privileged_session()` would be filtered by the very policies it needs to see
+# past, and every scheduled job would quietly process nothing.
+_maintenance_engine: AsyncEngine | None = None
+_maintenance_sessionmaker: async_sessionmaker[AsyncSession] | None = None
+
 
 def init_engine(settings: Settings) -> AsyncEngine:
-    global _engine, _sessionmaker
+    global _engine, _sessionmaker, _maintenance_engine, _maintenance_sessionmaker
     if _engine is not None:
         return _engine
 
@@ -44,6 +51,21 @@ def init_engine(settings: Settings) -> AsyncEngine:
     _sessionmaker = async_sessionmaker(
         _engine, expire_on_commit=False, autoflush=False, class_=AsyncSession
     )
+
+    _maintenance_engine = create_async_engine(
+        make_url(settings.effective_maintenance_url),
+        # Small on purpose: this pool serves a handful of background jobs, and
+        # sizing it like the request pool would double the connection footprint
+        # for no benefit.
+        pool_size=2,
+        max_overflow=2,
+        pool_pre_ping=True,
+        echo=False,
+        future=True,
+    )
+    _maintenance_sessionmaker = async_sessionmaker(
+        _maintenance_engine, expire_on_commit=False, autoflush=False, class_=AsyncSession
+    )
     return _engine
 
 
@@ -54,11 +76,15 @@ def get_engine() -> AsyncEngine:
 
 
 async def dispose_engine() -> None:
-    global _engine, _sessionmaker
+    global _engine, _sessionmaker, _maintenance_engine, _maintenance_sessionmaker
     if _engine is not None:
         await _engine.dispose()
+    if _maintenance_engine is not None:
+        await _maintenance_engine.dispose()
     _engine = None
     _sessionmaker = None
+    _maintenance_engine = None
+    _maintenance_sessionmaker = None
 
 
 def _factory() -> async_sessionmaker[AsyncSession]:
@@ -113,9 +139,16 @@ async def privileged_session() -> AsyncIterator[AsyncSession]:
     """Session for maintenance work that must cross tenants (GDPR purges,
     outbox dispatch, scheduled jobs).
 
-    Deliberately separate and deliberately rare: it is the one path where the RLS
-    safety net does not apply, so it is used by workers only, never by a request
+    Uses its **own engine and its own role** (ADR-042). Sharing the request
+    engine would not merely be untidy: the application role is `NOBYPASSRLS`, so
+    a cross-tenant query issued on it returns nothing and every scheduled job
+    becomes a silent no-op — a failure mode with no error, no log line and no
+    symptom until someone notices their reminders never arrive.
+
+    Deliberately separate and deliberately rare: workers only, never a request
     handler.
     """
-    async with _factory()() as session, session.begin():
+    if _maintenance_sessionmaker is None:
+        raise RuntimeError("Engine not initialised — call init_engine() first.")
+    async with _maintenance_sessionmaker() as session, session.begin():
         yield session

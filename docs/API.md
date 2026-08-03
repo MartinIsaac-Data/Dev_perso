@@ -911,3 +911,81 @@ X-MindFlow-Signature: t=1749473223,v1=5257a869e7…
 - Modèle de données → `Database.md`
 - Architecture IA (mode `answer`) → `AI.md`
 - Décisions et arbitrages → `Decisions.md`
+
+
+---
+
+## 14. Surface ajoutée en phase 2
+
+### 14.1 Planification
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| GET | `/v1/agenda` | Échéances d'une fenêtre. `view=day\|week\|month`, `anchor`, `include_done`, `include_unscheduled`, `project_id`. Les retards reviennent dans leur propre tableau |
+| GET | `/v1/calendar` | Densité par jour pour la grille mensuelle : `total`, `done`, `pending`, `overdue`, `captures` |
+| GET/POST | `/v1/entries/{id}/subtasks` | Lister, ajouter |
+| PATCH/DELETE | `/v1/subtasks/{id}` | Modifier, cocher, supprimer |
+| POST | `/v1/entries/{id}/subtasks/reorder` | **La liste complète ordonnée**, pas un couple (de, vers) : idempotent |
+| POST | `/v1/entries/{id}/complete-task` | Termine, et renvoie l'occurrence suivante si la tâche est récurrente |
+| POST | `/v1/entries/{id}/reopen` | Rouvre |
+| POST | `/v1/entries/{id}/snooze` | Masque jusqu'à un instant. **Ne déplace pas l'échéance** |
+| POST | `/v1/entries/{id}/reschedule` | Déplace l'échéance. `null` la retire, ce qui est un acte légitime |
+| POST | `/v1/entries/{id}/recurrence` | Définit ou retire une règle. Une règle non prise en charge est **rejetée**, pas approximée |
+| POST | `/v1/entries/{id}/pin` | Épingle |
+| POST | `/v1/entries/bulk` | Une modification, plusieurs entrées (200 au plus) |
+
+### 14.2 Rappels et notifications
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| GET | `/v1/reminders` | Rappels programmés. **Aussi la source que le client Windows non empaqueté synchronise** (ADR-040) |
+| POST | `/v1/reminders` | Instant absolu, ou décalage (`-15m`, `-1d@18:00`) depuis l'échéance |
+| DELETE | `/v1/reminders/{id}` | Annule |
+| POST | `/v1/reminders/{id}/dismiss` | Marque traité |
+| GET | `/v1/notifications` | Centre de notifications, avec le compteur non lus |
+| POST | `/v1/notifications/{id}/read`, `/read-all` | Marque lu |
+| PUT | `/v1/devices` | Inscription **idempotente sur `install_id`**, jamais sur le jeton push |
+| GET | `/v1/devices` | Appareils. Le jeton n'est **jamais** renvoyé : c'est une capacité de livraison |
+| DELETE | `/v1/devices/{install_id}` | Révoque |
+
+### 14.3 Recherche, statistiques, historique, bibliothèque
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| GET | `/v1/search?q=` | Plein texte + filtres. Renvoie la requête analysée, **y compris `ignored`** |
+| GET | `/v1/search/quick?q=` | Palette de commandes : quelques résultats sur plusieurs types |
+| GET | `/v1/stats?window_days=` | Tableau de bord analytique |
+| GET | `/v1/activity` | Historique utilisateur |
+| GET/PATCH/DELETE | `/v1/tags`, `/v1/tags/{id}` | Renommer fusionne vers un tag existant |
+| POST | `/v1/tags/{id}/merge` | Fusion explicite |
+| POST/DELETE | `/v1/entries/{id}/tags` | Attacher, détacher |
+| GET/POST/PATCH/DELETE | `/v1/filters` | Filtres enregistrés |
+| GET | `/v1/projects/detailed` | Projets avec compteurs |
+| PATCH | `/v1/projects/{id}` | Le slug suit le nom |
+| GET | `/v1/projects/{id}/stats` | Complétion d'un projet |
+
+### 14.4 Grammaire de recherche
+
+Une seule grammaire, partagée par la recherche plein texte, la palette et les
+filtres enregistrés (`app.domain.search_query`).
+
+| Filtre | Exemples |
+| --- | --- |
+| `is:` | `is:task`, `is:tâche`, `is:done`, `is:overdue`, `is:recurring`, `is:pinned` |
+| `p:` | `p:urgent`, `p:haute`, `p:low` |
+| `#tag` | `#finance`, ou `tag:finance` |
+| `@projet` | `@refonte`, ou `project:refonte` |
+| `due:` | `due:today`, `due:demain`, `due:semaine`, `due:mois`, `due:2026-06-12`, `due:none` |
+| `created:` | mêmes valeurs |
+| `"phrase"` | expression exacte |
+
+Deux règles gouvernent l'analyse :
+
+1. **Un jeton non reconnu est du texte libre, jamais une erreur.** Quelqu'un qui
+   tape `budget: 3000` cherche un budget. Une barre de recherche qui refuse
+   l'entrée est une barre de recherche qu'on cesse d'utiliser.
+2. **Une *valeur* de filtre inconnue est rapportée, pas devinée.** `p:hgih` ne
+   filtre sur rien et apparaît dans `query.ignored`, pour que l'interface puisse
+   le dire au lieu de renvoyer silencieusement tout.
+
+Répéter un filtre élargit : `is:task is:idea` signifie « l'un ou l'autre ».

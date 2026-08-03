@@ -1739,3 +1739,196 @@ Les deux leviers sont travaillés en parallèle (voir `Roadmap.md`).
 - Contrat d'API et conventions → `API.md`
 - Architecture IA et RAG → `AI.md`
 - Trajectoire → `Roadmap.md`
+
+
+---
+
+## 15. Architecture de la phase 2
+
+### 15.1 Composants ajoutés (C4 niveau 3)
+
+```mermaid
+graph TB
+    subgraph API["Conteneur API (FastAPI)"]
+        PLAN["planning<br/>agenda, calendrier, sous-tâches,<br/>récurrence, report, groupé"]
+        NOTIF["notifications<br/>rappels, centre, appareils"]
+        INSIGHT["insights<br/>recherche, statistiques,<br/>historique, bibliothèque"]
+    end
+
+    subgraph SERVICES["Couche services"]
+        AGENDA["AgendaService<br/>fenêtres dans le fuseau<br/>de l'utilisateur"]
+        TASK["TaskService<br/>sous-tâches, récurrence,<br/>report, groupé"]
+        REMIND["ReminderService<br/>décalages, dédoublonnage"]
+        NOTIFS["NotificationService<br/>centre + diffusion"]
+        SEARCH["SearchService<br/>plein texte + palette"]
+        STATS["AnalyticsService<br/>tout agrégé en SQL"]
+        ACT["ActivityService<br/>timeline"]
+        LIB["Library<br/>tags, projets, filtres"]
+    end
+
+    subgraph DOMAIN["Domaine (pur)"]
+        REC["recurrence<br/>sous-ensemble RFC 5545"]
+        SQ["search_query<br/>la grammaire"]
+        TEMP["temporal<br/>déjà là (ADR-020)"]
+    end
+
+    subgraph WORKER["Plan asynchrone (arq)"]
+        DISP["reminder_dispatcher<br/>toutes les minutes<br/>FOR UPDATE SKIP LOCKED"]
+        SNOOZE["sweep_snoozed<br/>tous les quarts d'heure"]
+    end
+
+    subgraph PUSH["Adaptateurs de livraison"]
+        PORT["PushSenderPort"]
+        FCM["FcmPushSender<br/>HTTP v1 + OAuth"]
+        WNS["WnsPushSender<br/>XML + OAuth"]
+        FAKE["FakePushSender<br/>tests, docker compose"]
+    end
+
+    PLAN --> AGENDA & TASK & REMIND
+    NOTIF --> NOTIFS & REMIND
+    INSIGHT --> SEARCH & STATS & ACT & LIB
+    TASK --> REC
+    SEARCH --> SQ
+    TASK --> TEMP
+    DISP --> NOTIFS
+    SNOOZE --> TASK
+    NOTIFS --> PORT
+    PORT -.-> FCM & WNS & FAKE
+
+    style DOMAIN fill:#f6f7f8,stroke:#c5c8cd
+    style PUSH fill:#f6f7f8,stroke:#c5c8cd
+```
+
+### 15.2 SEQ-07 — Un rappel, de la programmation à l'écran verrouillé
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Utilisateur
+    participant API as API
+    participant DB as PostgreSQL
+    participant W as Worker (cron 1 min)
+    participant P as FCM / WNS
+
+    U->>API: PATCH /v1/entries/{id} (échéance : jeudi 14 h)
+    API->>DB: écrit task.due_at
+    API->>DB: annule les rappels automatiques précédents
+    Note over API,DB: les rappels manuels ne sont pas touchés :<br/>l'utilisateur a demandé mardi, et mardi<br/>n'appartient pas au planificateur
+    API->>DB: crée -1d@18:00 et -15m (clé de dédoublonnage)
+
+    loop toutes les minutes
+        W->>DB: SELECT ... WHERE status='scheduled' AND remind_at <= now()<br/>FOR UPDATE SKIP LOCKED
+        Note over W,DB: SKIP LOCKED : deux workers sur le même tick<br/>ne s'attendent pas et ne doublonnent pas
+        W->>DB: status = 'sent' (dans la même transaction que le verrou)
+    end
+
+    W->>DB: INSERT notification
+    Note over W,DB: **avant** toute tentative de push :<br/>la ligne est l'enregistrement durable,<br/>le push n'est qu'une courtoisie
+    W->>P: envoie (titre, ligne, identifiants — jamais le contenu)
+    alt livré
+        P-->>W: 200
+        W->>DB: notification.pushed_at = now()
+    else jeton mort
+        P-->>W: UNREGISTERED / 410
+        W->>DB: device.revoked_at = now()
+        Note over W: un jeton que personne ne retire<br/>est une requête répétée à l'infini
+    else panne du fournisseur
+        P-->>W: 5xx
+        Note over W: le rappel reste « envoyé ».<br/>L'utilisateur le trouve dans l'application.
+    end
+```
+
+### 15.3 SEQ-08 — Terminer une tâche récurrente
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Utilisateur
+    participant API as API
+    participant T as TaskService
+    participant R as domain.recurrence
+    participant DB as PostgreSQL
+
+    U->>API: POST /v1/entries/{id}/complete-task
+    API->>T: complete(id)
+    T->>DB: task.completed_at = now(), entry.status = 'done'
+    T->>R: next_occurrence(règle, previous_due, now, fuseau)
+    Note over R: calculé depuis **l'échéance précédente**.<br/>Une tâche du lundi terminée mercredi<br/>reste due lundi prochain (ADR-044).
+    alt règle épuisée (COUNT / UNTIL) ou non prise en charge
+        R-->>T: null
+        T-->>API: pas de successeur
+    else
+        R-->>T: prochain instant, rattrapé au-delà de maintenant
+        Note over R: trois semaines d'absence ne créent pas<br/>trois copies en retard : une seule étape.
+        T->>DB: INSERT entry + task (capture_id = NULL)
+        T->>DB: INSERT activity_event 'recurred'
+        T-->>API: successeur
+    end
+    API->>DB: re-dérive les rappels automatiques du successeur
+    API-->>U: 200 { entry, next_occurrence }
+```
+
+### 15.4 SEQ-09 — Recherche plein texte
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Utilisateur
+    participant C as Client
+    participant API as API
+    participant SQ as domain.search_query
+    participant DB as PostgreSQL
+
+    U->>C: « réunion DAF is:task p:hgih #finance »
+    C->>C: debounce 320 ms
+    C->>API: GET /v1/search?q=…
+    API->>SQ: parse_query(texte, fuseau)
+    SQ-->>API: texte="réunion DAF", types=[task], tags=[finance],<br/>ignored=["p:hgih"]
+    Note over SQ: un jeton non reconnu est du texte libre ;<br/>une *valeur* inconnue est rapportée, jamais devinée
+    API->>DB: websearch_to_tsquery('french'::regconfig, …)<br/>@@ entry.search_vector + filtres
+    Note over DB: index GIN sur une colonne générée (ADR-037)<br/>ts_headline produit le surlignage côté serveur
+    DB-->>API: lignes classées par ts_rank_cd
+    API-->>C: hits + requête analysée + ignored
+    C->>U: résultats, et « Ignoré : p:hgih »
+```
+
+### 15.5 Notifications : deux chemins, une intention
+
+```mermaid
+graph LR
+    R[(reminder<br/>l'intention)] --> D{push_provider<br/>de l'appareil}
+    D -->|fcm| S1[Le serveur pousse<br/>Android, iOS, web]
+    D -->|wns| S2[Le serveur pousse<br/>Windows empaqueté MSIX]
+    D -->|local| S3[Le client programme<br/>Windows / macOS / Linux<br/>non empaqueté]
+    S3 -.->|GET /v1/reminders| R
+
+    N[(notification<br/>l'enregistrement durable)]
+    R --> N
+    S1 --> N
+    S2 --> N
+    S3 --> N
+
+    style R fill:#EBEBFE,stroke:#5B5BD6
+    style N fill:#EBEBFE,stroke:#5B5BD6
+```
+
+Le serveur enregistre **aussi** les rappels du canal `local` : ils sont
+l'intention, l'appareil n'en est que l'exécutant. Deux vues de « ce qui est
+programmé » qui ne peuvent pas être comparées finissent par diverger (ADR-040).
+
+### 15.6 Performance côté Flutter
+
+Les décisions prises, et ce qu'elles évitent :
+
+| Décision | Ce qu'elle évite |
+| --- | --- |
+| `itemExtent` / `SliverFixedExtentList` avec une hauteur de ligne fixe | Le calcul de la géométrie de défilement force la mise en page des enfants hors écran |
+| `findChildIndexCallback` + `ValueKey` sur chaque ligne | Un réordonnancement reconstruit tout ce qui suit le changement |
+| Slivers plutôt que des listes imbriquées | Un jour à quarante éléments dans un `Column` en met en page quarante pour en montrer deux |
+| `provider.select(...)` | Une frappe dans la barre de recherche reconstruit soixante lignes |
+| Familles indexées par objet-valeur avec `==` | Chaque reconstruction créerait un nouveau provider et referait la requête |
+| `RepaintBoundary` autour des graphiques | Le graphique est repeint à chaque pixel de défilement de la page |
+| Pas d'`Opacity` ni d'ombre par ligne | Chaque couche de sauvegarde par ligne fait tomber les images d'une liste |
+| Squelettes plutôt que roues d'attente | La mise en page saute à l'arrivée des données — première cause de clic manqué |
+| `const` partout où les données le permettent | Un sous-arbre `const` est ignoré à la reconstruction |
+| Debounce 180 ms (palette) / 320 ms (recherche) | Sept requêtes pour un mot de sept lettres |

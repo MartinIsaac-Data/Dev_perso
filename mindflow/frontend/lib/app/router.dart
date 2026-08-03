@@ -2,7 +2,11 @@
 ///
 /// The redirect is the only place that decides whether a screen is reachable.
 /// Guarding inside each screen instead would mean every new screen is a chance
-/// to forget the check.
+/// to forget the check — and phase 2 added eight.
+///
+/// Most routes sit inside a `ShellRoute`, so the sidebar and bottom bar persist
+/// across navigation instead of being rebuilt per screen. The exceptions are the
+/// full-screen flows: login, recording, and the detail pages pushed on top.
 library;
 
 import 'package:flutter/material.dart';
@@ -16,12 +20,29 @@ import '../features/capture/record_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/notes/note_detail_screen.dart';
 import '../features/notes/notes_screen.dart';
+import '../features/planning/agenda_screen.dart';
+import '../features/planning/analytics_screen.dart';
+import '../features/planning/calendar_screen.dart';
+import '../features/planning/library_screen.dart';
+import '../features/planning/notifications_screen.dart';
+import '../features/planning/search_screen.dart';
+import '../features/planning/timeline_screen.dart';
+import 'shell.dart';
 
 class Routes {
   static const login = '/login';
   static const dashboard = '/';
   static const notes = '/notes';
   static const record = '/record';
+
+  // Phase 2
+  static const agenda = '/agenda';
+  static const calendar = '/calendar';
+  static const search = '/search';
+  static const analytics = '/stats';
+  static const timeline = '/history';
+  static const notifications = '/notifications';
+  static const library = '/library';
 
   static String note(String id) => '/notes/$id';
   static String capture(String id) => '/captures/$id';
@@ -38,11 +59,15 @@ class _AuthRefresh extends ChangeNotifier {
   final Ref _ref;
 }
 
+final _rootKey = GlobalKey<NavigatorState>();
+final _shellKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _AuthRefresh(ref);
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
+    navigatorKey: _rootKey,
     initialLocation: Routes.dashboard,
     refreshListenable: refresh,
     redirect: (context, state) {
@@ -62,22 +87,60 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: Routes.login, builder: (_, __) => const LoginScreen()),
+
+      // Full-screen: recording takes the whole window on purpose — it has one
+      // job and a navigation bar beside it would be an invitation to leave.
       GoRoute(
-          path: Routes.dashboard, builder: (_, __) => const DashboardScreen()),
-      GoRoute(path: Routes.notes, builder: (_, __) => const NotesScreen()),
+        path: Routes.record,
+        parentNavigatorKey: _rootKey,
+        builder: (_, __) => const RecordScreen(),
+      ),
       GoRoute(
         path: '/notes/:id',
+        parentNavigatorKey: _rootKey,
         builder: (_, state) =>
             NoteDetailScreen(entryId: state.pathParameters['id']!),
       ),
       GoRoute(
-        path: Routes.record,
-        builder: (_, __) => const RecordScreen(),
-      ),
-      GoRoute(
         path: '/captures/:id',
+        parentNavigatorKey: _rootKey,
         builder: (_, state) =>
             CaptureDetailScreen(captureId: state.pathParameters['id']!),
+      ),
+
+      ShellRoute(
+        navigatorKey: _shellKey,
+        builder: (context, state, child) =>
+            AppShell(location: state.matchedLocation, child: child),
+        routes: [
+          GoRoute(
+              path: Routes.dashboard,
+              builder: (_, __) => const DashboardScreen()),
+          GoRoute(path: Routes.notes, builder: (_, __) => const NotesScreen()),
+          GoRoute(
+              path: Routes.agenda, builder: (_, __) => const AgendaScreen()),
+          GoRoute(
+              path: Routes.calendar,
+              builder: (_, __) => const CalendarScreen()),
+          GoRoute(
+            path: Routes.search,
+            builder: (_, state) => SearchScreen(
+              initialQuery: state.uri.queryParameters['q'],
+            ),
+          ),
+          GoRoute(
+              path: Routes.analytics,
+              builder: (_, __) => const AnalyticsScreen()),
+          GoRoute(
+              path: Routes.timeline,
+              builder: (_, __) => const TimelineScreen()),
+          GoRoute(
+            path: Routes.notifications,
+            builder: (_, __) => const NotificationsScreen(),
+          ),
+          GoRoute(
+              path: Routes.library, builder: (_, __) => const LibraryScreen()),
+        ],
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

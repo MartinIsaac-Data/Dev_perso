@@ -154,3 +154,58 @@ class TaskQueuePort(Protocol):
     production uses arq (ADR-006)."""
 
     async def enqueue(self, job: str, *args: Any, **kwargs: Any) -> str | None: ...
+
+
+# --------------------------------------------------------------------------- #
+# Push delivery (Phase 2)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True, slots=True)
+class PushMessage:
+    """What actually reaches a device.
+
+    Deliberately small. A push is a *pointer* — a title, a line, and enough
+    identity to open the right screen — never a copy of the content. Two reasons,
+    and both are load-bearing: push payloads transit a third party (ADR-039), and
+    a notification that duplicates the data ages badly the moment the user edits
+    it.
+    """
+
+    title: str
+    body: str
+    # Opaque to the transport; the client routes on it.
+    data: dict[str, str]
+    # Used by every provider to replace an earlier notification about the same
+    # subject instead of stacking a second one on the lock screen.
+    collapse_key: str | None = None
+    badge: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PushResult:
+    delivered: int
+    # Tokens the provider reported as permanently dead. The caller retires them:
+    # a token that will never work again must not be retried forever.
+    invalid_tokens: tuple[str, ...] = ()
+    retryable_tokens: tuple[str, ...] = ()
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+
+class PushSenderPort(ABC):
+    """One port, several providers (FCM, WNS, and a fake for tests).
+
+    The dispatcher never learns which one it is talking to — that is what makes
+    "add Windows support" a new adapter rather than a new branch in the
+    scheduler.
+    """
+
+    name: str = "push"
+
+    @abstractmethod
+    async def send(self, tokens: list[str], message: PushMessage) -> PushResult: ...
+
+    async def health(self) -> bool:
+        return True

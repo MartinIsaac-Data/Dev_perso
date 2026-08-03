@@ -64,6 +64,39 @@ entries_corrected_total = Counter(
     "entries_corrected_total", "User corrections", ["field"], registry=REGISTRY
 )
 
+# -- Planning and delivery (Phase 2) ----------------------------------------
+entries_completed_total = Counter(
+    "entries_completed_total", "Entries completed", ["entry_type"], registry=REGISTRY
+)
+tasks_recurred_total = Counter(
+    "tasks_recurred_total", "Recurring occurrences generated", registry=REGISTRY
+)
+reminders_scheduled_total = Counter(
+    "reminders_scheduled_total", "Reminders scheduled", ["channel"], registry=REGISTRY
+)
+reminders_delivered_total = Counter(
+    "reminders_delivered_total", "Reminder deliveries", ["provider", "result"], registry=REGISTRY
+)
+# How late a reminder actually fired. A reminder that arrives after the moment
+# it was meant to prevent is worse than none, so this is the SLI that matters
+# for the whole notification plane.
+reminder_delivery_lag_seconds = Histogram(
+    "reminder_delivery_lag_seconds",
+    "Delay between the scheduled time and the actual send",
+    buckets=(1, 5, 15, 30, 60, 120, 300, 900),
+    registry=REGISTRY,
+)
+search_queries_total = Counter(
+    "search_queries_total", "Search queries", ["mode", "outcome"], registry=REGISTRY
+)
+search_duration_seconds = Histogram(
+    "search_duration_seconds",
+    "Search latency",
+    ["mode"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
+    registry=REGISTRY,
+)
+
 # The one metric that must always read zero (Architecture.md §12.7).
 captures_lost_total = Counter(
     "captures_lost_total", "Captures irrecoverably lost", ["stage"], registry=REGISTRY

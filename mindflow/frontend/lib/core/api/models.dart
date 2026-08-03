@@ -87,6 +87,8 @@ class TaskDetails {
     this.priority = 'normal',
     this.completedAt,
     this.assigneeLabel,
+    this.recurrenceRule,
+    this.snoozedUntil,
   });
 
   final DateTime? dueAt;
@@ -98,15 +100,21 @@ class TaskDetails {
   final DateTime? completedAt;
   final String? assigneeLabel;
 
+  /// An RRULE subset. Present means the task regenerates itself on completion.
+  final String? recurrenceRule;
+  final DateTime? snoozedUntil;
+
   bool get isDone => completedAt != null;
 
   factory TaskDetails.fromJson(Map<String, dynamic> json) => TaskDetails(
-        dueAt: _date(json['due_at']),
+        dueAt: parseDate(json['due_at']),
         duePrecision: json['due_precision'] as String?,
         dueRawExpression: json['due_raw_expression'] as String?,
         priority: (json['priority'] as String?) ?? 'normal',
-        completedAt: _date(json['completed_at']),
+        completedAt: parseDate(json['completed_at']),
         assigneeLabel: json['assignee_label'] as String?,
+        recurrenceRule: json['recurrence_rule'] as String?,
+        snoozedUntil: parseDate(json['snoozed_until']),
       );
 }
 
@@ -124,6 +132,8 @@ class Entry {
     this.task,
     this.tags = const [],
     this.editedByUserAt,
+    this.pinnedAt,
+    this.projectId,
   });
 
   final String id;
@@ -138,6 +148,8 @@ class Entry {
   final TaskDetails? task;
   final List<String> tags;
   final DateTime? editedByUserAt;
+  final DateTime? pinnedAt;
+  final String? projectId;
 
   bool get needsReview => status == EntryStatus.needsReview;
 
@@ -147,7 +159,7 @@ class Entry {
         title: (json['title'] as String?) ?? '',
         body: json['body'] as String?,
         status: entryStatusFrom(json['status'] as String?),
-        occurredAt: _date(json['occurred_at']) ?? DateTime.now(),
+        occurredAt: parseDate(json['occurred_at']) ?? DateTime.now(),
         version: (json['version'] as num?)?.toInt() ?? 1,
         confidence: (json['confidence'] as num?)?.toDouble(),
         captureId:
@@ -156,7 +168,9 @@ class Entry {
             ? null
             : TaskDetails.fromJson(json['task'] as Map<String, dynamic>),
         tags: ((json['tags'] as List<dynamic>?) ?? const []).cast<String>(),
-        editedByUserAt: _date(json['edited_by_user_at']),
+        editedByUserAt: parseDate(json['edited_by_user_at']),
+        pinnedAt: parseDate(json['pinned_at']),
+        projectId: json['project_id'] as String?,
       );
 }
 
@@ -215,7 +229,7 @@ class Capture {
       id: json['id'] as String,
       status: captureStatusFrom(json['status'] as String?),
       durationMs: (json['duration_ms'] as num?)?.toInt() ?? 0,
-      capturedAt: _date(json['captured_at']) ?? DateTime.now(),
+      capturedAt: parseDate(json['captured_at']) ?? DateTime.now(),
       processingMode: (json['processing_mode'] as String?) ?? 'normal',
       failureCode: json['failure_code'] as String?,
       transcript: json['transcript'] == null
@@ -285,5 +299,8 @@ class Dashboard {
       );
 }
 
-DateTime? _date(dynamic value) =>
+/// Shared date parsing. Public because the phase-2 models parse the same
+/// shapes and duplicating the null-and-local handling is how two files start
+/// disagreeing about what a missing date means.
+DateTime? parseDate(dynamic value) =>
     value is String ? DateTime.tryParse(value)?.toLocal() : null;

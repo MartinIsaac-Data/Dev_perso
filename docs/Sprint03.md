@@ -239,3 +239,42 @@ sprint 3 est problématique.
 - Questions ouvertes → `Decisions.md` §Décisions non prises
 - Sprint précédent → `Sprint02.md`
 - Suite de la trajectoire → `Roadmap.md`
+
+
+---
+
+## Sprint 04 — Planification, recherche et mesure (phase 2, livré)
+
+Consigné ici plutôt que dans un fichier de plus : la liste des documents de
+`/docs` est fixée depuis la phase 0, et l'allonger à chaque sprint la rendrait
+illisible.
+
+### Objectif
+
+Faire passer le produit de « capturer et consulter » à « capturer, planifier,
+retrouver et mesurer ».
+
+### Épopées livrées
+
+| # | Épopée | Definition of Done |
+| --- | --- | --- |
+| 25 | Agenda et calendrier | Fenêtres correctes au changement d'heure ; retards dans leur propre section ; densité agrégée en base |
+| 26 | Gestion avancée des tâches | Sous-tâches ordonnées et idempotentes ; récurrence qui ne dérive pas ; report qui ne déplace pas l'échéance |
+| 27 | Rappels et notifications | Rien ne part deux fois ; rien n'est perdu ; une panne de push ne coûte pas la notification |
+| 28 | Recherche plein texte et palette | Une grammaire unique ; une requête malformée ne peut pas renvoyer 500 ; les filtres ignorés sont dits |
+| 29 | Statistiques | Tout agrégé en SQL ; les chiffres qui dérangent sont affichés |
+| 30 | Historique | Survit à la suppression de son sujet ; distinct de l'audit et des corrections IA |
+| 31 | Interface | Système de design, coque adaptative, palette ⌘K, optimisations de liste |
+
+### Ce que le sprint a trouvé sans le chercher
+
+Deux défauts silencieux de la phase 1, tous deux corrigés (ADR-041, ADR-042).
+Le second est le plus instructif : les travaux inter-tenants ne voyaient **aucune
+ligne** depuis le premier jour, parce que le rôle applicatif est `NOBYPASSRLS` par
+construction. Aucune erreur, aucun log, aucun test. Il n'a été découvert que
+parce qu'un *nouveau* travail inter-tenants — le répartiteur de rappels — avait un
+effet visible quand il fonctionnait.
+
+La leçon, consignée : un travail de fond qui ne produit rien d'observable n'a pas
+besoin d'un test « qu'il tourne », il a besoin d'un test **qu'il voie quelque
+chose**.

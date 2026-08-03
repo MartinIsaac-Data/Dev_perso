@@ -373,3 +373,28 @@ Scénarios à faible probabilité mais fort impact, à surveiller.
 - Décisions → `Decisions.md`
 - Détail des premiers sprints → `Sprint01.md`, `Sprint02.md`, `Sprint03.md`
 - Suivi → `Changelog.md`, `TODO.md`
+
+
+---
+
+## État réel au 3 août 2026
+
+| Version | Question à laquelle elle répond | État |
+| --- | --- | --- |
+| v0.1 | « Peut-on capturer une pensée sans y penser ? » | ✅ Phase 1 |
+| v0.2 | « Ce qui en sort est-il exploitable ? » | ✅ Phase 1 |
+| v0.3 | « Peut-on planifier, retrouver et mesurer ? » | ✅ **Phase 2** |
+| v0.4 | « L'extraction s'améliore-t-elle, et le sait-on ? » | ⏳ Bloquée par le corpus d'évaluation (E2) |
+| v0.5 | « Le produit tient-il sur plusieurs appareils ? » | ⏳ Bloquée par E6 |
+
+**Ce que la phase 2 a changé à la trajectoire.** Deux choses, et aucune n'était
+prévue :
+
+1. La phase 2 rend le taux de correction **visible** sur le tableau de bord. Ce
+   chiffre était jusqu'ici une abstraction ; il devient une pression. Mais sans
+   corpus annoté (E2), on le regarde bouger sans savoir pourquoi — ce qui déplace
+   E2 de « souhaitable » à « bloquant pour v0.4 ».
+2. Les appareils sont maintenant réellement enregistrés, plusieurs par compte.
+   La synchronisation multi-appareils cesse d'être théorique : deux appareils qui
+   modifient la même tâche hors ligne divergeront, et rien ne le résout
+   aujourd'hui (E6).

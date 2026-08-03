@@ -73,3 +73,28 @@ bool isOverdue(DateTime? dueAt, {DateTime? now}) {
   if (dueAt == null) return false;
   return dueAt.toLocal().isBefore(now ?? DateTime.now());
 }
+
+/// Just the hour, for dense rows where the day is already given by the section
+/// header. Showing "mardi 14:00" inside a section titled "Mardi" wastes the
+/// horizontal space the title needs.
+String formatTimeOnly(DateTime moment) =>
+    DateFormat.Hm(_locale).format(moment.toLocal());
+
+/// A month and year, for calendar headers.
+String formatMonth(DateTime moment) =>
+    DateFormat('MMMM yyyy', _locale).format(moment.toLocal());
+
+/// A weekday initial, for the calendar grid header.
+String weekdayInitial(int weekday) =>
+    const ['L', 'M', 'M', 'J', 'V', 'S', 'D'][(weekday - 1) % 7];
+
+/// Relative wording for a past instant, used by the timeline.
+String formatRelativePast(DateTime moment, {DateTime? now}) {
+  final reference = now ?? DateTime.now();
+  final elapsed = reference.difference(moment.toLocal());
+  if (elapsed.inMinutes < 1) return "à l'instant";
+  if (elapsed.inMinutes < 60) return 'il y a ${elapsed.inMinutes} min';
+  if (elapsed.inHours < 24) return 'il y a ${elapsed.inHours} h';
+  if (elapsed.inDays < 7) return 'il y a ${elapsed.inDays} j';
+  return formatDay(moment, now: reference);
+}

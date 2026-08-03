@@ -1406,3 +1406,117 @@ mémoire devient contrainte. Le schéma le permet sans migration de modèle.
 - Décisions et arbitrages → `Decisions.md`
 - Contrat d'API → `API.md`
 - Stratégie de recherche et RAG → `AI.md`
+
+
+---
+
+## 14. Extensions de la phase 2 — planification, rappels, historique
+
+Cinq tables, vingt-deux colonnes et une conversion de type. Chaque ajout est
+justifié par une fonctionnalité, et chaque table porte `account_id` pour que la
+RLS s'applique uniformément (ADR-005).
+
+### 14.1 Diagramme entité-relation
+
+```mermaid
+erDiagram
+    ENTRY ||--o{ SUBTASK : "contient (1 niveau)"
+    ENTRY ||--o| TASK : "détaille"
+    ENTRY ||--o{ REMINDER : "déclenche"
+    ENTRY ||--o{ ACTIVITY_EVENT : "historise"
+    REMINDER ||--o{ NOTIFICATION : "produit"
+    APP_USER ||--o{ NOTIFICATION : "reçoit"
+    APP_USER ||--o{ DEVICE : "possède"
+    APP_USER ||--o{ SAVED_FILTER : "définit"
+    APP_USER ||--o{ REMINDER : "programme"
+    TASK ||--o| TASK : "récurrence (recurred_from)"
+
+    SUBTASK {
+        uuid id PK
+        uuid entry_id FK
+        text title
+        int  position "clairsemé : 100, 200, 300"
+        timestamptz completed_at
+    }
+    REMINDER {
+        uuid id PK
+        uuid entry_id FK "nullable : rappel autonome"
+        timestamptz remind_at
+        text channel "push | local | email"
+        text status  "scheduled | sent | failed | cancelled | dismissed"
+        text offset_rule "NULL = manuel, donc jamais réécrit"
+        text dedupe_key UK "rend le planificateur idempotent"
+    }
+    NOTIFICATION {
+        uuid id PK
+        uuid user_id FK
+        text kind
+        timestamptz read_at
+        timestamptz pushed_at "NULL = jamais poussée, mais bien enregistrée"
+    }
+    SAVED_FILTER {
+        uuid id PK
+        uuid user_id FK
+        text name UK
+        text query "la chaîne, pas un prédicat compilé"
+    }
+    ACTIVITY_EVENT {
+        bigint id PK
+        uuid entry_id FK
+        text action
+        text subject_label "dénormalisé : survit à la suppression du sujet"
+    }
+```
+
+### 14.2 Les trois tables d'historique, et pourquoi elles ne fusionnent pas
+
+| Table | Question à laquelle elle répond | Public |
+| --- | --- | --- |
+| `audit_log` | « Qui a touché à quoi, et depuis où ? » | Sécurité, conformité |
+| `correction_event` | « Le modèle se trompe-t-il, et sur quel champ ? » | Évaluation IA |
+| `activity_event` | « Qu'est-il arrivé à ma tâche ? » | L'utilisateur |
+
+Les fusionner imposerait un vocabulaire unique à trois publics et n'en servirait
+aucun. Le prix payé — trois écritures là où il pourrait n'y en avoir qu'une — est
+inférieur au prix d'une table que personne ne peut lire.
+
+### 14.3 Colonnes ajoutées aux tables existantes
+
+| Table | Colonne | Raison |
+| --- | --- | --- |
+| `entry` | `search_vector` | Colonne **générée** `tsvector` (`title` poids A, `body` poids B), index GIN (ADR-037) |
+| `entry` | `pinned_at` | Un horodatage plutôt qu'un booléen : « épinglé, et depuis quand » permet un tri |
+| `task` | `recurrence_count` | Alimente `COUNT=` : « tous les lundis, 10 fois » s'arrête réellement |
+| `task` | `recurred_from_entry_id` | Provenance d'une occurrence. **Seconde clé étrangère vers `entry`** — la relation ORM doit déclarer `foreign_keys` explicitement, faute de quoi elle est ambiguë |
+| `task` | `position` | Ordre manuel, clairsemé |
+| `device` | `install_id` | Clé naturelle de l'appareil. Le jeton push ne l'est pas : il tourne |
+| `device` | `push_provider` | `fcm` / `wns` / `local` / `none` (ADR-038) |
+| `device` | `push_failure_count`, `push_failed_at` | Retire un jeton mort au lieu de le réessayer indéfiniment |
+| `project` | `description`, `icon`, `position`, `pinned_at` | Ce qu'un écran de bibliothèque doit afficher |
+| `tag` | `color`, `pinned_at` | Idem |
+
+### 14.4 Conversion des horodatages (ADR-041)
+
+32 colonnes passent de `timestamp` à `timestamptz` :
+
+```sql
+ALTER TABLE entry ALTER COLUMN created_at TYPE timestamptz
+    USING created_at AT TIME ZONE 'UTC';
+```
+
+La clause `USING` est ce qui rend la conversion correcte plutôt que simplement
+acceptée : les valeurs ont été écrites par `now()` sous une session UTC, elles
+sont donc réinterprétées comme UTC et non comme l'heure locale du serveur.
+
+### 14.5 Index ajoutés
+
+| Index | Table | Rôle |
+| --- | --- | --- |
+| `entry_search_idx` (GIN, partiel) | `entry` | Recherche plein texte, hors supprimés |
+| `entry_pinned_idx` (partiel) | `entry` | Les épinglés, rares donc partiel |
+| `reminder_due_idx` (partiel) | `reminder` | Ce que le répartiteur lit toutes les minutes |
+| `notification_unread_idx` (partiel) | `notification` | Le badge non lu |
+| `subtask_entry_idx` | `subtask` | Une liste ordonnée par tâche |
+| `activity_account_time_idx` | `activity_event` | La timeline |
+| `device_push_idx` (partiel) | `device` | Le groupage par fournisseur à l'envoi |
+| `tag_usage_idx` | `tag` | La barre de filtres, triée par usage |
