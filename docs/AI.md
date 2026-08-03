@@ -1,16 +1,18 @@
 # MindFlow AI — Architecture IA et RAG
 
-> **Phase 0 — Conception.** Aucun prompt exécutable ni code d'orchestration n'est écrit.
-> Ce document décrit la chaîne de traitement, les modèles retenus, la stratégie RAG,
-> le dispositif d'évaluation et les garde-fous. Les arbitrages sont dans `Decisions.md`.
+> **Sections 1 à 12 — conception (phase 0).** Elles décrivent la chaîne visée, les
+> arbitrages et les garde-fous, et restent le document de référence des intentions.
+> **Section 13 — implémentation (phase 3).** Elle documente la couche IA telle
+> qu'elle existe dans le code, y compris **là où elle s'écarte de la conception**
+> et pourquoi. Quand les deux divergent, la section 13 fait foi.
 
 | | |
 | --- | --- |
-| **Version** | 0.1 — Phase 0 |
-| **Modèles de référence** | `claude-opus-5` (extraction, synthèse), `claude-haiku-4-5` (préfiltrage) |
+| **Version** | 0.3 — Phase 3 (couche IA implémentée) |
+| **Fournisseurs** | OpenAI · Claude · Gemini · Llama (auto-hébergé) · Mistral — aucun couplé (ADR-045) |
 | **STT** | `faster-whisper large-v3` auto-hébergé, repli fournisseur SaaS |
-| **Embeddings** | Modèle multilingue auto-hébergé, 1024 dimensions |
-| **Magasin vectoriel** | `pgvector` dans PostgreSQL (voir `Database.md`) |
+| **Embeddings** | Largeur fixée au déploiement, 1536 par défaut (ADR-046) |
+| **Magasin vectoriel** | `pgvector` dans PostgreSQL, index HNSW cosinus |
 
 ---
 
@@ -28,6 +30,7 @@
 10. [Confidentialité et gouvernance](#10-confidentialité-et-gouvernance)
 11. [Boucle d'amélioration](#11-boucle-damélioration)
 12. [Limites connues](#12-limites-connues-et-risques)
+13. [La couche IA implémentée](#13-la-couche-ia-implémentée-phase-3)
 
 ---
 
@@ -783,9 +786,157 @@ poids.
 
 ---
 
+## 13. La couche IA implémentée (Phase 3)
+
+Cette section décrit le code réel. Elle signale explicitement les écarts avec la
+conception des sections 1 à 12 — un document qui prétend que tout s'est passé
+comme prévu n'aide personne à comprendre le système six mois plus tard.
+
+### 13.1 Carte du code
+
+| Couche | Module | Rôle |
+| --- | --- | --- |
+| Domaine (pur) | `app/domain/chunking.py` | Découpage déterministe, hachage de contenu, budget de tokens |
+| | `app/domain/retrieval.py` | Fusion RRF, candidats, citations |
+| | `app/domain/intent.py` | Routage déterministe des questions |
+| | `app/domain/knowledge.py` | Sept catégories d'entités, clés de résolution |
+| | `app/domain/memory.py` | Faits durables, décroissance de confiance |
+| | `app/domain/ports.py` | `EmbedderPort`, `ChatPort` |
+| Prompts | `app/prompts/` | Registre, extraction, entités, réponse, résumés, mémoire, thèmes |
+| Adaptateurs | `app/infra/ai/embedders.py` | OpenAI · Mistral · Gemini · Llama · faux |
+| | `app/infra/ai/chat.py` | OpenAI · Claude · Gemini · Mistral · Llama · faux |
+| | `app/infra/ai/factory.py` | **Le seul module qui nomme un fournisseur** |
+| Services | `app/services/indexing_service.py` | Écriture des chunks, encodage par lots |
+| | `app/services/retrieval_service.py` | Recherche hybride |
+| | `app/services/assistant_service.py` | Le moteur des cinq questions |
+| | `app/services/knowledge_service.py` | Extraction et résolution d'entités |
+| | `app/services/memory_service.py` | Ce que l'assistant retient |
+| | `app/services/digest_service.py` | Résumés quotidien, hebdomadaire, mensuel |
+| Workers | `app/workers/scheduled/indexer.py` | Vidage du retard d'encodage |
+| | `app/workers/scheduled/extractor.py` | Détection d'entités |
+| | `app/workers/scheduled/digester.py` | Résumés à l'heure locale |
+| API | `app/api/v1/assistant.py` | Chat (dont SSE), recherche sémantique, entités, résumés, mémoire |
+
+### 13.2 Le moteur des cinq questions
+
+```mermaid
+flowchart TB
+    Q([Question]) --> C[classify — déterministe<br/>app.domain.intent]
+
+    C -->|today| S1[Requête agenda]
+    C -->|overdue| S2[Requête échéances]
+    C -->|recall| S3[Récupération → liste]
+    C -->|themes| S4[GROUP BY sur entity_mention]
+    C -->|summarise / open_question| S5[Récupération hybride]
+
+    S1 & S2 & S3 --> R1([Réponse — aucun modèle])
+    S4 --> N[Narration des comptages]
+    S5 --> CTX[Assemblage du contexte<br/>mémoire + historique + passages]
+    CTX --> GEN[Génération avec citations imposées]
+
+    N --> R2([Réponse — modèle])
+    GEN --> R2
+
+    style R1 fill:#1f6f43,color:#fff
+    style R2 fill:#2b4c7e,color:#fff
+```
+
+Deux des cinq questions n'atteignent jamais un modèle, et une ne l'atteint que
+pour formuler des nombres calculés en SQL (ADR-047). Le test d'intégration
+`TestTheFiveRequiredQuestions` affirme `used_model is False` sur exactement ces
+routes.
+
+### 13.3 Récupération hybride
+
+```mermaid
+flowchart LR
+    Q([Question]) --> L[Lexical<br/>to_tsvector french<br/>requête disjonctive]
+    Q --> E[embed kind=query]
+    E --> V[Vectoriel<br/>embedding &lt;=&gt; requête<br/>filtré sur embedding_model]
+
+    L --> F[RRF k=60]
+    V --> F
+    F -->|vide| REC[Repli récence<br/>chunk_index = 0]
+    REC --> F2[RRF]
+    F --> H[Hydratation + citations]
+    F2 --> H
+```
+
+Trois propriétés que le code doit tenir, chacune protégée par un test :
+
+1. **Le filtre sur `embedding_model`.** Des vecteurs de deux modèles occupent des
+   espaces différents ; les mélanger classe par rien du tout (ADR-046).
+2. **L'opérateur `<=>`**, cosinus, pour correspondre à la classe d'opérateur de
+   l'index HNSW créé en migration 0006. Un opérateur différent n'échoue pas : il
+   ignore silencieusement l'index et fait un parcours séquentiel, ce qui
+   apparaît des mois plus tard sous la forme « la recherche est devenue lente ».
+3. **Aucune requête ne peut lever sur une saisie utilisateur.** Voir ADR-048.
+
+### 13.4 Écarts avec la conception de la section 6
+
+| Prévu (phase 0) | Implémenté (phase 3) | Pourquoi |
+| --- | --- | --- |
+| Reclassement par récence exponentielle | Pas de reclassement ; la récence sert de **repli** quand rien n'apparie | Le reclassement suppose un classement à réordonner. Le cas réellement gênant était « aucun résultat », pas « mauvais ordre ». Ajouté quand une mesure le justifiera, pas avant |
+| Diversité max 3 chunks par entrée | Déduplication des **citations** par entrée source | Le lecteur voit une source par entrée, ce que la diversité visait ; les passages restent disponibles pour le modèle |
+| Vérification des citations après génération | Citations attachées **par construction**, jamais extraites de la réponse | Vérifier après coup suppose de parser la sortie du modèle. Les passages transmis sont connus : ce sont eux les sources |
+| Budget contexte 8 000 tokens | 6 000 par défaut, configurable | Au-delà, le rappel cesse de progresser et le modèle répond depuis le milieu du contexte, ce qui se lit comme « il ignore la question » |
+| Expansion de requête écartée | Toujours écartée, mais **normalisation disjonctive** ajoutée | Une question n'est pas une requête de recherche (ADR-048) |
+| Embeddings 1024 dimensions | Largeur configurable, 1536 par défaut | La largeur suit le fournisseur choisi (ADR-046) |
+
+### 13.5 Prompts
+
+Sept prompts, tous dans `app/prompts/`, tous versionnés et empreintés (ADR-053).
+
+| Nom | Rôle | Sortie contrainte |
+| --- | --- | --- |
+| `extract_note_analysis` | Transcription → `NoteAnalysis` | ✅ schéma JSON |
+| `extract_entities` | Texte → sept catégories + thèmes | ✅ schéma JSON |
+| `extract_memory` | Conversation → faits durables | ✅ schéma JSON |
+| `answer_with_context` | Question + passages → réponse citée | prose |
+| `digest_daily` / `digest_weekly` / `digest_monthly` | Période → résumé | prose |
+| `narrate_themes` | Comptages → lecture des thèmes | prose |
+
+Chaque prompt manipulant du texte utilisateur déclare que ce texte est **une
+donnée, jamais une instruction**, et `tests/unit/test_prompts.py` le vérifie pour
+tous — y compris ceux qui n'existent pas encore.
+
+### 13.6 Ce que la couche IA garantit, et ce qu'elle ne garantit pas
+
+**Garanti et testé.**
+
+- Aucun service ne nomme un fournisseur ; le changement est une variable
+  d'environnement (test qui lit les sources).
+- Une réponse générée porte les passages dont elle est issue.
+- Un lot d'embeddings est complet et ordonné, ou il est refusé.
+- Réencoder du texte inchangé ne coûte rien.
+- Réextraire une entrée ne double aucun compteur.
+- Une note supprimée cesse d'être retrouvable.
+- Une panne fournisseur dégrade — recherche lexicale seule, résumé factuel,
+  retard d'encodage repris au tick suivant — et ne bloque jamais une capture.
+
+**Non garanti, et il faut le savoir.**
+
+- **Le modèle peut ne pas citer.** Le prompt l'impose, rien ne le force. La
+  métrique `assistant_uncited_answers_total` compte les réponses générées sans
+  passage ; c'est une mesure d'honnêteté, pas un garde-fou.
+- **Aucune évaluation quantitative n'a été exécutée.** Le dispositif de la
+  section 8 est conçu, pas lancé : aucun jeu doré, aucune mesure de rappel@k sur
+  un corpus réel. Les seuils de cette section restent des cibles.
+- **Aucun appel à un vrai fournisseur n'a été passé.** Tous les adaptateurs sont
+  testés contre des réponses simulées fidèles au format documenté. Le premier
+  contact avec une API réelle révélera des écarts.
+- **La qualité du repli sur la récence n'est pas mesurée.** « Résume mes
+  réunions » renvoie les plus récentes ; que ce soit le bon choix pour un corpus
+  de deux ans reste à vérifier.
+- **La détection d'entités retente indéfiniment les entrées sans entité.** C'est
+  le coût assumé de ne pas porter de colonne d'état, borné par la taille du lot.
+
+---
+
 ## Références
 
 - Architecture générale et séquences → `Architecture.md`
 - Schéma des chunks et index vectoriels → `Database.md`
 - Contrat de l'endpoint `/search` → `API.md`
 - Arbitrages IA → `Decisions.md` ADR-007, ADR-008, ADR-019, ADR-020, ADR-021, ADR-025
+- Arbitrages de la couche IA implémentée → `Decisions.md` ADR-045 à ADR-053

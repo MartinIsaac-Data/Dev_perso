@@ -989,3 +989,173 @@ Deux règles gouvernent l'analyse :
    le dire au lieu de renvoyer silencieusement tout.
 
 Répéter un filtre élargit : `is:task is:idea` signifie « l'un ou l'autre ».
+
+---
+
+## 15. Surface ajoutée en phase 3 — assistant, recherche sémantique, connaissances
+
+### 15.1 Catalogue
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| `POST` | `/v1/assistant/chat` | Poser une question, réponse complète |
+| `POST` | `/v1/assistant/chat/stream` | Poser une question, réponse en flux (SSE) |
+| `GET` | `/v1/assistant/conversations` | Lister les conversations |
+| `GET` | `/v1/assistant/conversations/{id}` | Lire une conversation |
+| `POST` | `/v1/search/semantic` | Recherche hybride lexicale + sémantique |
+| `GET` | `/v1/search/index-status` | État de l'index sémantique du compte |
+| `GET` | `/v1/entities` | Lister les entités détectées |
+| `GET` | `/v1/entities/themes` | Sujets récurrents, comptés en SQL |
+| `GET` | `/v1/entities/{id}/mentions` | Où une entité a été citée |
+| `GET` | `/v1/digests` | Lister les résumés |
+| `POST` | `/v1/digests` | Générer un résumé à la demande |
+| `POST` | `/v1/digests/{id}/read` | Marquer comme lu |
+| `GET` | `/v1/memory` | Tout ce que l'assistant retient |
+| `DELETE` | `/v1/memory/{id}` | Oublier définitivement |
+
+**Ce qui est délibérément absent :** aucun endpoint ne déclenche un encodage ou
+une extraction à la demande. Ce sont des affaires de worker, et les exposer
+laisserait un client transformer une requête HTTP en facture fournisseur non
+bornée.
+
+### 15.2 `POST /v1/assistant/chat`
+
+```json
+{
+  "question": "Que dois-je faire aujourd'hui ?",
+  "conversation_id": "018f2c20-…",
+  "client_message_id": "c3f1a9e2"
+}
+```
+
+`client_message_id` porte le même contrat d'idempotence que
+`client_capture_id` (ADR-009) : un téléphone qui réessaie sur une connexion
+instable ne doit ni poser la question deux fois, ni être facturé deux fois. La
+seconde requête renvoie la réponse déjà produite, avec le même `message_id`.
+
+```json
+{
+  "data": {
+    "text": "Aujourd'hui — 2 tâches :\n• Rappeler le DAF de Vinci — 2026-06-10",
+    "intent": "today",
+    "citations": [],
+    "notes": ["Réponse construite depuis vos échéances, sans modèle de langage."],
+    "conversation_id": "018f2c20-…",
+    "message_id": "018f2c21-…",
+    "latency_ms": 38,
+    "used_model": false,
+    "refused": false
+  }
+}
+```
+
+| Champ | Ce qu'il sert à faire côté client |
+| --- | --- |
+| `intent` | Choisir le rendu : une liste ne se lit pas comme un paragraphe |
+| `citations` | Afficher les sources. Vide sur les routes structurées, qui n'en ont pas |
+| `notes` | Dire comment la réponse a été construite. Un assistant qui l'explique est un assistant que l'on peut corriger |
+| `used_model` | Afficher instantanément plutôt qu'animer une frappe sur une réponse déjà complète |
+| `refused` | Un refus est une réponse légitime (ADR-030), pas une erreur : statut 200 |
+
+### 15.3 `POST /v1/assistant/chat/stream`
+
+Le seul endpoint du produit qui ne renvoie pas du JSON. Deux types d'événements :
+
+```
+event: delta
+data: {"text": "Deux "}
+
+event: delta
+data: {"text": "réunions cette semaine."}
+
+event: answer
+data: {"text": "Deux réunions cette semaine.", "intent": "summarise", "citations": [...]}
+```
+
+Un client qui ignore les `delta` et ne lit que le dernier `answer` obtient
+exactement ce que renvoie l'endpoint non streamé — c'est ce qui rend cet ajout
+sûr sans scinder le client en deux chemins de code.
+
+Les routes structurées n'ont rien à streamer : leur réponse est calculée d'un
+bloc et arrive en un seul `delta`. L'asymétrie est visible du client, qui affiche
+ces réponses instantanément.
+
+L'en-tête `X-Accel-Buffering: no` est envoyé : sans lui, un proxy intermédiaire
+tamponne toute la réponse et la délivre d'un coup, ce qui retransforme le
+streaming en attente.
+
+### 15.4 `POST /v1/search/semantic`
+
+```json
+{ "query": "négociation fournisseur", "limit": 10, "entry_types": ["meeting"] }
+```
+
+La réponse porte le détail de la fusion, pas seulement le résultat :
+
+```json
+{
+  "data": {
+    "passages": [
+      {
+        "chunk_id": "018f…",
+        "text": "Le fournisseur a changé ses conditions…",
+        "title": "Négociation fournisseur",
+        "occurred_at": "2026-06-03",
+        "found_by": ["lexical", "semantic"],
+        "score": 0.032
+      }
+    ],
+    "took_ms": 24,
+    "lexical_count": 12,
+    "semantic_count": 8,
+    "notes": []
+  }
+}
+```
+
+`found_by` est exposé parce que l'accord entre le sens et les mots est un signal
+bien plus fort que l'un ou l'autre seul, et le dire aide l'utilisateur à calibrer
+sa confiance. `score` est le score RRF fusionné ; il sert à l'affichage, jamais
+au classement côté client.
+
+`notes` porte les dégradations en clair : « Recherche lexicale seule : le service
+d'embedding est indisponible », « Aucun résultat sémantique : le corpus n'est pas
+encore indexé ». Le produit énonce ses dégradations plutôt que de les masquer.
+
+### 15.5 `GET /v1/search/index-status`
+
+```json
+{ "data": { "total_chunks": 412, "pending_chunks": 37, "provider": "openai", "dimensions": 1536 } }
+```
+
+Existe pour une raison précise : une recherche sémantique qui ne renvoie rien
+parce que le corpus est encore en cours d'indexation et une recherche qui ne
+renvoie rien parce qu'aucune réponse n'existe sont **indiscernables** de
+l'extérieur. Cet endpoint les distingue.
+
+### 15.6 `GET /v1/memory` et `DELETE /v1/memory/{id}`
+
+Le contenu est retourné **en totalité**, avec le poids après décroissance :
+
+```json
+{ "data": [ { "id": "018f…", "kind": "profile", "label": "Profil",
+              "statement": "Je dirige le pôle forecast",
+              "confidence": 0.95, "weight": 0.87 } ] }
+```
+
+Un magasin de mémoire que l'utilisateur ne peut pas inspecter est un magasin
+qu'il ne peut pas corriger. La suppression est définitive : la ligne survit en
+pierre tombale côté serveur pour qu'une conversation ultérieure ne réapprenne pas
+ce qui vient d'être rejeté (ADR-051). Réponse `204`.
+
+### 15.7 Erreurs propres à la phase 3
+
+| Code | Statut | Quand |
+| --- | --- | --- |
+| `extraction_unavailable` | 503 | Fournisseur injoignable ou saturé. Réessayable |
+| `not_found` | 404 | Conversation, entité, résumé ou mémoire inconnus |
+| `validation_failed` | 422 | Question vide ou dépassant 2 000 caractères |
+
+Un refus du modèle n'est **pas** une erreur : statut 200, `refused: true`, et le
+texte explique. Le transformer en 4xx en ferait une chose que le client réessaie,
+ce qui serait un contournement.

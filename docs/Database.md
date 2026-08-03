@@ -1520,3 +1520,129 @@ sont donc réinterprétées comme UTC et non comme l'heure locale du serveur.
 | `activity_account_time_idx` | `activity_event` | La timeline |
 | `device_push_idx` (partiel) | `device` | Le groupage par fournisseur à l'envoi |
 | `tag_usage_idx` | `tag` | La barre de filtres, triée par usage |
+
+---
+
+## 15. Extensions de la phase 3 — vecteurs, entités, conversations, mémoire
+
+Migration `0006_ai_layer_vectors_entities_conversations`.
+
+### 15.1 Ce que ces tables ont en commun
+
+Elles sont toutes **dérivées**. Chaque ligne peut être reconstruite depuis les
+`capture` et les `entry` ; aucune n'est source de vérité. La distinction est
+opérationnelle : une table `chunk` corrompue est une réindexation, une table
+`entry` corrompue est une restauration. C'est pourquoi elles vivent dans
+`app/infra/db/models/ai.py` et non dans `core.py`.
+
+### 15.2 Diagramme entité-relation
+
+```mermaid
+erDiagram
+    entry ||--o{ chunk : "découpée en"
+    capture ||--o{ chunk : "transcription découpée en"
+    entry ||--o{ entity_mention : "cite"
+    entity ||--o{ entity_mention : "citée par"
+    account ||--o{ entity : possède
+    app_user ||--o{ conversation : mène
+    conversation ||--o{ conversation_message : contient
+    conversation |o--o{ memory : "a produit"
+    app_user ||--o{ memory : "concerne"
+    app_user ||--o{ digest : reçoit
+
+    chunk {
+        uuid id PK
+        uuid entry_id FK "CASCADE, exclusif"
+        uuid capture_id FK "CASCADE, exclusif"
+        int chunk_index
+        text text
+        varchar content_hash "sha256[:32]"
+        vector embedding "NULL tant que non encodé"
+        varchar embedding_model
+        timestamptz embedded_at
+        timestamptz occurred_at "dénormalisé"
+    }
+    entity {
+        uuid id PK
+        varchar kind "7 catégories"
+        varchar name "verbatim"
+        varchar resolution_key "replié, unique par compte"
+        int mention_count "recalculé"
+        timestamptz edited_by_user_at
+    }
+    entity_mention {
+        uuid id PK
+        uuid entity_id FK
+        uuid entry_id FK "unique avec entity_id"
+        varchar role
+        numeric confidence
+        int source_span_start
+    }
+    conversation_message {
+        uuid id PK
+        varchar role
+        text content
+        varchar client_message_id "idempotence"
+        varchar intent
+        jsonb citations
+    }
+    memory {
+        uuid id PK
+        varchar kind
+        varchar statement
+        varchar statement_hash "unique par utilisateur"
+        timestamptz confirmed_at "pilote la décroissance"
+        timestamptz dismissed_at "pierre tombale"
+    }
+    digest {
+        uuid id PK
+        varchar period
+        date period_start "unique avec period"
+        date period_end
+        text content
+        jsonb stats "chiffres exacts"
+    }
+```
+
+### 15.3 Les décisions de schéma qui comptent
+
+| Décision | Pourquoi |
+| --- | --- |
+| `chunk.embedding` en `vector(N)`, N configuré au déploiement | Deux modèles occupent des espaces différents ; changer de fournisseur impose de tout réencoder (ADR-046) |
+| `chunk` appartient à **une seule** source, contrainte CHECK `(entry_id IS NOT NULL) <> (capture_id IS NOT NULL)` | Rend « que supprime la suppression d'une capture ? » répondable sans lire le code |
+| `chunk.entry_id` en CASCADE, contrairement à `entry.capture_id` (ADR-028) | Un chunk est une *copie* d'un contenu qui vient d'être supprimé ; le garder ferait ressortir du texte effacé dans la recherche |
+| `chunk.occurred_at` dénormalisé | La récupération est la requête la plus chaude du produit ; joindre pour filtrer par date la doublerait |
+| Index HNSW `vector_cosine_ops` | Doit correspondre à l'opérateur `<=>` de la requête. Une divergence n'échoue pas : elle ignore l'index et fait un parcours séquentiel |
+| Index partiel `WHERE embedding IS NULL` | En régime permanent les lignes en attente sont une fraction infime de la table |
+| `entity` : une table, sept catégories | Voir ADR-049 |
+| `entity_mention` unique sur (entity_id, entry_id) | Réextraire une entrée doit *remplacer* ses mentions ; sans cela une réindexation double tous les compteurs |
+| `memory.dismissed_at` plutôt qu'une suppression | Une conversation ultérieure ne doit pas réapprendre ce que l'utilisateur vient de rejeter (ADR-051) |
+| `memory.source_conversation_id` en SET NULL | Supprimer une conversation perd la provenance d'un fait, pas le fait |
+| `digest.period_start` en `date`, pas en `timestamptz` | « La semaine du 1er juin » doit désigner la même chose partout et ne pas glisser quand l'utilisateur voyage (ADR-052) |
+| Unicité (compte, utilisateur, période, début) sur `digest` | Régénérer remplace. Deux résumés de la même semaine sont une contradiction affichée |
+
+### 15.4 RLS et privilèges
+
+Les sept tables reçoivent `ENABLE`/`FORCE ROW LEVEL SECURITY` et une politique
+`account_id = current_account_id()` **dans la migration qui les crée**. Une table
+qui existe ne serait-ce qu'un déploiement sans politique est une table qui fuit
+pendant un déploiement. `chunk` est la plus sensible : elle contient une copie
+verbatim de chaque note.
+
+La migration 0006 corrige aussi une lacune de la phase 2. La migration 0003 avait
+posé des privilèges par défaut pour `mindflow_app` et `mindflow_readonly`, **mais
+pas pour `mindflow_maintenance`** : toute table créée après elle était donc
+invisible à la connexion inter-locataires (ADR-042), sans erreur et sans symptôme
+jusqu'à ce qu'un job de fond en ait besoin et renvoie zéro ligne. Corrigée dans
+les deux sens : un `GRANT` de rattrapage et un `ALTER DEFAULT PRIVILEGES` pour
+que cela ne puisse pas se reproduire.
+
+### 15.5 Prérequis d'exploitation
+
+`CREATE EXTENSION vector` exige des privilèges que le rôle applicatif n'a pas.
+Sur un PostgreSQL managé où la création d'extension est refusée, **pré-créer
+l'extension est le prérequis documenté** : la migration la trouve et continue.
+pgvector ≥ 0.5 est requis pour HNSW ; le développement se fait sur 0.6.
+
+IVFFlat n'est pas utilisé : il exige une table peuplée pour s'entraîner et
+construirait ici un index sur zéro ligne.

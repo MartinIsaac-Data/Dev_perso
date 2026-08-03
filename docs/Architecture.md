@@ -1932,3 +1932,115 @@ Les décisions prises, et ce qu'elles évitent :
 | Squelettes plutôt que roues d'attente | La mise en page saute à l'arrivée des données — première cause de clic manqué |
 | `const` partout où les données le permettent | Un sous-arbre `const` est ignoré à la reconstruction |
 | Debounce 180 ms (palette) / 320 ms (recherche) | Sept requêtes pour un mot de sept lettres |
+
+---
+
+## 16. Architecture de la phase 3 — la couche IA
+
+### 16.1 Le plan de traitement, complet
+
+```mermaid
+flowchart TB
+    subgraph SYNC["Chemin synchrone — jamais d'appel fournisseur"]
+        E[Écriture d'une entrée] --> CH[Découpage<br/>domain.chunking]
+        CH --> CK[(chunk<br/>embedding NULL)]
+    end
+
+    subgraph ASYNC["Plan asynchrone — appels fournisseur, échec sans conséquence"]
+        IDX[indexer<br/>toutes les 2 min] --> EMB[EmbedderPort]
+        EMB --> CK
+        EXT[extractor<br/>3× par heure] --> KN[ChatPort<br/>extract_entities]
+        KN --> ENT[(entity<br/>entity_mention)]
+        DIG[digester<br/>chaque heure] --> DG[ChatPort<br/>digest_*]
+        DG --> DGT[(digest)]
+    end
+
+    subgraph READ["Chemin de lecture"]
+        Q([Question]) --> INT[classify<br/>domain.intent]
+        INT -->|structuré| SQL[(agenda / échéances)]
+        INT -->|thèmes| GB[GROUP BY entity_mention]
+        INT -->|récupération| RET[RetrievalService]
+        RET --> CK
+        RET --> RRF[Fusion RRF]
+        RRF --> GEN[ChatPort<br/>answer_with_context]
+        GB --> NAR[ChatPort<br/>narrate_themes]
+        SQL --> ANS([Réponse])
+        GEN --> ANS
+        NAR --> ANS
+    end
+
+    style SYNC fill:#0f2f1f,color:#fff
+    style ASYNC fill:#2a2416,color:#fff
+```
+
+La ligne de séparation est la plus importante du schéma. **Rien de facturé ni de
+faillible ne se trouve sur le chemin synchrone.** Une panne fournisseur dégrade
+la recherche pendant un moment ; elle n'empêche jamais quelqu'un d'écrire une
+note. C'est le même principe qu'ADR-026 pour les quotas.
+
+### 16.2 Ports et adaptateurs, après la phase 3
+
+```mermaid
+flowchart LR
+    subgraph DOM["app.domain — pur"]
+        P1[TranscriberPort]
+        P2[AnalyzerPort]
+        P3[EmbedderPort]
+        P4[ChatPort]
+        P5[ObjectStoragePort]
+        P6[TaskQueuePort]
+        P7[PushSenderPort]
+    end
+
+    subgraph FAC["app.infra.ai.factory — le seul module qui nomme un fournisseur"]
+        F[build_transcriber / build_analyzer<br/>build_embedder / build_chat]
+    end
+
+    subgraph ADP["Adaptateurs"]
+        A1[faster-whisper · OpenAI]
+        A2[OpenAI · Anthropic]
+        A3[OpenAI · Mistral · Gemini · Llama]
+        A4[OpenAI · Anthropic · Gemini · Mistral · Llama]
+    end
+
+    P1 & P2 & P3 & P4 --> F
+    F --> A1 & A2 & A3 & A4
+```
+
+Cinq fournisseurs, trois implémentations pour le chat : OpenAI, Mistral et tout
+serveur compatible OpenAI partagent un format de fil. Un test lit les sources et
+échoue si un module hors de la fabrique nomme un fournisseur (ADR-045).
+
+### 16.3 Contrats d'imports, portés à cinq
+
+| Contrat | Ce qu'il empêche |
+| --- | --- |
+| `api → services → domain` | L'inversion de couche |
+| `app.domain` pur | Un framework, un driver ou une I/O dans le domaine |
+| **`app.prompts` neutre** *(phase 3)* | Un prompt qui importerait un SDK fournisseur — l'inverse exact de l'objectif |
+| `app.infra` n'appelle pas ses appelants | Le couplage inversé |
+| Les workers n'importent pas le routage HTTP | Un worker qui dépendrait de FastAPI |
+
+### 16.4 Nouveaux jobs planifiés
+
+| Job | Cadence | Pourquoi cette cadence |
+| --- | --- | --- |
+| `embed_job` | toutes les 2 min | Un chunk devenu cherchable 90 s plus tard est invisible pour l'utilisateur, et la cadence lâche laisse les lots se remplir — c'est là qu'est l'économie |
+| `extract_job` | 3× par heure | Un appel modèle par entrée. Traite du plus récent au plus ancien : un graphe à jour sur les bords vaut mieux qu'un graphe complet au début |
+| `digest_job` | chaque heure | « 21 h » désigne vingt-quatre instants différents ; chaque tick demande quels utilisateurs viennent d'atteindre le leur |
+
+Tous trois sont inter-locataires, donc utilisent `privileged_session()` — la
+seule connexion du produit qui contourne RLS (ADR-042). Le travail par compte
+rentre ensuite dans une session locataire, donc chaque écriture passe par une
+politique.
+
+### 16.5 Métriques ajoutées
+
+| Métrique | Ce qu'elle révèle |
+| --- | --- |
+| `embedding_backlog` | Un retard qui monte et ne redescend pas signifie que la recherche sémantique répond depuis un corpus périmé — indiscernable, de l'extérieur, d'une recherche correcte |
+| `assistant_uncited_answers_total` | Les réponses générées sans passage. C'est la métrique d'honnêteté : chacune est une phrase que le système ne peut pas étayer |
+| `chunks_embedded_total{provider,outcome}` | Le taux d'échec par fournisseur |
+| `assistant_duration_seconds{intent}` | Sépare les routes structurées (millisecondes) des routes génératives (secondes) |
+| `entities_extracted_total{kind}` | La distribution des sept catégories |
+| `digests_generated_total{period,outcome}` | `outcome=degraded` compte les résumés rendus factuels faute de modèle |

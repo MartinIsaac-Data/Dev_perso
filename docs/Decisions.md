@@ -1365,3 +1365,314 @@ semaines d'absence ne doit pas créer trois copies en retard de la même corvée
 voulu : la récurrence décrit un rythme, pas une file d'attente. Le sous-ensemble
 de RFC 5545 pris en charge est volontairement petit (`FREQ`, `INTERVAL`, `BYDAY`,
 `COUNT`, `UNTIL`) et **rejette** ce qu'il ne comprend pas au lieu de l'approximer.
+
+---
+
+<a id="adr-045"></a>
+## ADR-045 — Aucun fournisseur d'IA n'est couplé au projet : le port est le contrat
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** La phase 3 devait fonctionner indifféremment avec OpenAI, Claude,
+Gemini, Llama et Mistral. La tentation habituelle est d'installer le SDK du
+fournisseur retenu et de l'appeler depuis les services, avec l'intention de
+« généraliser plus tard ». Cette généralisation n'arrive jamais : au moment où
+elle devient nécessaire, le nom du fournisseur est dans quarante fichiers.
+
+**Décision.** Deux ports — `EmbedderPort`, `ChatPort` — et **un seul module dans
+tout le dépôt qui connaît le nom d'un fournisseur** : `app/infra/ai/factory.py`.
+Aucun SDK vendeur n'est installé ; les adaptateurs parlent HTTP directement, via
+`httpx`, déjà présent. Le choix se fait par variable d'environnement.
+
+Cinq fournisseurs pour trois implémentations, parce qu'OpenAI, Mistral et
+n'importe quel serveur compatible OpenAI — Ollama, vLLM, llama.cpp, Together —
+partagent un format de fil. « Llama » n'est d'ailleurs pas un fournisseur mais
+une famille de modèles : son intégration est une URL de base et aucune clé.
+Exiger une clé rendrait le seul fournisseur tournant sur votre propre matériel le
+plus difficile des cinq à configurer.
+
+**Vérification.** `tests/unit/test_ai_factory.py::test_no_service_imports_a_provider_by_name`
+lit les sources et échoue si un module hors de la fabrique nomme un fournisseur.
+Une convention non vérifiée est une convention qui tient jusqu'à la première
+échéance.
+
+**Coût accepté.** Écrire l'HTTP à la main plutôt qu'utiliser un SDK signifie
+suivre soi-même les évolutions de quatre APIs. C'est un coût réel, payé en
+échange d'un dépôt où ajouter Mistral a touché la fabrique, un bloc de
+configuration et une validation de production — rien d'autre.
+
+---
+
+<a id="adr-046"></a>
+## ADR-046 — La largeur du vecteur est une décision de déploiement, pas d'exécution
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** `chunk.embedding` est un `vector(N)` de largeur fixe. Les modèles
+d'embedding n'ont pas la même dimension : 1536 pour `text-embedding-3-small`,
+1024 pour `mistral-embed`, 768 pour `text-embedding-004`. Trois options : une
+colonne par largeur, une colonne `vector` sans dimension, ou une largeur fixée
+au déploiement.
+
+**Décision.** Largeur fixée au déploiement, lue depuis `embedding_dimensions` par
+le modèle SQLAlchemy **et** par la migration 0006, et `embedding_model` enregistré
+sur chaque ligne. Les requêtes sémantiques filtrent sur ce modèle.
+
+Le raisonnement décisif n'est pas technique mais mathématique : **deux modèles
+produisent des vecteurs dans des espaces différents, et leur distance cosinus n'a
+aucune signification**. Changer de fournisseur impose donc de tout réencoder,
+quelle que soit la solution retenue. Une colonne sans dimension aurait perdu
+l'index HNSW — qui exige une largeur fixe — pour ne rien résoudre.
+
+Le filtre sur `embedding_model` est ce qui rend la migration *dégradante* plutôt
+que *corruptrice* : pendant le réencodage, la recherche sémantique ignore les
+anciens vecteurs et retrouve moins de choses. Sans lui, elle mélangerait deux
+espaces et classerait par rien du tout — un résultat pire qu'un index vide, parce
+qu'il a l'air de fonctionner. `reset_embeddings()` est le chemin de migration.
+
+**Coût accepté.** La même migration produit un schéma différent selon la
+configuration, ce qui est inhabituel et mérite d'être su. C'est documenté dans
+l'en-tête de la migration 0006.
+
+---
+
+<a id="adr-047"></a>
+## ADR-047 — Ce que la base sait exactement ne passe jamais par un modèle
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** Cinq questions à traiter. Il aurait été plus simple de toutes les
+router vers le RAG : un seul chemin, un seul prompt, un seul jeu de tests.
+
+**Décision.** Le routage est **déterministe d'abord** (`app/domain/intent.py`).
+Deux des cinq questions n'atteignent jamais un modèle et une ne l'atteint que
+pour formuler des nombres calculés en SQL.
+
+| Question | Chemin | Modèle |
+| --- | --- | --- |
+| « Que dois-je faire aujourd'hui ? » | requête agenda | non |
+| « Quelles sont mes tâches en retard ? » | requête agenda | non |
+| « Montre les notes concernant X » | récupération → liste | non |
+| « Résume mes réunions » | récupération → génération | oui |
+| « Quels sujets reviennent souvent ? » | `GROUP BY` → narration | oui, pour la phrase seulement |
+
+Ce n'est pas une optimisation de coût. « Ce qui est dû aujourd'hui » est un fait
+que la base connaît exactement ; un modèle interrogé sur la même question ne peut
+que l'approximer, plus lentement. Tout router vers la génération rendrait
+l'assistant **moins bon** sur les questions les plus fréquentes.
+
+C'est le même principe qu'ADR-020 pour les dates, appliqué au routage : ce qui
+peut être calculé exactement ne doit jamais être deviné.
+
+**Vérification.** Le test d'intégration affirme `used_model is False` sur
+exactement ces routes. C'est la propriété qu'une refactorisation bien
+intentionnée — « simplifions, envoyons tout au LLM » — détruirait en premier.
+
+**Coût accepté.** Une question formulée de façon inattendue tombe dans le RAG
+générique. C'est le bon repli : il répond toujours quelque chose de défendable,
+et la confiance basse du classifieur dit « aucun raccourci appliqué », pas « je
+n'ai pas compris ».
+
+---
+
+<a id="adr-048"></a>
+## ADR-048 — Une question n'est pas une requête de recherche
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** `websearch_to_tsquery` combine ses termes par **ET**. C'est le bon
+comportement pour une barre de recherche, et catastrophique pour une question :
+« Pourquoi le fournisseur a-t-il changé ses conditions ? » exigerait que le mot
+« pourquoi » figure dans la note. Aucun résultat, jamais.
+
+**Décision.** Deux comportements distincts pour deux usages distincts.
+`search_service` — la barre de recherche — garde `websearch_to_tsquery` tel quel.
+La récupération de l'assistant construit une requête **disjonctive** à partir des
+termes significatifs, en passant toujours par `websearch_to_tsquery` avec le
+mot-clé `OR` explicite.
+
+Passer par `websearch_to_tsquery` plutôt que de fabriquer une chaîne `to_tsquery`
+conserve la garantie qui l'avait fait choisir (ADR-037) : quoi que tape
+l'utilisateur, la fonction ne lève pas. Une barre de recherche ne doit pas
+pouvoir renvoyer un 500.
+
+**Complément.** « Résume mes réunions » ne partage aucun mot-clé avec une réunion
+et aucun embedding avec un *ensemble* de réunions : c'est une demande de
+**parcours d'une tranche filtrée**, pas d'appariement. Quand ni le lexical ni le
+sémantique ne trouvent rien, la récupération se rabat sur la récence dans le même
+périmètre. C'est ce repli qui rend cette question répondable ; il ne s'applique
+qu'en dernier recours, donc une question qui apparie garde son classement.
+
+---
+
+<a id="adr-049"></a>
+## ADR-049 — La résolution d'entités est déterministe, l'extraction ne l'est pas
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** Le produit détecte sept catégories — personnes, produits,
+entreprises, projets, décisions, risques, actions. Deux questions distinctes :
+*trouver* « Jean-Marc Ondo » dans une phrase, et *décider* que le « jean marc
+ondo » de juillet est la même personne.
+
+**Décision.** La première est confiée au modèle, la seconde au code. La clé de
+résolution (`app/domain/knowledge.py`) replie le nom : minuscules, sans accents,
+sans ponctuation, sans article de tête. Demander au modèle donnerait une réponse
+différente un autre jour, et un graphe de connaissances qui se réorganise tout
+seul est pire que pas de graphe.
+
+Les catégories nommables (personne, produit, entreprise, projet) se résolvent sur
+le nom seul, donc une personne se retrouve de mois en mois. Les catégories
+énonciatives (décision, risque, action) se résolvent sur le texte complet : deux
+risques formulés identiquement en mars et en juillet ne sont pas évidemment le
+même risque. Fusionner à tort deux décisions en perd une irrémédiablement ;
+les séparer à tort n'affiche que deux lignes.
+
+**Une seule table, sept catégories.** Sept tables presque identiques signifieraient
+sept requêtes presque identiques pour « quels sujets reviennent souvent ? », et
+l'ensemble grandira (`lieu` est évident, `contrat` probable). Le coût est qu'une
+colonne propre à une catégorie n'a nulle part où aller : `detail` est un texte
+libre, ce qui suffit pour « risque : rupture de stock » et est honnête sur le reste.
+
+**`mention_count` est recalculé, jamais incrémenté.** L'incrément est
+l'implémentation évidente et elle est fausse : une seule réindexation double tous
+les compteurs du produit, « quels sujets reviennent souvent ? » répond avec des
+nombres gonflés, et rien n'a l'air cassé.
+
+---
+
+<a id="adr-050"></a>
+## ADR-050 — Le découpage est synchrone et gratuit, l'encodage est asynchrone et payant
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** Rendre une note retrouvable demande deux choses : la découper, et
+encoder les morceaux. La première est du texte pur ; la seconde est un appel
+réseau facturé.
+
+**Décision.** Les deux sont séparées et échouent indépendamment. À l'écriture
+d'une entrée, ses `chunk` sont écrits dans la **même transaction**, avec
+`embedding` à NULL. Un worker remplit les NULL par lots.
+
+Les fusionner mettrait un appel fournisseur sur le chemin de publication d'une
+capture, où une panne devient une perte de données. Séparés, une panne dégrade la
+recherche un moment et rien d'autre — le même principe qu'ADR-026 pour les quotas :
+le produit se dégrade, il ne bloque pas.
+
+**Il n'existe pas d'état « échec ».** Un lot en échec laisse les lignes à NULL et
+le tick suivant les reprend. Un état d'échec exigerait un chemin de remise à zéro
+et quelqu'un pour se souvenir qu'il existe.
+
+**La réindexation est incrémentale, par hachage de contenu.** Une entrée corrigée
+d'une faute se redécoupe en très majoritairement les mêmes hachages ; seul ce qui
+a changé est réencodé. Sans cela, chaque modification réencode toute l'entrée, et
+un utilisateur qui range ses notes un dimanche après-midi génère une facture. Le
+compteur `unchanged` du résultat est la mesure qui rend cela vérifiable : sur une
+modification typique il doit dominer, et un déploiement où il vaut toujours zéro a
+un bug de déterminisme du découpage, invisible autrement.
+
+---
+
+<a id="adr-051"></a>
+## ADR-051 — La mémoire ne retient que le durable, et l'oubli est définitif
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** Sans mémoire, chaque conversation repart de zéro : l'utilisateur
+réexplique son rôle, qui est le DAF, qu'il veut des réponses courtes. Avec une
+mémoire trop généreuse, le magasin se remplit de « L'utilisateur a demandé un
+résumé de ses réunions » — vrai, inutile, et relu à chaque tour à un coût.
+
+**Décision.** Trois règles, appliquées dans le code et non confiées au prompt.
+
+1. **Un seuil de confiance plus haut que partout ailleurs** (0,7). Une entité
+   extraite douteuse s'affiche une fois ; une mémoire douteuse façonne toutes les
+   réponses futures, sans erreur et sans moyen pour l'utilisateur de deviner la
+   cause.
+2. **La confiance décroît** — demi-vie de 180 jours, exponentielle et non
+   couperet. Un couperet ferait disparaître un fait entre deux tours de la même
+   conversation, ce qui se lit comme une amnésie en pleine phrase. La pondération
+   porte sur la *dernière confirmation*, pas sur la confiance d'origine : un fait
+   devenu faux cesse discrètement d'être utilisé.
+3. **Un oubli est définitif.** La ligne survit en pierre tombale et le
+   réapprentissage est refusé contre elle. Une suppression sèche laisserait la
+   conversation suivante réapprendre exactement ce que l'utilisateur vient de
+   rejeter — ce qui lui dit que sa correction n'a pas tenu.
+
+**Tout est inspectable.** `GET /v1/memory` retourne l'intégralité, avec le poids
+après décroissance. Un magasin de mémoire que l'utilisateur ne peut pas inspecter
+est un magasin qu'il ne peut pas corriger.
+
+---
+
+<a id="adr-052"></a>
+## ADR-052 — Les résumés périodiques reçoivent leurs chiffres comme des faits établis
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** Un résumé est lu **passivement**, souvent sur une notification, par
+quelqu'un qui n'ouvrira pas la source pour vérifier. Une information fausse y est
+directement agie.
+
+**Décision.** Les comptages sont calculés en SQL et transmis au modèle comme des
+faits, avec interdiction explicite de les recalculer ou de les réordonner. Un
+modèle qui dénombre une liste est un moyen documenté de se tromper de deux avec
+aplomb.
+
+Trois prompts distincts, un par période, parce que ce qui change entre le
+quotidien, l'hebdomadaire et le mensuel n'est pas la longueur mais **ce que le
+lecteur cherche** : ce qu'il a oublié de faire, où en sont les sujets, ce qui a
+changé. Un seul prompt à période variable produit trois résumés médiocres.
+
+**Les périodes sont des jours dans le fuseau de l'utilisateur**, pas des instants
+UTC : « la semaine du 1er juin » doit désigner la même chose à Libreville et à
+Paris, et ne pas se décaler quand la personne voyage. D'où `period_start` en
+`date`, et un cron **horaire** qui demande à chaque tick quels utilisateurs
+viennent d'atteindre leur heure locale.
+
+**Régénérer remplace.** La contrainte d'unicité sur
+(compte, utilisateur, période, début) fait qu'un tick qui se déclenche deux fois
+produit la même ligne. Deux résumés de la même semaine ne sont pas un historique
+plus riche, c'est une contradiction affichée à l'utilisateur.
+
+**Repli sans modèle.** Un cron tourne sans personne pour regarder. En cas de
+panne fournisseur, le résumé est rendu **factuel** — les mêmes chiffres, sans la
+prose — plutôt que vide. Une période vide produit une phrase explicite, parce que
+le silence est ambigu : l'utilisateur ne peut pas distinguer « vous n'avez rien
+fait » de « le travail a échoué », et conclura le second.
+
+---
+
+<a id="adr-053"></a>
+## ADR-053 — Les prompts sont des artefacts versionnés, dans un dossier dédié
+
+**Statut** ✅ Acceptée · Phase 3
+
+**Contexte.** En phase 1 le prompt d'extraction vivait dans
+`app/infra/ai/prompts.py`, à côté de l'adaptateur qui l'envoyait. Cela laissait
+entendre que l'adaptateur OpenAI *possédait* ce prompt — faux, et devenu
+franchement trompeur dès lors que le fournisseur est interchangeable.
+
+**Décision.** Un dossier `app/prompts/`, hors de `app.infra`, avec un contrat
+d'imports vérifié par `import-linter` : un prompt ne peut importer ni fournisseur,
+ni framework, ni I/O. C'est du texte neutre ; le même prompt d'extraction part
+chez OpenAI, Claude, Gemini, Llama ou Mistral sans modification.
+
+Chaque prompt déclare un nom stable, une version et une **empreinte** — le hachage
+du texte réellement envoyé, écrit sur chaque `ai_run`. Quand une réponse est
+mauvaise six semaines plus tard, la première question est « qu'avons-nous envoyé
+exactement ? », et la seule réponse honnête vient d'une empreinte stockée
+pointant vers un texte que personne ne peut modifier discrètement.
+
+**Une propriété de sûreté devient vérifiable.** Le registre permet à un test
+d'affirmer que **tout** prompt interpolant du texte utilisateur déclare que ce
+texte est une donnée et non une instruction. L'injection par une *capture* n'est
+pas hypothétique ici : l'entrée du produit est du texte dicté ou collé, et
+quelqu'un lisant un document à voix haute finira par prononcer quelque chose
+ayant la forme d'une consigne. Chaque prompt s'en défend individuellement ; seul
+un registre permet de vérifier qu'aucun ne l'a oublié.
+
+**Rétrocompatibilité.** `app/infra/ai/prompts.py` subsiste en réexport : mêmes
+noms, même texte, même empreinte. Le texte de la phase 1 est **déplacé, pas
+réécrit** — le modifier changerait son empreinte et orphelinerait tout
+l'historique des `ai_run` qui la référencent.

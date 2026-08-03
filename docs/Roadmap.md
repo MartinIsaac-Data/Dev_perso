@@ -383,9 +383,10 @@ Scénarios à faible probabilité mais fort impact, à surveiller.
 | --- | --- | --- |
 | v0.1 | « Peut-on capturer une pensée sans y penser ? » | ✅ Phase 1 |
 | v0.2 | « Ce qui en sort est-il exploitable ? » | ✅ Phase 1 |
-| v0.3 | « Peut-on planifier, retrouver et mesurer ? » | ✅ **Phase 2** |
-| v0.4 | « L'extraction s'améliore-t-elle, et le sait-on ? » | ⏳ Bloquée par le corpus d'évaluation (E2) |
-| v0.5 | « Le produit tient-il sur plusieurs appareils ? » | ⏳ Bloquée par E6 |
+| v0.3 | « Peut-on planifier, retrouver et mesurer ? » | ✅ Phase 2 |
+| v0.4 | « Le produit peut-il répondre à des questions sur sa propre mémoire ? » | ✅ **Phase 3** |
+| v0.5 | « L'extraction s'améliore-t-elle, et le sait-on ? » | ⏳ Bloquée par le corpus d'évaluation (E2) |
+| v0.6 | « Le produit tient-il sur plusieurs appareils ? » | ⏳ Bloquée par E6 |
 
 **Ce que la phase 2 a changé à la trajectoire.** Deux choses, et aucune n'était
 prévue :
@@ -398,3 +399,34 @@ prévue :
    La synchronisation multi-appareils cesse d'être théorique : deux appareils qui
    modifient la même tâche hors ligne divergeront, et rien ne le résout
    aujourd'hui (E6).
+
+
+---
+
+## Ce que la phase 3 a changé à la trajectoire
+
+Trois choses, et deux n'étaient pas prévues.
+
+1. **L'évaluation devient bloquante, pas seulement souhaitable.** Une chaîne
+   d'extraction sans corpus annoté était un problème de qualité ; un moteur de
+   réponses sans corpus annoté est un problème de confiance. On ne sait pas
+   aujourd'hui si l'assistant répond bien — seulement qu'il répond, cite ses
+   sources et refuse d'inventer quand le contexte est vide. E2 passe donc devant
+   toute nouvelle fonctionnalité IA.
+
+2. **Le coût devient une variable de conception, pas une conséquence.** La
+   décision de ne pas router deux des cinq questions vers un modèle (ADR-047) est
+   ce qui rend le produit viable sur les questions les plus fréquentes. Toute
+   fonctionnalité IA future devra répondre à la même question : *la base
+   connaît-elle déjà la réponse exactement ?*
+
+3. **L'interchangeabilité des fournisseurs, une fois obtenue, change ce qui est
+   négociable.** Un déploiement souverain — Llama sur matériel propre, aucune
+   donnée sortante — n'est plus un chantier mais une variable d'environnement.
+   C'est une capacité commerciale qui n'était pas au plan et qui mérite d'être
+   testée auprès des utilisateurs avant d'investir ailleurs.
+
+**Ce qu'il ne faut pas faire ensuite.** Ajouter des fonctionnalités IA. La couche
+est large et non mesurée ; l'élargir encore avant de savoir ce qui marche
+reviendrait à empiler des hypothèses. La prochaine phase devrait mesurer, pas
+ajouter.

@@ -182,12 +182,30 @@ raison.
 | --- | --- | --- |
 | Applications desktop natives | La web app couvre le besoin | Sur demande utilisateur mesurée |
 | Diarisation fine des locuteurs | Coûteuse, sans valeur sur une capture de 15 s | v1.1 |
-| Assistant conversationnel multi-tours | La recherche one-shot valide l'hypothèse H3 | v2.5 |
+| ~~Assistant conversationnel multi-tours~~ | **Livré en phase 3** — le besoin s'est révélé structurant plutôt que confortable | ✅ |
 | Traitement local sur appareil | Dépend de la maturité des modèles embarqués | v3.0 |
 | API publique | Coût de support avant traction | v2.0 |
 | Langues au-delà de FR et EN | Chaque langue est un travail de résolution temporelle | v1.2 |
 | Analyse de sentiment, scoring d'utilisateurs | **Ligne rouge éthique** — ne sera pas fait | Jamais |
 | Génération de contenu à la place de l'utilisateur | Hors positionnement : le produit structure, il n'invente pas | Jamais |
+
+---
+
+## 6 bis. Ce que la phase 3 a laissé ouvert
+
+Écrit après coup, pas avant : ce sont les manques réels de la couche IA telle
+qu'elle existe, pas ceux qu'on avait anticipés.
+
+| # | Manque | Gravité | Pourquoi il n'a pas été traité |
+| --- | --- | --- | --- |
+| A1 | **Aucun appel à un vrai fournisseur n'a été passé.** Tous les adaptateurs sont testés contre des réponses simulées | 🔴 Haute | Aucune clé d'API disponible dans l'environnement. Le premier contact réel révélera des écarts de format |
+| A2 | **Aucune évaluation quantitative.** Pas de jeu doré, pas de rappel@k mesuré | 🔴 Haute | Même blocage que E2 depuis la phase 0 : il faut un corpus annoté, qui demande des utilisateurs réels |
+| A3 | Le modèle peut ne pas citer. Le prompt l'impose, rien ne le force | 🟠 Moyenne | Une vérification des citations demande de parser la prose du modèle. `assistant_uncited_answers_total` mesure le problème sans le corriger |
+| A4 | La qualité du repli sur la récence n'est pas mesurée | 🟠 Moyenne | « Résume mes réunions » renvoie les plus récentes ; sur un corpus de deux ans, ce n'est peut-être pas le bon choix |
+| A5 | L'extraction d'entités retente indéfiniment les entrées sans entité | 🟡 Basse | Coût assumé de ne pas porter de colonne d'état ; borné par la taille du lot |
+| A6 | Aucun test de charge sur la recherche vectorielle | 🟡 Basse | Le rappel HNSW sous filtre étroit (L5) reste théorique tant qu'aucun corpus réel n'existe |
+| A7 | La récupération dégradée en mode hors ligne reste non traitée | 🟠 Moyenne | Ouverte depuis la phase 1. Non aggravée par la phase 3, mais toujours là |
+| A8 | Docker Compose n'a jamais été exécuté | 🟠 Moyenne | Le démon Docker n'est pas disponible dans l'environnement de développement |
 
 ---
 
@@ -202,6 +220,7 @@ Les cinq choses à faire en premier, dans l'ordre.
 | 3 | Commencer la constitution du jeu d'évaluation (D13) | La tâche la plus longue et la plus déterminante ; à démarrer en tâche de fond dès maintenant |
 | 4 | Prototyper la RLS et le contexte de session (sprint 01, R1) | Le risque technique le plus élevé du premier sprint |
 | 5 | Arbitrer la durée du sprint 01 (2 ou 3 semaines) | Le backlog dépasse la capacité de 65 % — voir `Sprint01.md` §4 |
+| 6 | **Passer un appel réel à chacun des cinq fournisseurs** (A1) | Toute la couche IA repose sur des formats de fil vérifiés uniquement contre des simulations |
 
 ---
 

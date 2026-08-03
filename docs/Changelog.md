@@ -26,7 +26,124 @@ back-end, client, infrastructure et modèles IA. Les versions de documentation
 
 ## [Non publié]
 
-Rien pour l'instant. La phase 3 n'a pas démarré.
+Rien pour l'instant.
+
+---
+
+## [0.4.0] — 2026-08-03
+
+**Phase 3 — La couche IA.** Le produit passe de « capturer, planifier, retrouver »
+à « interroger ». Rien de l'existant n'a été cassé : les 481 tests des phases 1 et
+2 passent inchangés, et le prompt d'extraction de la phase 1 conserve la même
+empreinte pour que l'historique des `ai_run` reste valide.
+
+### Ajouté — Domaine
+
+- `chunking` : découpage déterministe sur frontières de phrases, hachage de
+  contenu, estimation de budget. Aucune dépendance à un tokeniseur — cela
+  épinglerait le projet au vocabulaire d'un fournisseur.
+- `retrieval` : fusion par rangs réciproques (k = 60). Les scores lexicaux et
+  vectoriels ne sont pas commensurables ; la fusion n'utilise que les positions.
+- `intent` : routage déterministe des cinq questions imposées.
+- `knowledge` : sept catégories d'entités, clés de résolution calculées en code.
+- `memory` : contrat des faits durables, décroissance exponentielle de confiance.
+- `EmbedderPort` et `ChatPort`, streaming en opération primaire.
+
+### Ajouté — Prompts
+
+- Dossier dédié `app/prompts/`, hors de `app.infra`, avec son propre contrat
+  d'imports vérifié par `import-linter`.
+- Sept prompts versionnés et empreintés : extraction de note, extraction
+  d'entités, extraction de mémoire, réponse citée, trois résumés périodiques,
+  narration des thèmes.
+- Un test affirme que **tout** prompt manipulant du texte utilisateur déclare que
+  ce texte est une donnée et non une instruction.
+
+### Ajouté — Fournisseurs
+
+- OpenAI, Claude, Gemini, Llama (auto-hébergé) et Mistral, derrière deux ports.
+  Le choix est une variable d'environnement.
+- Un test lit les sources et échoue si un module hors de la fabrique nomme un
+  fournisseur.
+
+### Ajouté — Schéma
+
+- Migration 0006 : extension `vector`, tables `chunk`, `entity`,
+  `entity_mention`, `conversation`, `conversation_message`, `memory`, `digest`.
+- Index HNSW cosinus sur `chunk.embedding`, index partiel sur le retard
+  d'encodage.
+- RLS activée et forcée sur les sept tables dans la migration qui les crée.
+
+### Ajouté — Services et workers
+
+- Indexation (découpage synchrone, encodage asynchrone), récupération hybride,
+  assistant conversationnel, extraction d'entités, mémoire, résumés périodiques.
+- Trois jobs planifiés : `embed_job`, `extract_job`, `digest_job`.
+
+### Ajouté — API
+
+- `/v1/assistant/chat` et `/v1/assistant/chat/stream` (SSE), conversations,
+  `/v1/search/semantic`, `/v1/search/index-status`, `/v1/entities`,
+  `/v1/entities/themes`, `/v1/digests`, `/v1/memory`.
+
+### Ajouté — Client
+
+- Écran d'assistant avec réponse en flux et citations rendues sous chaque
+  réponse générée.
+- Écran de connaissances : entités, sujets récurrents, mémoire — inspectable et
+  supprimable en un geste.
+- Fil de résumés. Trois entrées ajoutées à la palette ⌘K.
+
+### Modifié
+
+- `app/infra/ai/prompts.py` devient un réexport de `app.prompts.extraction` :
+  mêmes noms, même texte, même empreinte.
+- `harden_schema` passe en API publique du domaine, désormais partagée par trois
+  contrats de décodage contraint.
+- La création et la modification d'une entrée réindexent ; la suppression
+  logique retire ses chunks.
+- Le contrat de configuration de production exige désormais un `embedding_backend`
+  et un `chat_backend` réels. Le faux encodeur produit des vecteurs qui
+  s'indexent et se retrouvent **avec succès** et n'encodent rien : la recherche
+  sémantique aurait l'air de fonctionner en renvoyant les mauvaises notes.
+
+### Corrigé
+
+- **Privilèges du rôle de maintenance.** La migration 0003 avait posé des
+  privilèges par défaut pour `mindflow_app` et `mindflow_readonly` mais pas pour
+  `mindflow_maintenance` : toute table créée après elle — dont les cinq de la
+  phase 2 — était invisible à la connexion inter-locataires. Sans erreur et sans
+  symptôme jusqu'à ce qu'un job de fond en ait besoin.
+- **Ordre des écritures à la réindexation.** SQLAlchemy émet les insertions
+  avant les suppressions pour un même mapper ; un chunk remplaçant un autre au
+  même index violait la contrainte d'unicité — le cas ordinaire d'une note
+  modifiée.
+- **Compteurs d'entités périmés.** Une entité retirée d'une réextraction
+  conservait son compteur de la veille, faute d'être recomptée.
+- **Routage des accents et apostrophes.** « que dois je faire aujourd hui »,
+  produit couramment par la dictée, ne routait pas comme la forme accentuée.
+
+### Décisions
+
+- ADR-045 — Aucun fournisseur d'IA n'est couplé au projet : le port est le contrat
+- ADR-046 — La largeur du vecteur est une décision de déploiement
+- ADR-047 — Ce que la base sait exactement ne passe jamais par un modèle
+- ADR-048 — Une question n'est pas une requête de recherche
+- ADR-049 — La résolution d'entités est déterministe, l'extraction ne l'est pas
+- ADR-050 — Le découpage est synchrone et gratuit, l'encodage asynchrone et payant
+- ADR-051 — La mémoire ne retient que le durable, et l'oubli est définitif
+- ADR-052 — Les résumés reçoivent leurs chiffres comme des faits établis
+- ADR-053 — Les prompts sont des artefacts versionnés, dans un dossier dédié
+
+### Documentation
+
+- `AI.md` §13 — la couche IA telle qu'implémentée, **y compris les six écarts
+  avec la conception de la phase 0** et ce que le système ne garantit pas.
+- `Database.md` §15, `API.md` §15, `Architecture.md` §16.
+
+### Tests
+
+599 tests back-end (dont 179 nouveaux), 108 tests client, 5 contrats d'imports.
 
 ---
 
