@@ -110,6 +110,8 @@ class EntryService:
                 )
             )
             await self._session.flush()
+
+        await self._reindex(entry)
         return entry
 
     async def update(
@@ -171,6 +173,7 @@ class EntryService:
 
         await self._session.flush()
         await self._session.refresh(entry)
+        await self._reindex(entry)
         return entry
 
     def _assert_type_change(self, current: EntryType, target: EntryType) -> None:
@@ -203,6 +206,13 @@ class EntryService:
         entry = await self.get(entry_id)
         entry.deleted_at = datetime.now(UTC)
         await self._session.flush()
+        # Soft delete, so the foreign key's CASCADE never fires. Without
+        # this the deleted note keeps surfacing in semantic search —
+        # visible only to the person who deleted it, which is exactly who
+        # will notice.
+        from app.services.indexing_service import IndexingService
+
+        await IndexingService(self._session).remove_for_entry(entry_id)
 
     async def counts_by_status(self) -> dict[str, int]:
         result = await self._session.execute(
@@ -233,6 +243,22 @@ class EntryService:
             .limit(limit)
         )
         return [(row[0], row[1]) for row in result.all()]
+
+    async def _reindex(self, entry: Entry) -> None:
+        """Keep the retrieval index in step with a hand-written entry.
+
+        Chunking only — no provider call, so this is safe on a request path
+        (`services.indexing_service` explains the split). Failures are swallowed:
+        an entry that saved correctly is a success, and losing its chunks means
+        it is missing from semantic search until the next re-index rather than
+        losing the note itself.
+        """
+        from app.services.indexing_service import IndexingService
+
+        try:
+            await IndexingService(self._session).index_entry(entry)
+        except Exception:
+            log.warning("entry.indexing_failed", entry_id=str(entry.id))
 
     async def _record_correction(self, entry: Entry, field: str, old: object, new: object) -> None:
         """A correction on an AI-produced entry is a quality signal (AI.md §11).

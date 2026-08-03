@@ -57,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_error_handlers(app)
 
     from app.api.v1 import (
+        assistant,
         captures,
         entries,
         health,
@@ -79,6 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(planning.router, prefix=settings.api_prefix, tags=["planning"])
     app.include_router(notifications.router, prefix=settings.api_prefix, tags=["notifications"])
     app.include_router(insights.router, prefix=settings.api_prefix, tags=["insights"])
+    app.include_router(assistant.router, prefix=settings.api_prefix, tags=["assistant"])
     if settings.storage_backend == "local":
         # Local-only: lets the client follow the same signed-URL flow it will use
         # against Supabase Storage in production.

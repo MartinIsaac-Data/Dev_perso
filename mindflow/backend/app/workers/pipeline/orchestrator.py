@@ -280,6 +280,13 @@ class CapturePipeline:
             session.add_all(mapped.tasks)
             session.add_all(mapped.entry_tags)
 
+            # Phase 3: make the new content retrievable in the same transaction.
+            # Chunking is pure text work with no network call, so it is safe
+            # here; embedding is not, and is left to the indexer worker. Doing
+            # it any other way would put a provider outage on the path that
+            # publishes a user's capture.
+            await self._index(session, capture, mapped.entries, transcript_text)
+
             capture.status = CaptureStatus.COMPLETED
             capture.processing_finished_at = datetime.now(UTC)
             if capture.processing_started_at:
@@ -295,6 +302,34 @@ class CapturePipeline:
             unresolved_dates=len(mapped.unresolved_dates),
         )
         return CaptureStatus.COMPLETED
+
+    async def _index(
+        self,
+        session: AsyncSession,
+        capture: Capture,
+        entries: list[Entry],
+        transcript_text: str,
+    ) -> None:
+        """Write chunks for the new entries and the transcript.
+
+        Failures here are swallowed deliberately. A capture that transcribed and
+        extracted correctly is a success; losing its chunks means it is missing
+        from semantic search until the next re-index, which is a degraded
+        feature, not a lost note. Raising would roll back the extraction too and
+        turn a search-quality problem into data loss.
+        """
+        from app.services.indexing_service import IndexingService
+
+        indexer = IndexingService(session)
+        try:
+            for entry in entries:
+                await indexer.index_entry(entry)
+            if transcript_text.strip():
+                transcript = await self._current_transcript(session, capture.id)
+                if transcript is not None:
+                    await indexer.index_transcript(capture, transcript)
+        except Exception:
+            log.exception("capture.indexing_failed", capture_id=str(capture.id))
 
     # -- helpers -----------------------------------------------------------
     async def _load(self, session: AsyncSession, capture_id: uuid.UUID) -> Capture | None:

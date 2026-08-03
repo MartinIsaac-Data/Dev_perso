@@ -17,6 +17,8 @@ from app.infra.queue.arq_queue import redis_settings
 from app.observability.logging import configure_logging, get_logger
 from app.workers.outbox_dispatcher import dispatch_outbox
 from app.workers.pipeline.runner import PROCESS_CAPTURE, process_capture
+from app.workers.scheduled.digester import generate_due_digests
+from app.workers.scheduled.indexer import embed_backlog
 from app.workers.scheduled.reminder_dispatcher import dispatch_due_reminders, sweep_snoozed
 from app.workers.scheduled.sweeper import sweep_stuck_captures
 
@@ -63,6 +65,14 @@ async def snooze_job(ctx: dict[str, Any]) -> int:
     return await sweep_snoozed(ctx["settings"])
 
 
+async def embed_job(ctx: dict[str, Any]) -> int:
+    return await embed_backlog(ctx["settings"])
+
+
+async def digest_job(ctx: dict[str, Any]) -> int:
+    return await generate_due_digests(ctx["settings"])
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [process_capture_job]
     cron_jobs: ClassVar[list[Any]] = [
@@ -77,6 +87,14 @@ class WorkerSettings:
         # Waking a snoozed task is not urgent to the minute; a quarter-hour
         # cadence keeps the query cheap.
         cron(snooze_job, minute=set(range(0, 60, 15))),
+        # Embedding backlog. Every two minutes rather than every minute: a
+        # chunk that becomes semantically searchable ninety seconds later
+        # than it might have is invisible to a user, and the looser cadence
+        # lets batches fill up, which is where the cost saving is.
+        cron(embed_job, minute=set(range(0, 60, 2)), run_at_startup=True),
+        # Hourly, because "21:00" means twenty-four different instants and
+        # each tick asks which users have just reached theirs.
+        cron(digest_job, minute={2}),
     ]
     on_startup = startup
     on_shutdown = shutdown
