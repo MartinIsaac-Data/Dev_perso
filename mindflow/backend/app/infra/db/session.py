@@ -98,6 +98,7 @@ async def set_tenant_context(
     *,
     account_id: uuid.UUID | str | None = None,
     auth_subject: str | None = None,
+    user_id: uuid.UUID | str | None = None,
 ) -> None:
     """Post the RLS context for the current transaction.
 
@@ -116,6 +117,15 @@ async def set_tenant_context(
             text("SELECT set_config('app.auth_subject', :value, true)"),
             {"value": auth_subject},
         )
+    if user_id is not None:
+        # Read by the restrictive workspace policy (ADR-054). Absent, that
+        # policy passes and behaviour is exactly as it was before phase 4 —
+        # which is what every background job relies on, and why the request
+        # path must always set it.
+        await session.execute(
+            text("SELECT set_config('app.user_id', :value, true)"),
+            {"value": str(user_id)},
+        )
 
 
 @asynccontextmanager
@@ -123,6 +133,7 @@ async def tenant_session(
     account_id: uuid.UUID | str | None,
     *,
     auth_subject: str | None = None,
+    user_id: uuid.UUID | str | None = None,
 ) -> AsyncIterator[AsyncSession]:
     """Open a session whose transaction carries the RLS tenant context.
 
@@ -130,7 +141,9 @@ async def tenant_session(
     nothing, which is the safe default for anonymous paths.
     """
     async with _factory()() as session, session.begin():
-        await set_tenant_context(session, account_id=account_id, auth_subject=auth_subject)
+        await set_tenant_context(
+            session, account_id=account_id, auth_subject=auth_subject, user_id=user_id
+        )
         yield session
 
 

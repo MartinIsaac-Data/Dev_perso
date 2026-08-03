@@ -79,6 +79,20 @@ class ForbiddenError(DomainError):
     status = 403
 
 
+class PermissionDeniedError(ForbiddenError):
+    """The caller is authenticated and simply may not do this (Phase 4).
+
+    Distinct from `ForbiddenError` by its applicative code, because the two mean
+    different things to a client: an insufficient *scope* is a token problem to
+    be solved by re-authenticating, an insufficient *role* is an organisational
+    problem to be solved by asking an administrator. Sending the same code for
+    both would make the client offer the wrong remedy.
+    """
+
+    code = "permission_denied"
+    title = "Permission insuffisante"
+
+
 class InvalidStateTransitionError(DomainError):
     code = "invalid_state_transition"
     title = "Transition d'état invalide"

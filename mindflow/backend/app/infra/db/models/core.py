@@ -436,6 +436,14 @@ class Entry(Base, TimestampMixin):
     # "pinned, and since when" answers ordering questions a boolean cannot.
     pinned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Phase 4. NULL means personal — the phase 1 behaviour, and still the
+    # default. Making this mandatory would have forced every existing row into a
+    # synthetic "default workspace": a rewrite of working data to satisfy a new
+    # abstraction. The restrictive RLS policy of ADR-054 reads this column.
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workspace.id", ondelete="SET NULL")
+    )
+
     # Maintained by PostgreSQL, not by the application (ADR-037). A trigger or an
     # application-side update would drift the moment one write path forgets it,
     # and a search index that is right 95 % of the time is worse than none.
@@ -1071,4 +1079,16 @@ TENANT_TABLES: tuple[str, ...] = (
     "conversation_message",
     "memory",
     "digest",
+    # Phase 4. Defined in `app.infra.db.models.enterprise`, listed here because
+    # this tuple is the single list the RLS migrations and the isolation test
+    # both walk.
+    "workspace",
+    "workspace_member",
+    "invitation",
+    "comment",
+    "mention",
+    "share_link",
+    "integration_connection",
+    "external_link",
+    "meeting_session",
 )

@@ -56,7 +56,9 @@ ignore = [
 # Test credentials, temp paths and literal SQL are intentional inside tests.
 "tests/*" = ["S105", "S106", "S108", "S607", "S608"]
 # Migrations build DDL from a fixed, code-controlled table list — never user input.
-"migrations/*" = ["E501", "N999", "S608"]
+# French typography in migration rationale is deliberate; N999 because the
+# revision filenames carry their revision number.
+"migrations/*" = ["E501", "N999", "S608", "RUF001", "RUF002", "RUF003"]
 # `UUID as PgUUID` disambiguates the dialect type from uuid.UUID; N811 misreads it.
 "app/infra/db/models/*" = ["N811"]
 # French typography in prompt text is deliberate — the prompt is the product,

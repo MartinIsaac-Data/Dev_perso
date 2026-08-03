@@ -196,6 +196,11 @@ class NotificationKind(StrEnum):
     CAPTURE_FAILED = "capture_failed"
     REVIEW_PENDING = "review_pending"
     DIGEST = "digest"
+    # Phase 4. Distinct from SYSTEM because a mention is the one
+    # notification a user may reasonably want to keep on while muting the
+    # rest: somebody asked them a question by name.
+    MENTION = "mention"
+    COMMENT = "comment"
     SYSTEM = "system"
 
 
