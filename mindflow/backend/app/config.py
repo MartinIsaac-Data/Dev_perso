@@ -119,6 +119,19 @@ class Settings(BaseSettings):
     # question.
     chat_context_token_budget: int = 6000
 
+    # -- Enterprise (Phase 4) ----------------------------------------------
+    # `id:base64[,id:base64…]`, active key first. One string because it must
+    # survive being an environment variable in every deployment target, and
+    # because a secret manager hands back one value (ADR-058).
+    token_encryption_keys: str = ""
+    # How often the scheduler considers a connection due. Five minutes is well
+    # inside every provider's rate limit and well under a user's patience.
+    sync_interval_seconds: int = 300
+    sync_batch_size: int = 25
+    # Public base for share links and invitations. Wrong here means every link
+    # a user sends points at localhost.
+    public_base_url: str = "http://localhost:3000"
+
     # -- Retrieval (Phase 3) -----------------------------------------------
     # Candidates pulled from *each* retriever before fusion. Fusion needs depth
     # to find consensus; showing depth to the user does not.
@@ -211,6 +224,13 @@ class Settings(BaseSettings):
             self.fcm_service_account_json or self.wns_client_id
         ):
             missing.append("fcm_service_account_json or wns_client_id")
+
+        # Phase 4. Without a key, OAuth tokens would be stored in plaintext —
+        # and a database backup would be a set of live Google credentials.
+        if not self.token_encryption_keys:
+            missing.append("token_encryption_keys")
+        if self.public_base_url.startswith("http://localhost"):
+            missing.append("public_base_url (les liens de partage pointeraient sur localhost)")
 
         # Phase 3. `fake` here is not inert like a fake push: the fake embedder
         # produces hash-derived vectors that index and retrieve *successfully*

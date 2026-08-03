@@ -30,6 +30,10 @@ async def api_settings(tmp_path_factory) -> Settings:  # type: ignore[no-untyped
         stt_backend="fake",
         llm_backend="fake",
         queue_backend="inline",
+        # Phase 4 encrypts OAuth tokens at rest, so the test settings
+        # need a key like any other deployment.
+        token_encryption_keys="test:bWluZGZsb3ctdGVzdC1rZXktMzItYnl0ZXMtISF4eXo=",
+        public_base_url="https://test.mindflow.invalid",
         log_format="console",
         log_level="warning",
     )

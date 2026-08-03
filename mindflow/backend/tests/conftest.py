@@ -60,6 +60,10 @@ def settings() -> Settings:
         stt_backend="fake",
         llm_backend="fake",
         queue_backend="inline",
+        # Phase 4 encrypts OAuth tokens at rest, so the test settings
+        # need a key like any other deployment.
+        token_encryption_keys="test:bWluZGZsb3ctdGVzdC1rZXktMzItYnl0ZXMtISF4eXo=",
+        public_base_url="https://test.mindflow.invalid",
         log_format="console",
         log_level="warning",
     )
@@ -144,10 +148,15 @@ async def clean_db(engine) -> AsyncIterator[None]:  # type: ignore[no-untyped-de
     async with admin.begin() as conn:
         await conn.execute(
             text(
+                # `audit_log` is deliberately absent since phase 4: it is
+                # partitioned by month, so truncating it takes an
+                # AccessExclusiveLock on every partition and deadlocks against
+                # any still-pooled application connection. Its rows are
+                # account-scoped and harmless between tests.
                 "TRUNCATE account, app_user, device, capture, transcript, "
                 "transcript_segment, project, tag, entry, task, entry_tag, "
                 "entry_link, correction_event, ai_run, subscription, "
-                "usage_counter, outbox, job_run, audit_log RESTART IDENTITY CASCADE"
+                "usage_counter, outbox, job_run RESTART IDENTITY CASCADE"
             )
         )
     await admin.dispose()

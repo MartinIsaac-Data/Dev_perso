@@ -134,3 +134,22 @@ entities_extracted_total = Counter(
 digests_generated_total = Counter(
     "digests_generated_total", "Digests generated", ["period", "outcome"], registry=REGISTRY
 )
+
+# -- Enterprise (Phase 4) ----------------------------------------------------
+integration_syncs_total = Counter(
+    "integration_syncs_total", "Synchronisation passes", ["provider", "outcome"], registry=REGISTRY
+)
+# Items the resolver refused to decide. Not an error rate: a healthy two-way
+# connection produces a few. A number that climbs means the two sides are
+# fighting and somebody should be told.
+integration_conflicts_total = Counter(
+    "integration_conflicts_total", "Sync conflicts surfaced", ["provider"], registry=REGISTRY
+)
+comments_posted_total = Counter("comments_posted_total", "Comments posted", registry=REGISTRY)
+mentions_total = Counter("mentions_total", "Mentions recorded", ["notified"], registry=REGISTRY)
+share_links_total = Counter("share_links_total", "Share links", ["action"], registry=REGISTRY)
+# Workspace membership lookups run inside the restrictive RLS policy, so this
+# is a proxy for the cost phase 4 added to every content read.
+permission_denials_total = Counter(
+    "permission_denials_total", "Denied actions", ["action"], registry=REGISTRY
+)

@@ -86,8 +86,19 @@ PrincipalDep = Annotated[Principal, Depends(get_principal)]
 
 
 async def get_session(principal: PrincipalDep) -> AsyncIterator[AsyncSession]:
-    """A transaction already scoped to the caller's tenant."""
-    async with tenant_session(principal.account_id) as session:
+    """A transaction already scoped to the caller's tenant *and to the caller*.
+
+    `user_id` is what the restrictive workspace policy reads (ADR-054). That
+    policy passes when it is absent — a compatibility concession without which
+    every background job would go blind — so **this function is the single place
+    that makes workspace isolation real on the request path**. Omitting it here
+    would not raise, log or fail a test in phases 1 to 3; it would quietly let
+    every member of an organisation read every other member's private entries.
+
+    `tests/integration/test_workspaces.py::test_the_api_always_sets_the_user_context`
+    exists solely to keep this line honest.
+    """
+    async with tenant_session(principal.account_id, user_id=principal.user_id) as session:
         await set_tenant_context(session, auth_subject=principal.auth_subject)
         yield session
 

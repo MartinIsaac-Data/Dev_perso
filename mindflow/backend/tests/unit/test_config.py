@@ -56,6 +56,8 @@ def test_production_accepts_a_complete_configuration() -> None:
         openai_api_key="sk-test",
         push_backend="real",
         fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+        token_encryption_keys="k1:c2VjcmV0LWtleS0zMi1ieXRlcy1sb25nLXh4eHg=",
+        public_base_url="https://app.mindflow.ai",
         embedding_backend="openai",
         chat_backend="openai",
     )
@@ -78,6 +80,8 @@ def test_production_refuses_a_fake_embedding_backend() -> None:
             openai_api_key="sk-test",
             push_backend="real",
             fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+            token_encryption_keys="k1:c2VjcmV0LWtleS0zMi1ieXRlcy1sb25nLXh4eHg=",
+            public_base_url="https://app.mindflow.ai",
             embedding_backend="fake",
             chat_backend="openai",
         )
@@ -95,6 +99,8 @@ def test_production_requires_the_credential_of_whichever_provider_is_chosen() ->
             openai_api_key="sk-test",
             push_backend="real",
             fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+            token_encryption_keys="k1:c2VjcmV0LWtleS0zMi1ieXRlcy1sb25nLXh4eHg=",
+            public_base_url="https://app.mindflow.ai",
             embedding_backend="mistral",
             chat_backend="openai",
         )
@@ -111,6 +117,8 @@ def test_a_self_hosted_llama_needs_no_credential() -> None:
         openai_api_key="sk-test",
         push_backend="real",
         fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+        token_encryption_keys="k1:c2VjcmV0LWtleS0zMi1ieXRlcy1sb25nLXh4eHg=",
+        public_base_url="https://app.mindflow.ai",
         embedding_backend="llama",
         chat_backend="llama",
     )
@@ -147,3 +155,43 @@ def test_production_requires_push_credentials() -> None:
 def test_sync_database_url_strips_the_async_driver() -> None:
     settings = Settings(database_url="postgresql+asyncpg://u:p@h:5432/db")
     assert settings.sync_database_url == "postgresql://u:p@h:5432/db"
+
+
+def test_production_requires_a_token_encryption_key() -> None:
+    """Without it, OAuth tokens would be stored in plaintext.
+
+    A database backup restored onto a laptop would be a set of live Google
+    credentials — and disk encryption does not help, because the backup leaves
+    the encrypted disk the moment anyone downloads it.
+    """
+    with pytest.raises(ValidationError, match="token_encryption_keys"):
+        Settings(
+            env="prod",
+            supabase_jwt_secret="secret",
+            stt_backend="faster_whisper",
+            llm_backend="openai",
+            openai_api_key="sk-test",
+            push_backend="real",
+            fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+            embedding_backend="openai",
+            chat_backend="openai",
+            public_base_url="https://app.mindflow.ai",
+        )
+
+
+def test_production_refuses_a_localhost_share_url() -> None:
+    # Otherwise every invitation and share link a user sends points at their
+    # own machine — a failure nobody notices until a recipient complains.
+    with pytest.raises(ValidationError, match="public_base_url"):
+        Settings(
+            env="prod",
+            supabase_jwt_secret="secret",
+            stt_backend="faster_whisper",
+            llm_backend="openai",
+            openai_api_key="sk-test",
+            push_backend="real",
+            fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+            embedding_backend="openai",
+            chat_backend="openai",
+            token_encryption_keys="k1:c2VjcmV0LWtleS0zMi1ieXRlcy1sb25nLXh4eHg=",
+        )
