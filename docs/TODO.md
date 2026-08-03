@@ -1,10 +1,10 @@
 # MindFlow AI — TODO
 
-> État à la clôture de la **phase 2 (planification, recherche, mesure)**. Ce document recense ce qui reste
+> État à la clôture de la **phase 4 (fonctionnalités d'entreprise)**. Ce document recense ce qui reste
 > à faire, ce qui reste à décider, et ce qui a été délibérément laissé de côté.
 > Il est mis à jour à chaque fin de phase.
 
-**Dernière mise à jour** : 2026-08-03 · Clôture de la phase 2
+**Dernière mise à jour** : 2026-08-03 · Clôture de la phase 4
 
 **Légende de priorité**
 
@@ -209,9 +209,38 @@ qu'elle existe, pas ceux qu'on avait anticipés.
 
 ---
 
+## 6 ter. Ce que la phase 4 a laissé ouvert
+
+Écrit après coup. **Quatre de ces lignes portent sur des fonctionnalités
+explicitement demandées et non livrées** ; elles sont marquées 🔴 pour cette
+raison, indépendamment de leur difficulté.
+
+| # | Manque | Gravité | Pourquoi il n'a pas été traité |
+| --- | --- | --- | --- |
+| B1 | **`partition_job` n'existe pas.** `ensure_audit_partitions` vit en base et rien ne l'appelle automatiquement | 🔴 Haute | Le plus urgent de cette liste : sans partition pour le mois à venir, **chaque écriture d'audit échouera** le 1er, sans symptôme avant. Voir ADR-059 |
+| B2 | **`sync_job` n'existe pas.** Les intégrations ne se synchronisent que sur appel explicite de `/v1/integrations/{id}/sync` | 🔴 Haute | Documenté dans `DevOps.md` §2, non écrit. La synchronisation automatique demandée n'est donc pas automatique |
+| B3 | **IA temps réel en réunion non implémentée.** `meeting_session` est créée et n'est remplie par rien | 🔴 Haute | Demande un canal de transcription en flux et une extraction incrémentale — un chantier de la taille d'une phase, pas d'un module. Cadré en `RoadmapV2.md` §5 |
+| B4 | **Mode hors ligne incomplet.** Seule la capture l'est, depuis la phase 1 | 🔴 Haute | Consulter, cocher, commenter et chercher exigent un miroir local et une file de mutations. Dette E6, ouverte depuis la phase 2. Cadré en `RoadmapV2.md` §6 |
+| B5 | **Aucun écran Flutter d'entreprise.** L'API existe ; le client ne l'appelle pas | 🔴 Haute | Espaces, membres, commentaires, partage, intégrations, administration : six écrans non construits |
+| B6 | **Aucun build Desktop ni Web produit.** Flutter cible les deux | 🟠 Moyenne | Aucun `flutter build` n'a été lancé pour ces cibles ; rien ne prouve qu'ils compilent |
+| B7 | **Notifications intelligentes** : les types `mention` et `comment` existent, aucune logique de regroupement ni de silence | 🟠 Moyenne | « Intelligent » demande une règle mesurable. Sans usage réel, toute règle serait une supposition |
+| B8 | **Aucun appel réel à un fournisseur d'intégration.** Les sept connecteurs sont écrits contre des documentations | 🔴 Haute | Même blocage que A1. Il faut s'attendre à ce que plusieurs adaptateurs soient faux — ADR-057 en assume le coût |
+| B9 | **Le worker planifié ne s'étend pas horizontalement.** `ensure_audit_partitions` et les résumés ne sont pas protégés par `SKIP LOCKED` | 🟠 Moyenne | Un verrou consultatif par job suffirait ; non écrit. Vrai plafond structurel, cadré en `RoadmapV2.md` §7 |
+| B10 | **Le coût de la politique restrictive n'est pas mesuré** sur une grande organisation | 🟠 Moyenne | L'index la couvre en théorie ; aucun plan d'exécution n'a été examiné. C'est ce qui casserait en premier |
+| B11 | **Aucune restauration de sauvegarde testée**, aucun manifeste de déploiement | 🔴 Haute | Le démon Docker est resté indisponible pendant les quatre phases (A8). Une sauvegarde jamais restaurée n'est pas une sauvegarde |
+| B12 | **Un seul propriétaire de compte peut tout** — aucune séparation des pouvoirs | 🟡 Basse | Acceptable à cette échelle ; une organisation de plusieurs centaines de personnes exigera une validation à deux |
+
+**Le fil commun de B1 à B5** : la phase 4 a construit une fondation complète et
+correcte, et n'a pas construit ce qui la rend visible. L'API d'entreprise existe
+et fonctionne, prouvée par 53 tests d'intégration ; **un utilisateur du produit
+ne peut aujourd'hui rien en faire**, faute d'écrans. C'est le manque le plus
+honnête à énoncer de cette phase.
+
+---
+
 ## 7. Actions immédiates
 
-Les cinq choses à faire en premier, dans l'ordre.
+Les choses à faire en premier, dans l'ordre.
 
 | # | Action | Pourquoi en premier |
 | --- | --- | --- |
@@ -221,6 +250,8 @@ Les cinq choses à faire en premier, dans l'ordre.
 | 4 | Prototyper la RLS et le contexte de session (sprint 01, R1) | Le risque technique le plus élevé du premier sprint |
 | 5 | Arbitrer la durée du sprint 01 (2 ou 3 semaines) | Le backlog dépasse la capacité de 65 % — voir `Sprint01.md` §4 |
 | 6 | **Passer un appel réel à chacun des cinq fournisseurs** (A1) | Toute la couche IA repose sur des formats de fil vérifiés uniquement contre des simulations |
+| 7 | **Écrire `partition_job`** (B1) | Le seul manque de cette liste dont l'échéance est une date : le 1er du mois suivant celui de la dernière partition créée |
+| 8 | **Construire les écrans Flutter d'entreprise** (B5) | Sans eux, toute la phase 4 est inaccessible à un utilisateur du produit |
 
 ---
 
@@ -228,5 +259,5 @@ Les cinq choses à faire en premier, dans l'ordre.
 
 - Décisions et questions ouvertes → `Decisions.md`
 - Écarts et compromis → `Changelog.md`
-- Trajectoire → `Roadmap.md`
+- Trajectoire → `Roadmap.md`, `RoadmapV2.md`, `RoadmapV3.md`
 - Plans de sprint → `Sprint01.md`, `Sprint02.md`, `Sprint03.md`

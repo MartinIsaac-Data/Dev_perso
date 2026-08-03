@@ -1646,3 +1646,153 @@ pgvector ≥ 0.5 est requis pour HNSW ; le développement se fait sur 0.6.
 
 IVFFlat n'est pas utilisé : il exige une table peuplée pour s'entraîner et
 construirait ici un index sur zéro ligne.
+
+---
+
+## 16. Extensions de la phase 4 — espaces, collaboration, intégrations, audit
+
+Migrations `0007_enterprise_workspaces_collaboration_integrations` et
+`0008_scale_indexes_and_partitioning`.
+
+### 16.1 Ce que ces tables ont en commun
+
+Contrairement à celles de la phase 3, **elles ne sont pas dérivées** : un
+commentaire, une appartenance à un espace, une connexion OAuth sont des sources
+de vérité. Elles vivent dans `app/infra/db/models/enterprise.py` et sont toutes
+soumises à l'isolation par compte comme les autres.
+
+### 16.2 Diagramme entité-relation
+
+```mermaid
+erDiagram
+    account ||--o{ workspace : contient
+    workspace ||--o{ workspace_member : "a pour membres"
+    app_user ||--o{ workspace_member : "appartient à"
+    workspace ||--o{ entry : "contient (nullable)"
+    entry ||--o{ comment : "commentée par"
+    comment ||--o{ mention : "interpelle"
+    app_user ||--o{ mention : "reçoit"
+    entry ||--o{ share_link : "partagée par"
+    account ||--o{ invitation : émet
+    account ||--o{ integration_connection : connecte
+    integration_connection ||--o{ external_link : "suit"
+    entry ||--o| external_link : "liée à un objet distant"
+    account ||--o{ meeting_session : héberge
+```
+
+### 16.3 Les neuf tables
+
+| Table | Rôle | Particularité |
+| --- | --- | --- |
+| `workspace` | Un dossier partagé | Archivée, jamais détruite |
+| `workspace_member` | Appartenance et rôle d'espace | Unique sur `(workspace_id, user_id)` |
+| `invitation` | Invitation en attente | Jeton **haché**, expiration obligatoire |
+| `comment` | Fil de discussion sur une note | Suppression douce, `resolved_at` |
+| `mention` | Une personne interpellée | `user_id` résolu à l'écriture, jamais un texte |
+| `share_link` | Lien public en lecture | Condensat SHA-256, compteur d'ouvertures |
+| `integration_connection` | Un service connecté | Jetons **chiffrés**, `consecutive_failures` |
+| `external_link` | Correspondance local ↔ distant | Les deux empreintes de la dernière sync |
+| `meeting_session` | Une réunion | **Créée, non utilisée** — voir `Architecture.md` §17.5 |
+
+**`entry.workspace_id` est la seule colonne ajoutée à une table existante.** Elle
+est nullable, sans valeur par défaut : l'ajout est une opération de catalogue, et
+`NULL` signifie « privée », ce qui est le comportement de la phase 3 conservé à
+l'identique pour toutes les lignes existantes.
+
+### 16.4 Les politiques restrictives
+
+Deux, et deux seulement.
+
+```sql
+CREATE POLICY entry_workspace_visibility ON entry AS RESTRICTIVE
+    USING (
+        current_user_id() IS NULL
+        OR user_id = current_user_id()
+        OR (workspace_id IS NOT NULL AND EXISTS (
+              SELECT 1 FROM workspace_member wm
+              WHERE wm.workspace_id = entry.workspace_id
+                AND wm.user_id = current_user_id()))
+    );
+```
+
+`comment_workspace_visibility` **dérive** sa condition de celle de l'entrée
+plutôt que de la recopier. Deux politiques indépendantes finiraient par diverger,
+et le jour où elles divergent un commentaire devient lisible sur une note qui ne
+l'est pas.
+
+```sql
+CREATE FUNCTION current_user_id() RETURNS uuid LANGUAGE sql STABLE AS $$
+    SELECT nullif(current_setting('app.user_id', true), '')::uuid
+$$;
+```
+
+Le second argument `true` de `current_setting` est essentiel : la fonction rend
+`NULL` quand le paramètre n'est pas posé, au lieu de lever. Une fonction qui lève
+dans une politique RLS rendrait chaque requête d'un travail planifié impossible.
+
+**Vérification opérationnelle** — le seul contrôle qui distingue une politique
+correcte d'une politique qui élargit l'accès :
+
+```sql
+SELECT polname, polpermissive FROM pg_policy
+WHERE polname LIKE '%_workspace_visibility';   -- attendu : f, f
+```
+
+### 16.5 Index ajoutés, et la requête qui les motive
+
+| Index | Requête servie |
+| --- | --- |
+| `workspace_member (user_id, workspace_id) INCLUDE (role)` | **La politique restrictive elle-même.** L'index le plus chaud du schéma |
+| `entry (workspace_id, occurred_at)` partiel sur vivantes | Liste d'un espace |
+| `comment (entry_id, created_at)` partiel sur vivants | Fil d'une note |
+| `mention (user_id, created_at)` partiel sur non lues | Le badge de mentions |
+| `integration_connection (last_sync_at)` partiel sur actives | Le planificateur de synchronisation |
+| `share_link (token_hash)` partiel sur vivants | Résolution d'un lien public — **la seule requête sans contexte de locataire** |
+| `external_link (connection_id, external_id)` unique | Idempotence de la synchronisation |
+
+Le premier porte `INCLUDE (role)` pour que la sous-requête de la politique soit
+un parcours d'index seul et ne touche jamais le tas. C'est un index consulté sur
+chaque lecture de contenu d'organisation.
+
+### 16.6 Le partitionnement de `audit_log`
+
+```sql
+CREATE TABLE audit_log (
+    id          bigserial,
+    occurred_at timestamptz NOT NULL,
+    …,
+    PRIMARY KEY (id, occurred_at)
+) PARTITION BY RANGE (occurred_at);
+```
+
+La clé primaire est composite parce que PostgreSQL exige que la clé de
+partitionnement y figure. Aucun code du produit ne référence une ligne d'audit
+par identifiant, donc le coût est nul ici.
+
+| Fonction | Rôle |
+| --- | --- |
+| `ensure_audit_partitions(n)` | Crée les partitions des `n` mois à venir, idempotent |
+| `drop_audit_partitions_before(date)` | Rétention, par `DROP TABLE` |
+
+**Les deux vivent en PL/pgSQL, pas en Python** : elles doivent fonctionner quand
+le worker est arrêté — c'est-à-dire exactement quand on en a besoin.
+
+**Le piège**, répété ici parce qu'il est silencieux : une insertion dans une
+plage sans partition **échoue**. Sans partition pour le mois qui vient, chaque
+écriture d'audit échouera le premier du mois. Voir ADR-059 pour les trois
+défenses mises en place, et `DevOps.md` §1 pour le signal à surveiller.
+
+### 16.7 Correction d'un défaut latent de la phase 2
+
+La migration 0003 avait créé les rôles et accordé les droits **sur les tables
+existant à ce moment-là**, sans poser `ALTER DEFAULT PRIVILEGES`. Toute table
+créée après elle était donc invisible au rôle `mindflow_maintenance` — c'est-à-dire
+à tous les travaux inter-locataires.
+
+Le défaut était silencieux : un job qui ne voit aucune ligne ne lève pas
+d'erreur, il ne fait rien. Corrigé en 0006 puis en 0007 par un rattrapage des
+droits et la pose des privilèges par défaut.
+
+**C'est la deuxième fois que ce rôle produit un défaut invisible** (voir ADR-042).
+Le contrôle est désormais dans `DevOps.md` §2 : un travail inter-locataires qui
+renvoie systématiquement zéro est suspect, pas rassurant.

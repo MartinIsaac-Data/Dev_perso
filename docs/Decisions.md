@@ -52,6 +52,32 @@
 | [031](#adr-031) | OpenAI par défaut, architecture interchangeable | ⚠️ | 1 |
 | [032](#adr-032) | Python 3.11 au lieu de 3.13 | ✅ | 1 |
 | [033](#adr-033) | Rôle applicatif non-superutilisateur, obligatoire | ✅ | 1 |
+| [034](#adr-034) | File d'attente des captures persistée sur l'appareil | ✅ | 1 |
+| [035](#adr-035) | Le fuseau IANA de l'appareil accompagne chaque capture | ✅ | 1 |
+| [036](#adr-036) | Mode d'authentification locale pour le développement | ✅ | 1 |
+| [037](#adr-037) | La recherche plein texte s'appuie sur une colonne générée | ✅ | 2 |
+| [038](#adr-038) | Le fournisseur de notification est stocké par appareil | ✅ | 2 |
+| [039](#adr-039) | Une notification push est un pointeur, jamais une copie | ✅ | 2 |
+| [040](#adr-040) | Windows non empaqueté programme ses notifications localement | ✅ | 2 |
+| [041](#adr-041) | Tous les horodatages sont `timestamptz` | ✅ | 2 |
+| [042](#adr-042) | Les travaux inter-tenants ont leur propre connexion | ✅ | 2 |
+| [043](#adr-043) | Une sous-tâche n'est pas une entrée | ✅ | 2 |
+| [044](#adr-044) | L'occurrence suivante se calcule depuis l'échéance | ✅ | 2 |
+| [045](#adr-045) | Aucun fournisseur d'IA n'est couplé au projet : le port est le contrat | ✅ | 3 |
+| [046](#adr-046) | La largeur du vecteur est une décision de déploiement | ✅ | 3 |
+| [047](#adr-047) | Ce que la base sait exactement ne passe jamais par un modèle | ✅ | 3 |
+| [048](#adr-048) | Une question n'est pas une requête de recherche | ✅ | 3 |
+| [049](#adr-049) | La résolution d'entités est déterministe, l'extraction ne l'est pas | ✅ | 3 |
+| [050](#adr-050) | Le découpage est synchrone, l'encodage est asynchrone | ✅ | 3 |
+| [051](#adr-051) | La mémoire ne retient que le durable, et l'oubli est définitif | ✅ | 3 |
+| [052](#adr-052) | Les résumés reçoivent leurs chiffres comme des faits établis | ✅ | 3 |
+| [053](#adr-053) | Les prompts sont des artefacts versionnés, dans un dossier dédié | ✅ | 3 |
+| [054](#adr-054) | La visibilité par espace est une politique **restrictive** | ✅ | 4 |
+| [055](#adr-055) | Le compte *est* l'organisation | ✅ | 4 |
+| [056](#adr-056) | Un conflit de synchronisation est classé, jamais résolu tout seul | ✅ | 4 |
+| [057](#adr-057) | Un seul port pour sept connecteurs, dont un qui n'est pas un service | ✅ | 4 |
+| [058](#adr-058) | Les jetons sont chiffrés avec un trousseau versionné | ✅ | 4 |
+| [059](#adr-059) | Le journal d'audit est partitionné par mois | ✅ | 4 |
 
 ---
 
@@ -1676,3 +1702,344 @@ un registre permet de vérifier qu'aucun ne l'a oublié.
 noms, même texte, même empreinte. Le texte de la phase 1 est **déplacé, pas
 réécrit** — le modifier changerait son empreinte et orphelinerait tout
 l'historique des `ai_run` qui la référencent.
+
+---
+
+<a id="adr-054"></a>
+## ADR-054 — La visibilité par espace est une politique **restrictive**, pas une seconde politique permissive
+
+**Statut** ✅ Acceptée · Phase 4 · **Complète** [ADR-005](#adr-005)
+
+**Contexte.** Depuis la phase 0, chaque table porte une politique RLS
+`*_tenant_isolation` qui compare `account_id` au contexte de la session. Trente-cinq
+politiques, éprouvées, testées table par table. La phase 4 introduit une seconde
+frontière **à l'intérieur** du compte : une note sans espace doit rester privée,
+y compris vis-à-vis d'un collègue du même compte.
+
+Le réflexe est d'ajouter une politique de plus. **C'est le piège.** PostgreSQL
+combine les politiques *permissives* par `OR` : une seconde politique permissive
+sur `entry` aurait **élargi** l'accès — n'importe quelle ligne satisfaisant l'une
+*ou* l'autre serait devenue visible. On aurait écrit une politique de partage en
+croyant écrire une politique d'isolation, et le comportement nominal ne l'aurait
+pas révélé : tout aurait *marché*, en montrant trop.
+
+**Décision.** Les politiques de visibilité par espace sont déclarées
+`AS RESTRICTIVE`. PostgreSQL les combine par `AND` avec les permissives : une
+ligne doit satisfaire l'isolation de compte **et** la visibilité d'espace.
+Aucune des trente-cinq politiques existantes n'est touchée.
+
+```sql
+CREATE POLICY entry_workspace_visibility ON entry AS RESTRICTIVE
+    USING (
+        current_user_id() IS NULL
+        OR user_id = current_user_id()
+        OR (workspace_id IS NOT NULL AND EXISTS (
+              SELECT 1 FROM workspace_member wm
+              WHERE wm.workspace_id = entry.workspace_id
+                AND wm.user_id = current_user_id()))
+    );
+```
+
+**La visibilité des commentaires est dérivée de celle de l'entrée**, pas
+recopiée. Deux politiques indépendantes finiraient par diverger, et le jour où
+elles divergent un commentaire est lisible sur une note qui ne l'est pas.
+
+**Alternative écartée.** Filtrer dans le service applicatif. Rejetée pour la
+raison qui a fondé ADR-005 : un filtre applicatif est une convention, qu'une
+requête oubliée contourne sans bruit. Le seul endroit où l'isolation est vraie
+plutôt que promise est la base.
+
+**Coût accepté — et il est explicite.** La première clause,
+`current_user_id() IS NULL`, fait **passer** la politique quand aucun contexte
+utilisateur n'est posé. C'est une concession de compatibilité : tous les travaux
+planifiés et toutes les migrations tournent sans utilisateur, et la refuser
+aurait cassé chaque job du produit.
+
+Elle a une conséquence directe : **si l'API cessait de poser `app.user_id`,
+chaque organisation deviendrait un disque partagé.** La ligne qui l'empêche est
+unique, dans `api/deps.py` :
+
+```python
+async with tenant_session(principal.account_id, user_id=principal.user_id) as session:
+```
+
+Un test lit le code source de `get_session` et échoue si elle disparaît
+(`test_the_api_always_sets_the_user_context`). Un test qui inspecte du source est
+inhabituel ; il est ici justifié parce que la propriété à garantir est *une ligne
+précise à un endroit précis*, et qu'aucun test fonctionnel ne la distingue d'une
+base correctement isolée par ailleurs.
+
+Un second test vérifie que `pg_policy.polpermissive` vaut `false` — parce qu'une
+politique passée par erreur en permissive élargirait l'accès sans rien changer au
+comportement observable.
+
+**Réexamen.** Si le coût de la sous-requête `EXISTS` devient mesurable sur une
+grande organisation. La sortie serait une vue matérialisée d'appartenance, pas
+l'abandon de la politique.
+
+---
+
+<a id="adr-055"></a>
+## ADR-055 — Le compte *est* l'organisation
+
+**Statut** ✅ Acceptée · Phase 4
+
+**Contexte.** « Ajouter le multi-utilisateurs » suggère une nouvelle entité :
+une organisation, qui contiendrait des comptes, qui contiendraient des
+utilisateurs. C'est le modèle que la plupart des produits finissent par avoir, et
+généralement au prix d'une migration douloureuse.
+
+Or `app_user.account_id` existe depuis la phase 1 et n'a jamais interdit
+plusieurs utilisateurs par compte. Rien dans le schéma ne supposait un utilisateur
+unique : c'est le produit qui n'en créait qu'un.
+
+**Décision.** Aucune entité « organisation ». Une organisation est un `account`
+avec `kind = 'org'`. La frontière de locataire reste `account_id`, donc les
+trente-cinq politiques d'isolation, les index, les travaux inter-locataires et le
+`tenant_session` de la phase 1 fonctionnent inchangés.
+
+Conséquence visible dans l'API : **aucune route de la phase 4 ne prend
+d'identifiant de compte**. Le locataire vient du jeton, comme avant.
+
+**Alternative écartée.** Une table `organization` avec `account.organization_id`.
+Elle aurait ajouté un niveau à chaque politique RLS, à chaque index composite et à
+chaque requête — pour représenter une relation qui, dans ce produit, est toujours
+un-à-un. Un niveau de hiérarchie qui n'a jamais plus d'un enfant est un niveau qui
+n'existe que pour être traversé.
+
+**Coût accepté.** Une personne appartient à **un** compte. Un consultant
+travaillant pour trois organisations aura trois comptes et trois sessions, ce qui
+est une friction réelle. Le sortir demanderait une table d'appartenance
+`(user, account)` et la révision de la notion de contexte de session dans son
+entier — un chantier, pas un ajustement.
+
+Ce coût est accepté parce que l'alternative le paie d'avance et pour tout le
+monde : chaque requête du produit porterait la complexité multi-comptes pour
+servir une minorité d'utilisateurs qui n'existe pas encore.
+
+**Réexamen.** Au premier client qui exige le multi-appartenance par écrit. Le
+signal sera commercial, pas technique.
+
+---
+
+<a id="adr-056"></a>
+## ADR-056 — Un conflit de synchronisation est classé, jamais résolu tout seul
+
+**Statut** ✅ Acceptée · Phase 4
+
+**Contexte.** Dès qu'une donnée existe des deux côtés d'une synchronisation, elle
+peut changer des deux côtés entre deux passages. Le comportement quasi universel
+est le dernier-qui-écrit-gagne, souvent sans le dire.
+
+**Décision.** `resolve()` compare quatre valeurs — l'empreinte locale, l'empreinte
+distante, et les deux empreintes connues à la dernière synchronisation — et
+retourne une classification :
+
+| Résolution | Situation | Action |
+| --- | --- | --- |
+| `NOOP` | Rien n'a changé | — |
+| `PULL` | Le distant seul a changé | Appliquer |
+| `PUSH` | Le local seul a changé | Envoyer |
+| `CONFLICT` | **Les deux** ont changé | Signaler, ne rien écrire |
+
+```python
+if local_changed and remote_changed:
+    return SyncOutcome(Resolution.CONFLICT,
+                       "modifié des deux côtés depuis la dernière synchronisation")
+```
+
+Trois des quatre cas sont automatiques. Le quatrième attend une décision humaine,
+exposée par `GET /v1/integrations/conflicts`.
+
+**Alternative écartée.** Le dernier-qui-écrit-gagne, éventuellement arbitré par
+un horodatage. Rejetée parce que l'horodatage d'un service tiers n'est pas
+comparable au nôtre — fuseaux, granularité, horloges non synchronisées — et
+surtout parce que le cas où les deux côtés ont changé est précisément celui où
+**les deux versions comptaient pour quelqu'un**. Choisir sans le dire perd du
+travail en silence, ce qui est la pire des façons d'en perdre.
+
+**Coût accepté.** Un conflit non tranché **bloque** l'élément : il ne se
+synchronise plus tant que personne ne décide. Sur une intégration très active,
+une liste de conflits peut s'accumuler et devenir une corvée. C'est assumé : une
+corvée visible vaut mieux qu'une perte invisible.
+
+**Coût connexe.** L'échec répété est traité séparément, et différemment. Le délai
+entre tentatives croît exponentiellement, plafonné à une heure, et le
+planificateur abandonne après six échecs consécutifs — parce qu'un jeton révoqué
+ne redeviendra jamais valide, et que retenter éternellement une opération qui ne
+peut pas réussir consomme du quota chez le fournisseur et masque le vrai
+problème. `expired` et `error` sont donc deux états distincts : le premier
+n'est jamais retenté.
+
+**Réexamen.** Si le taux de conflits mesuré dépasse quelques pour cent des
+éléments. Ce serait le signe que le découpage des données synchronisées est trop
+grossier, pas que la politique est mauvaise.
+
+---
+
+<a id="adr-057"></a>
+## ADR-057 — Un seul port pour sept connecteurs, dont un qui n'est pas un service
+
+**Statut** ✅ Acceptée · Phase 4 · **Reprend** [ADR-045](#adr-045)
+
+**Contexte.** Sept intégrations demandées : Google Calendar, Outlook, Microsoft
+To Do, Slack, Teams, Notion, Obsidian. Elles n'ont ni le même protocole, ni le
+même sens de circulation, ni même la même nature — Obsidian est un dossier sur un
+disque.
+
+**Décision.** Un port unique, `SyncConnectorPort`, avec `pull()` et `push()`, et
+des propriétés déclarées par le fournisseur plutôt que devinées par l'appelant :
+`is_server_side`, `kind`, `supports_two_way`. Le service de synchronisation ne
+connaît que le port ; il ne contient aucun `if provider == …`.
+
+**Deux conséquences qui valident la forme.**
+
+*Outlook et Microsoft To Do partagent un adaptateur.* Microsoft Graph sert le
+calendrier et les tâches depuis la même API et le même jeton. Deux fournisseurs
+distincts côté produit — l'utilisateur connecte l'un sans l'autre — un seul
+client HTTP côté infrastructure.
+
+*Obsidian déclare `is_server_side = False`.* Son `pull()` lève une exception, et
+son `push()` rend du Markdown avec un en-tête YAML sans faire la moindre E/S. Ce
+n'est pas un cas particulier bricolé : c'est une propriété déclarée que le
+planificateur consulte, et un connecteur non serveur n'est jamais programmé. Un
+`if provider == "obsidian"` dans le planificateur aurait été le début de la fin de
+l'abstraction.
+
+**Alternative écartée.** Deux hiérarchies, « connecteurs de calendrier » et
+« connecteurs de notification ». Rejetée parce que Microsoft To Do est
+bidirectionnel et n'est ni l'un ni l'autre, et parce que le pull/push est
+exactement le même mécanisme d'idempotence dans les deux cas.
+
+**Coût accepté — et il est élevé.** Le port a été conçu contre des documentations,
+**pas contre des serveurs**. Aucun jeton n'a jamais été échangé, aucun appel
+réel n'a jamais été passé. Il faut s'attendre à ce que plusieurs adaptateurs
+soient faux — pagination, format de date, sémantique d'`etag`. Le pari est que
+le *port* survivra et que seuls les adaptateurs seront réécrits ; c'est
+précisément ce que l'abstraction est censée acheter, et cela reste à vérifier.
+
+**Réexamen.** À la première intégration réelle. Si le port doit changer pour
+accueillir un vrai fournisseur, la forme est mauvaise et il vaut mieux le savoir
+au septième connecteur qu'au vingtième.
+
+---
+
+<a id="adr-058"></a>
+## ADR-058 — Les jetons sont chiffrés avec un trousseau versionné, pas une clé
+
+**Statut** ✅ Acceptée · Phase 4
+
+**Contexte.** Les jetons OAuth des intégrations sont des identifiants de longue
+durée donnant accès à l'agenda et aux messages de l'utilisateur chez un tiers.
+Les stocker en clair fait d'une fuite de sauvegarde une compromission de tous les
+comptes Google des utilisateurs.
+
+Le réflexe est une variable `ENCRYPTION_KEY`. Elle a un défaut qui n'apparaît
+qu'un an plus tard : **on ne peut pas en changer**. La rotation exige de
+déchiffrer tout l'existant avec l'ancienne et de rechiffrer avec la nouvelle,
+donc une fenêtre pendant laquelle les deux doivent coexister — que le format ne
+permet pas d'exprimer. En pratique, la rotation n'a jamais lieu.
+
+**Décision.** AES-256-GCM, et un **trousseau** plutôt qu'une clé :
+
+```
+MINDFLOW_TOKEN_ENCRYPTION_KEYS="2026-08:AbC…=,2025-11:XyZ…="
+```
+
+La première clé est active pour les écritures ; toutes servent en lecture. Le
+chiffré porte l'identifiant de la clé qui l'a produit :
+
+```
+v1$2026-08$base64(nonce ‖ scellé)
+```
+
+**L'identifiant de clé est authentifié comme donnée associée (AAD).** Le
+modifier ne permet pas de faire déchiffrer un jeton par une autre clé : cela fait
+échouer la vérification. Sans cela, l'identifiant serait un champ que l'on peut
+réécrire dans la base pour orienter le déchiffrement.
+
+**Une rotation se fait donc sans fenêtre de maintenance** : ajouter la nouvelle
+clé en tête, garder l'ancienne, laisser un job repasser sur les lignes. L'ancienne
+se retire quand plus aucune ligne ne la nomme.
+
+**Alternative écartée.** `pgcrypto` et le chiffrement en base. Rejeté parce que
+la clé finirait dans une chaîne de connexion ou une fonction SQL, donc dans le
+même endroit que les données — ce qui annule l'essentiel du bénéfice.
+
+**Coût accepté.** La perte d'une clé rend ses jetons irrécupérables ; les
+utilisateurs doivent reconnecter. C'est le comportement correct. Un chiffrement
+dont on peut récupérer la clé perdue est un chiffrement dont un attaquant peut
+récupérer la clé.
+
+Second coût : le service **refuse de démarrer** en production sans clé. Le
+contrôle de configuration échoue au lancement plutôt que de choisir un défaut.
+Un défaut silencieux ici signifierait des jetons en clair sans que personne ne
+s'en aperçoive.
+
+**Note connexe : les jetons de partage ne sont pas chiffrés, ils sont hachés.**
+Le serveur n'a jamais besoin de les relire — il vérifie qu'un jeton présenté
+correspond. Un condensat SHA-256 suffit, et il est strictement meilleur : une
+fuite de base ne peut pas être renversée en liste de liens ouvrables. Le
+plaintext est retourné exactement une fois, à l'émission.
+
+---
+
+<a id="adr-059"></a>
+## ADR-059 — Le journal d'audit est partitionné par mois, et purgé par `DROP`
+
+**Statut** ✅ Acceptée · Phase 4
+
+**Contexte.** `audit_log` est la seule table du schéma qui croît sans borne, n'est
+jamais mise à jour et n'est presque jamais lue. Une table d'audit non gérée
+finit par représenter l'essentiel du volume d'une base et par rendre chaque
+sauvegarde plus lente que la précédente.
+
+La purge naturelle — `DELETE FROM audit_log WHERE occurred_at < …` — a trois
+défauts cumulatifs : elle prend un verrou long, elle ne rend pas l'espace au
+système, et elle laisse une table gonflée qui demande un `VACUUM FULL` que
+personne ne planifie.
+
+**Décision.** `audit_log` est partitionnée par `RANGE (occurred_at)`, une
+partition par mois. La rétention se fait en supprimant des partitions.
+
+```sql
+SELECT ensure_audit_partitions(3);                  -- créer d'avance
+SELECT drop_audit_partitions_before('2025-01-01');  -- purger
+```
+
+`DROP` d'une partition est instantané, rend l'espace, et ne verrouille pas le
+reste de la table.
+
+**Les deux fonctions vivent dans la base, en PL/pgSQL, pas dans un job Python.**
+C'est délibéré : elles doivent fonctionner même quand le worker est arrêté —
+c'est-à-dire exactement au moment où personne ne regarde.
+
+**Alternative écartée.** Une purge applicative par lots. Elle aurait fonctionné,
+au prix d'un job qui doit tourner longtemps, se reprendre après interruption, et
+dont l'échec est silencieux. Le partitionnement déplace le problème dans le
+moteur, dont c'est le métier.
+
+**Coût accepté — le plus vicieux du projet.** Une insertion dans une plage sans
+partition **échoue**. Un mois qui arrive sans que les partitions aient été créées
+d'avance fait échouer *chaque* écriture d'audit, sans aucun symptôme avant le
+premier du mois, puis beaucoup d'un coup.
+
+Trois défenses, parce qu'une seule ne suffisait pas :
+
+1. les partitions sont créées **trois mois à l'avance** ;
+2. un champ `audit_partition_ready` dans `GET /v1/admin/health` — le seul champ
+   de cette réponse qui *prédit* une panne au lieu de la constater ;
+3. un signal d'exploitation `audit_partition_gap`, documenté en tête des runbooks.
+
+**Second coût, dans la migration.** PostgreSQL ne convertit pas une table simple
+en table partitionnée : la table est renommée, recréée partitionnée, et les
+lignes du mois courant recopiées. **Les lignes plus anciennes que la plus vieille
+partition créée sont abandonnées.** Sur une installation neuve c'est instantané et
+sans perte ; sur une installation en service, il faut exporter d'abord. C'est
+écrit dans `Deployment.md` §5 parce que c'est la seule migration du projet qui
+n'est pas anodine.
+
+La clé primaire devient composite, `(id, occurred_at)` — PostgreSQL exige que la
+clé de partitionnement en fasse partie. Aucun code du produit ne référence un
+enregistrement d'audit par identifiant, donc cela ne coûte rien ici ; cela le
+coûterait dans une table où quelque chose pointe vers les lignes.

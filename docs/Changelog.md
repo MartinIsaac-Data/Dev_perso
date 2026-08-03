@@ -30,6 +30,116 @@ Rien pour l'instant.
 
 ---
 
+## [0.5.0] — 2026-08-03
+
+**Phase 4 — Les fonctionnalités d'entreprise.** Le produit passe d'un outil
+personnel à un outil d'équipe. **Rien de l'existant n'a été réécrit** : les 35
+politiques d'isolation de compte, les prompts de la phase 3 et leurs empreintes,
+et l'intégralité des tests antérieurs sont inchangés. 777 tests passent.
+
+### Ajouté — Domaine
+
+- `permissions` : quatre rôles de compte (`owner`, `admin`, `member`, `viewer`)
+  et trois rôles d'espace (`editor`, `commenter`, `reader`), ordonnés. `can()`
+  est une **fonction totale** : une action inconnue est refusée, jamais autorisée
+  par omission.
+- `collaboration` : analyse des `@mentions` — avec un `lookbehind` négatif qui
+  refuse les adresses de courriel —, émission et vérification des jetons de
+  partage. La révocation est vérifiée **avant** l'expiration, parce que c'est ce
+  que l'auteur du lien a fait.
+- `sync` : classification des synchronisations en `NOOP`, `PULL`, `PUSH`,
+  `CONFLICT`, sans aucune E/S. Délai entre tentatives exponentiel, plafonné à
+  une heure, abandon après six échecs consécutifs.
+
+### Ajouté — Infrastructure
+
+- `infra/crypto` : AES-256-GCM avec **trousseau versionné**. Format
+  `v1$id$base64(nonce‖scellé)`, l'identifiant de clé authentifié comme donnée
+  associée. La rotation se fait sans fenêtre de maintenance.
+- `infra/sync/connectors` : sept fournisseurs derrière un port unique. Outlook et
+  Microsoft To Do partagent un adaptateur Microsoft Graph. Obsidian déclare
+  `is_server_side = false` et ne fait aucune E/S serveur.
+- Neuf tables : `workspace`, `workspace_member`, `invitation`, `comment`,
+  `mention`, `share_link`, `integration_connection`, `external_link`,
+  `meeting_session`.
+
+### Ajouté — API
+
+- Espaces, membres, invitations, commentaires, mentions, partage, intégrations,
+  conflits (`API.md` §16).
+- `/v1/admin/overview`, `/audit`, `/usage`, `/health` (`API.md` §17).
+- `GET /v1/shared/{token}` : la **seule** route non authentifiée du produit. Elle
+  s'exécute sur une connexion de maintenance et retourne une entrée, par
+  identifiant.
+- `permission_denied` (403), distinct de `forbidden` : une portée de jeton
+  insuffisante et un rôle insuffisant appellent des remèdes différents.
+
+### Sécurité
+
+- **Deux politiques RLS `RESTRICTIVE`** sur `entry` et `comment`. Restrictives et
+  non permissives : PostgreSQL combine les permissives par `OR`, donc une seconde
+  politique permissive aurait **élargi** l'accès en croyant le restreindre.
+- Une note sans espace est privée, y compris pour l'administrateur du compte —
+  appliqué par la base, pas par l'API.
+- Jetons OAuth chiffrés au repos ; jetons de partage stockés **hachés** en
+  SHA-256 et retournés en clair exactement une fois.
+- Le service refuse de démarrer en production sans clé de chiffrement, et refuse
+  une `PUBLIC_BASE_URL` en `localhost` — qui ferait pointer chaque lien de
+  partage sur la machine de l'émetteur.
+- Aucun endpoint inter-comptes, aucun « super administrateur ». C'est une absence
+  délibérée (`API.md` §17.1).
+
+### Modifié
+
+- `audit_log` est **partitionnée par mois**. Clé primaire composite
+  `(id, occurred_at)`. Rétention par `DROP TABLE`.
+- Sept index ajoutés, chacun motivé par une requête existante (`Database.md`
+  §16.5).
+- `NotificationKind` gagne `mention` et `comment`, distincts de `system` : une
+  mention est la notification qu'on veut garder en coupant les autres.
+
+### Corrigé
+
+- **Défaut latent de la phase 2** : la migration 0003 n'avait jamais posé
+  `ALTER DEFAULT PRIVILEGES` pour `mindflow_maintenance`, rendant invisible à
+  tous les travaux inter-locataires **chaque table créée après elle**. Le défaut
+  était silencieux — un job qui ne voit rien ne lève pas d'erreur, il ne fait
+  rien. Rattrapé en 0006 et 0007.
+
+### Décisions
+
+- [ADR-054] La visibilité par espace est une politique **restrictive**
+- [ADR-055] Le compte *est* l'organisation
+- [ADR-056] Un conflit de synchronisation est classé, jamais résolu tout seul
+- [ADR-057] Un seul port pour sept connecteurs, dont un qui n'est pas un service
+- [ADR-058] Les jetons sont chiffrés avec un trousseau versionné
+- [ADR-059] Le journal d'audit est partitionné par mois, purgé par `DROP`
+
+### Documentation
+
+- `Deployment.md`, `DevOps.md`, `Production.md`, `UserGuide.md`,
+  `RoadmapV2.md`, `RoadmapV3.md` — six documents nouveaux.
+- `API.md` §16–17, `Database.md` §16, `Architecture.md` §17, index d'ADR complété
+  de 034 à 059.
+
+### Ce qui n'a pas été fait, et qui était demandé
+
+Énoncé plutôt qu'omis. Le détail est dans `Architecture.md` §17.5 et `TODO.md`.
+
+- **IA temps réel pendant les réunions** : la table `meeting_session` existe et
+  n'est remplie par rien.
+- **Mode hors ligne** : seule la capture l'est, depuis la phase 1.
+- **Versions Desktop et Web** : Flutter les cible ; aucun build n'a été produit.
+- **Écrans Flutter d'entreprise** : l'API existe, le client ne l'appelle pas.
+- **`sync_job` et `partition_job`** : documentés, non écrits. Tant que le second
+  n'existe pas, la protection d'ADR-059 repose sur quelqu'un qui y pense.
+- **Notifications intelligentes** : les types existent, aucune logique de
+  regroupement.
+- Aucun appel réel à un fournisseur d'intégration n'a jamais été passé, et aucune
+  mesure de charge n'a été faite.
+
+---
+
 ## [0.4.0] — 2026-08-03
 
 **Phase 3 — La couche IA.** Le produit passe de « capturer, planifier, retrouver »

@@ -2044,3 +2044,141 @@ politique.
 | `assistant_duration_seconds{intent}` | Sépare les routes structurées (millisecondes) des routes génératives (secondes) |
 | `entities_extracted_total{kind}` | La distribution des sept catégories |
 | `digests_generated_total{period,outcome}` | `outcome=degraded` compte les résumés rendus factuels faute de modèle |
+
+---
+
+## 17. Architecture de la phase 4 — organisation, collaboration, intégrations
+
+### 17.1 Le principe : deux couches d'isolation, pas une frontière déplacée
+
+La phase 4 ajoute une frontière **à l'intérieur** du compte sans toucher celle
+qui l'entoure. Aucune des trente-cinq politiques `*_tenant_isolation` n'a été
+modifiée ; aucune requête existante n'a changé de forme.
+
+```mermaid
+flowchart TB
+    subgraph T["Locataire — account_id, phase 0"]
+        direction TB
+        subgraph P["Privé — user_id, phase 4"]
+            N1[Note sans espace]
+        end
+        subgraph W["Espace — workspace_id, phase 4"]
+            N2[Note d'espace]
+            C2[Commentaires]
+        end
+    end
+    T -.->|politique PERMISSIVE| DB[(PostgreSQL)]
+    P -.->|politique RESTRICTIVE| DB
+    W -.->|politique RESTRICTIVE| DB
+```
+
+**Les deux politiques se composent par `AND`, pas par `OR`.** C'est toute la
+décision d'ADR-054, et c'est ce qui distingue une politique d'isolation d'une
+politique de partage écrite par mégarde. Une ligne doit satisfaire les deux.
+
+Conséquence directe : **une note sans espace est privée par défaut**, y compris
+vis-à-vis d'un administrateur de compte. Le partage est un acte, pas un état de
+départ.
+
+### 17.2 Où vivent les décisions d'autorisation
+
+```mermaid
+flowchart LR
+    API[Route FastAPI] --> SVC[Service]
+    SVC --> CAN["domain.permissions.can()"]
+    SVC --> DB[(PostgreSQL<br/>politiques RLS)]
+    CAN -.->|décision| SVC
+```
+
+Deux niveaux, et ils ne font pas la même chose :
+
+| Niveau | Répond à | Si absent |
+| --- | --- | --- |
+| `domain.permissions.can()` | « Cette personne a-t-elle le droit de faire cela ? » | Un message d'erreur incorrect |
+| Politique RLS | « Cette ligne existe-t-elle pour cette personne ? » | **Une fuite** |
+
+**Le premier produit de bons messages, le second produit la sécurité.** Un
+contrôle applicatif sans politique en dessous est une suggestion : une requête
+oubliée le contourne sans bruit. C'est pourquoi tout ce qui est vérifié dans
+`can()` est aussi vrai dans la base.
+
+`can()` est une **fonction totale** : elle prend un `Actor` et une `Action` et
+retourne toujours une décision. Une action inconnue est refusée. Un `match` sans
+branche par défaut aurait fait d'un oubli une autorisation.
+
+**Une seule exception délibérée** : un administrateur de compte est traité comme
+éditeur dans n'importe quel espace. Sans elle, un administrateur peut créer un
+espace, en sortir, et personne ne peut plus l'administrer — un verrouillage
+irréparable, puisqu'il n'existe aucun opérateur au-dessus du compte (`API.md`
+§17.1).
+
+### 17.3 Les mentions sont résolues à l'écriture
+
+```mermaid
+sequenceDiagram
+    participant U as Utilisateur
+    participant A as API
+    participant D as domain.collaboration
+    participant P as PostgreSQL
+    U->>A: POST /comments  "@marie peux-tu confirmer ?"
+    A->>D: parse_mentions(body)
+    D-->>A: ["marie"]
+    A->>P: SELECT user_id … visibles dans l'espace
+    P-->>A: {marie → 018f…}
+    A->>P: INSERT comment + INSERT mention(user_id)
+    A-->>U: 201 · mentions=[…] · unresolved=[]
+```
+
+**Résoudre au rendu aurait été plus simple et faux.** Un changement de nom
+réécrirait rétroactivement l'historique, et un commentaire de l'an dernier
+finirait par interpeller quelqu'un d'autre.
+
+L'expression régulière refuse les adresses de courriel par un `lookbehind`
+négatif : `écris à paul@exemple.fr` ne mentionne personne.
+
+Les identifiants non résolus reviennent dans `unresolved`, parce que le silence
+ferait croire à l'auteur que la personne est prévenue.
+
+### 17.4 La synchronisation : un port, sept fournisseurs
+
+```mermaid
+flowchart TB
+    SVC[IntegrationService] --> PORT{{SyncConnectorPort}}
+    PORT --> G[Google Calendar]
+    PORT --> MS[Microsoft Graph<br/>Outlook + To Do]
+    PORT --> SL[Slack]
+    PORT --> TM[Teams]
+    PORT --> NO[Notion]
+    PORT --> OB[Obsidian<br/>is_server_side = false]
+    SVC --> XL[(external_link<br/>idempotence + conflits)]
+```
+
+`external_link` est la seule pièce qui rende la synchronisation ré-exécutable :
+elle associe une entrée locale à son identifiant distant et mémorise les deux
+empreintes de la dernière synchronisation réussie. Sans elle, chaque passage
+recréerait ce qu'il a déjà créé.
+
+**Le planificateur ne connaît aucun fournisseur.** Il lit `is_server_side` et
+`kind` sur le fournisseur lui-même ; Obsidian n'est jamais programmé parce qu'il
+déclare ne pas être un service, pas parce qu'un `if` le nomme.
+
+**Le classement des conflits est du domaine pur.** `resolve()` ne fait aucune
+E/S : quatre empreintes entrent, une résolution sort. C'est ce qui la rend
+testable sans réseau — et testée, avec 35 cas.
+
+### 17.5 Ce que la phase 4 n'a pas construit
+
+Énoncé plutôt qu'implicite.
+
+| Prévu | État |
+| --- | --- |
+| Table `meeting_session` | ✅ Créée, **jamais remplie** — aucun service temps réel |
+| Mode hors ligne complet | ❌ Seule la capture est hors ligne, depuis la phase 1 |
+| Écrans Flutter d'entreprise | ❌ L'API existe, le client ne l'appelle pas |
+| Version Desktop / Web | ❌ Flutter les cible ; aucun build n'a été produit |
+| Notifications intelligentes | ⚠️ Les types `mention` et `comment` existent ; aucune logique de regroupement |
+| `sync_job`, `partition_job` | ❌ Documentés dans `DevOps.md` §2, non écrits |
+
+**La ligne la plus importante est la dernière.** `ensure_audit_partitions` existe
+en base et n'est appelée par rien d'automatique. Tant que ce job n'existe pas,
+la protection d'ADR-059 repose sur quelqu'un qui y pense.

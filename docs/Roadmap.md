@@ -430,3 +430,40 @@ Trois choses, et deux n'étaient pas prévues.
 est large et non mesurée ; l'élargir encore avant de savoir ce qui marche
 reviendrait à empiler des hypothèses. La prochaine phase devrait mesurer, pas
 ajouter.
+
+---
+
+## Ce que la phase 4 a changé à la trajectoire
+
+**La v2.0 « Collaboration » de ce document est construite.** Espaces,
+multi-utilisateurs, partage, commentaires, mentions, permissions, sept
+intégrations : la surface existe et elle est testée. Ce que la phase 4 n'a pas
+changé, c'est la question à laquelle cette version devait répondre — *« l'usage
+en équipe existe-t-il ? »* — qui reste entière, puisqu'aucun utilisateur n'a
+jamais créé d'espace.
+
+Trois choses ont bougé, et deux n'étaient pas prévues.
+
+1. **Le socle multi-utilisateur n'a rien coûté au schéma.** `app_user.account_id`
+   n'avait jamais interdit plusieurs personnes par compte (ADR-055). L'isolation
+   par espace s'est ajoutée en deux politiques restrictives, sans toucher les
+   trente-cinq existantes. Ce qu'on croyait être un chantier de refonte était une
+   couche.
+
+2. **L'écart s'est déplacé du serveur vers le client.** Toutes les phases
+   précédentes livraient les deux ensemble. La phase 4 livre une API d'entreprise
+   complète et **aucun écran**. C'est le premier déséquilibre structurel du
+   projet : la valeur construite est réelle et strictement invisible pour un
+   utilisateur.
+
+3. **Le produit a maintenant une échéance qui n'attend personne.** Toutes les
+   dettes précédentes étaient des dégradations progressives. `audit_log`
+   partitionnée introduit la première panne *datée* : le premier du mois suivant
+   la dernière partition créée, si rien n'appelle `ensure_audit_partitions`
+   (ADR-059, B1).
+
+**La suite ne devrait pas ajouter de fonctionnalités.** Après quatre phases, le
+système fait beaucoup de choses dont aucune n'a été mesurée en conditions
+réelles, et plusieurs n'ont jamais parlé à un vrai serveur. La trajectoire
+détaillée est en `RoadmapV2.md` — dont le premier jalon n'ajoute rien et se
+contente de mettre en production ce qui existe.

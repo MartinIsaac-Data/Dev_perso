@@ -28,6 +28,10 @@
 11. [Quotas et limitation de débit](#11-quotas-et-limitation-de-débit)
 12. [Versionnage et dépréciation](#12-versionnage-et-dépréciation)
 13. [Webhooks sortants](#13-webhooks-sortants)
+14. [Surface phase 2](#14-surface-ajoutée-en-phase-2)
+15. [Surface phase 3](#15-surface-ajoutée-en-phase-3--assistant-recherche-sémantique-connaissances)
+16. [Surface phase 4](#16-surface-ajoutée-en-phase-4--organisation-collaboration-intégrations)
+17. [Administration](#17-surface-dadministration)
 
 ---
 
@@ -1159,3 +1163,249 @@ ce qui vient d'être rejeté (ADR-051). Réponse `204`.
 Un refus du modèle n'est **pas** une erreur : statut 200, `refused: true`, et le
 texte explique. Le transformer en 4xx en ferait une chose que le client réessaie,
 ce qui serait un contournement.
+
+---
+
+## 16. Surface ajoutée en phase 4 — organisation, collaboration, intégrations
+
+Rien de la surface existante n'a changé. Les routes de la phase 4 s'ajoutent ;
+aucun schéma de réponse antérieur n'a été modifié, aucune route n'a été
+renommée. Un client de phase 3 continue de fonctionner sans savoir que les
+espaces existent.
+
+### 16.1 Le principe qui gouverne toute cette section
+
+**Le compte *est* l'organisation** (ADR-055). Il n'existe pas de ressource
+« organisation » : `POST /v1/workspaces` crée un espace *dans le compte du
+demandeur*, et tout le reste en découle. C'est pourquoi aucune route de la
+phase 4 ne prend d'identifiant de compte en paramètre — le locataire vient du
+jeton, comme dans les trois phases précédentes.
+
+**Une note sans espace est privée**, y compris pour l'administrateur du compte.
+Cette phrase est appliquée par une politique PostgreSQL restrictive, pas par le
+code de l'API (ADR-054).
+
+### 16.2 Espaces et membres
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| GET | `/v1/workspaces` | Les espaces dont on est membre. `include_archived` |
+| POST | `/v1/workspaces` | Créer. Le créateur en devient éditeur |
+| PATCH | `/v1/workspaces/{id}` | Renommer, archiver |
+| DELETE | `/v1/workspaces/{id}` | Archiver — le contenu **n'est pas supprimé** |
+| GET | `/v1/workspaces/{id}/members` | Membres, avec leur rôle d'espace |
+| POST | `/v1/workspaces/{id}/members` | Ajouter, en `editor`, `commenter` ou `reader` |
+| DELETE | `/v1/workspaces/{id}/members/{user_id}` | Retirer |
+| GET | `/v1/members` | Membres du compte |
+| PATCH | `/v1/members/{user_id}/role` | `owner`, `admin`, `member`, `viewer` |
+| DELETE | `/v1/members/{user_id}` | Retirer du compte |
+
+**Supprimer un espace l'archive.** Les notes qu'il contenait redeviennent
+visibles de leur seul auteur ; aucune n'est perdue. Une suppression qui efface
+le travail de cinq personnes parce qu'un administrateur a cliqué trop vite n'est
+pas une fonctionnalité.
+
+**Deux retraits sont refusés**, et le refus est le comportement correct :
+
+- retirer le **dernier propriétaire** — un compte sans propriétaire ne peut plus
+  être administré par personne, et il n'existe aucun opérateur au-dessus pour le
+  réparer (§17.1) ;
+- retirer quelqu'un **de rang supérieur au sien**, ce qui permettrait à un
+  administrateur d'évincer le propriétaire.
+
+### 16.3 Invitations
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| GET | `/v1/invitations` | En attente |
+| POST | `/v1/invitations` | Inviter par courriel, avec un rôle |
+| DELETE | `/v1/invitations/{id}` | Révoquer |
+| POST | `/v1/invitations/accept` | Réclamer une invitation, par jeton |
+
+`POST /v1/invitations/accept` est la seule route authentifiée qui s'exécute sur
+une connexion de maintenance. Le demandeur est authentifié mais **n'est pas
+encore membre du compte qu'il rejoint** : une session cadrée sur son locataire
+actuel ne verrait aucune invitation — pas parce qu'elle n'existe pas, mais parce
+qu'elle appartient à l'autre compte. C'est le seul cas du produit où le contexte
+de locataire ne peut pas précéder la décision.
+
+### 16.4 Commentaires et mentions
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| GET | `/v1/entries/{id}/comments` | Fil d'une note |
+| POST | `/v1/entries/{id}/comments` | Commenter. Les `@mentions` sont résolues **à l'écriture** |
+| PATCH | `/v1/comments/{id}` | Modifier — **son propre** commentaire uniquement |
+| DELETE | `/v1/comments/{id}` | Supprimer. Un administrateur peut supprimer, jamais modifier |
+| POST | `/v1/comments/{id}/resolve` | Clore un fil |
+| GET | `/v1/mentions` | Les siennes. `unread_only` |
+| POST | `/v1/mentions/{id}/read` | Marquer lue |
+
+**Les mentions sont résolues à l'écriture, pas à l'affichage.** `@marie.dupont`
+devient un `user_id` au moment du `POST`. Résoudre au rendu ferait qu'un
+changement de nom réécrirait rétroactivement l'historique, et qu'un commentaire
+de l'an dernier finirait par interpeller quelqu'un d'autre.
+
+La réponse porte `unresolved`, les identifiants écrits qui n'ont désigné
+personne **ayant accès à la note** :
+
+```json
+{ "data": { "id": "018f…", "body": "@paul peux-tu confirmer ?",
+            "mentions": [], "unresolved": ["paul"] } }
+```
+
+Le silence serait le pire des comportements : l'auteur croirait Paul prévenu.
+L'interface affiche « Paul n'a pas accès à cette note » — ce qui est vrai, et
+actionnable.
+
+**Personne ne peut réécrire le commentaire d'autrui.** Un administrateur peut le
+supprimer ; l'autoriser à le modifier ferait d'un fil de discussion un document
+falsifiable.
+
+### 16.5 Partage par lien
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| POST | `/v1/entries/{id}/share` | Émettre un lien. `expires_at`, `allow_comments` |
+| GET | `/v1/shares` | Liens vivants, avec leur nombre d'ouvertures |
+| DELETE | `/v1/shares/{id}` | Révoquer |
+| GET | `/v1/shared/{token}` | **Sans authentification.** La seule route du produit dans ce cas |
+
+```json
+{ "data": { "id": "018f…", "url": "https://app.mindflow.ai/s/xK9…",
+            "token": "xK9…", "expires_at": "2026-09-02T…", "view_count": 0 } }
+```
+
+**`token` n'apparaît que dans cette réponse-ci.** Le serveur stocke un
+condensat SHA-256 ; il ne peut pas réafficher le lien, et une fuite de la base
+n'est pas une fuite des liens. `GET /v1/shares` ne renvoie jamais le jeton.
+
+**Les liens expirent par défaut**, à trente jours. L'expiration est un
+comportement par défaut plutôt qu'une option, parce qu'une option de sécurité que
+l'on doit penser à activer protège les gens qui n'en avaient pas besoin.
+
+**La révocation est vérifiée avant l'expiration.** Un lien révoqué *et* expiré
+répond « révoqué » : c'est ce que son auteur a fait, et c'est ce qu'il doit lire.
+
+`GET /v1/shared/{token}` s'exécute sur une connexion de maintenance et retourne
+**une** note, par identifiant. Poser le contexte du créateur donnerait à un
+inconnu une session cadrée sur tout le compte.
+
+### 16.6 Intégrations
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| GET | `/v1/integrations` | Connexions du compte, statut et dernier succès |
+| POST | `/v1/integrations` | Connecter. Le jeton est chiffré avant d'atteindre le disque |
+| DELETE | `/v1/integrations/{id}` | Déconnecter |
+| POST | `/v1/integrations/{id}/sync` | Synchroniser maintenant. Renvoie un rapport |
+| GET | `/v1/integrations/conflicts` | Éléments modifiés **des deux côtés** |
+| POST | `/v1/integrations/conflicts/{id}/resolve` | Trancher : `local` ou `remote` |
+
+| `provider` | Sens | Note |
+| --- | --- | --- |
+| `google_calendar` | lecture, écriture optionnelle | |
+| `outlook_calendar` | idem | Microsoft Graph |
+| `microsoft_todo` | bidirectionnel | Même jeton Graph que ci-dessus |
+| `slack` | écriture | Notifications sortantes |
+| `teams` | écriture | Idem |
+| `notion` | écriture | Export de notes |
+| `obsidian` | écriture, **côté client** | Voir ci-dessous |
+
+**Aucun jeton n'est jamais renvoyé par l'API.** Ni en clair, ni chiffré, ni
+tronqué. Ce qui revient est un état : `active`, `error`, `expired`.
+
+**`expired` et `error` ne veulent pas dire la même chose.** `error` compte des
+échecs successifs et se retente avec un délai croissant ; `expired` signifie que
+le grant OAuth est révoqué, et **réessayer ne servira jamais** — seul
+l'utilisateur peut reconnecter. Confondre les deux, c'est retenter mille fois
+une opération qui ne peut pas réussir.
+
+**Obsidian n'est pas un service.** `is_server_side` vaut `false` : le serveur n'a
+aucun accès à un coffre local. La connexion existe pour porter les préférences de
+rendu ; l'écriture des fichiers se fait dans l'application. `POST
+/v1/integrations/{id}/sync` sur Obsidian ne fait aucune E/S serveur.
+
+**Un conflit n'est jamais résolu tout seul** (ADR-056). Quand les deux côtés ont
+changé depuis la dernière synchronisation, l'élément est *classé* en conflit et
+attend une décision humaine. Le dernier-qui-écrit-gagne perd exactement la
+version à laquelle quelqu'un tenait, et sans le dire.
+
+### 16.7 Erreurs propres à la phase 4
+
+| Code | Statut | Quand |
+| --- | --- | --- |
+| `permission_denied` | 403 | Rôle insuffisant |
+| `not_found` | 404 | Espace, commentaire, invitation, connexion inconnus — **ou invisibles** |
+| `conflict` | 409 | Invitation déjà utilisée, membre déjà présent |
+| `validation_failed` | 422 | Commentaire vide, rôle inconnu, expiration dans le passé |
+
+**`permission_denied` est distinct de `forbidden`, et la distinction porte.**
+Une portée de jeton insuffisante est un problème d'authentification, que le
+client résout en se réauthentifiant ; un rôle insuffisant est un problème
+d'organisation, que l'utilisateur résout en demandant à un administrateur.
+Renvoyer le même code ferait proposer le mauvais remède.
+
+**Ce qui n'est pas visible répond `404`, pas `403`.** Un `403` sur un espace
+dont on ignore l'existence confirmerait cette existence — et l'énumération des
+identifiants deviendrait une carte de l'organisation.
+
+---
+
+## 17. Surface d'administration
+
+| Méthode | Chemin | Rôle minimal |
+| --- | --- | --- |
+| GET | `/v1/admin/overview` | `admin` — membres, espaces, volumes |
+| GET | `/v1/admin/audit` | `admin` — journal, filtrable par acteur, action, période |
+| GET | `/v1/admin/usage` | `admin` — usage par jour |
+| GET | `/v1/admin/health` | `admin` — retard d'encodage, connexions en échec, partitions |
+
+### 17.1 Ce qui n'existe délibérément pas
+
+**Aucun endpoint inter-comptes. Aucun « super administrateur ».**
+
+L'absence est une décision, pas un manque. Un rôle capable de lire tous les
+comptes est un identifiant dont la compromission expose l'intégralité de la base,
+et il ne peut pas être testé de façon convaincante : le seul test possible est
+« il voit tout », qui passe aussi quand l'isolation est cassée. Les rôles
+PostgreSQL de maintenance existent pour les travaux planifiés ; ils n'ont pas de
+route HTTP, et c'est précisément ce qui les rend sûrs.
+
+**Un administrateur de compte ne voit pas les notes personnelles de ses
+collègues.** Ni via `/v1/admin/overview`, ni via l'audit. La vue d'ensemble
+compte des lignes ; elle n'en montre aucune. Cette limite est appliquée par la
+politique restrictive, donc elle tient même si une route d'administration
+oubliait de la vérifier.
+
+### 17.2 Journal d'audit
+
+```json
+{ "data": [ { "id": 4821, "occurred_at": "2026-08-03T09:12:44Z",
+              "actor_id": "018f…", "action": "workspace.member.added",
+              "target_type": "workspace", "target_id": "018f…",
+              "metadata": { "role": "editor" } } ] }
+```
+
+Le journal est **append-only** : aucune route ne le modifie ni ne l'efface. La
+rétention se fait par suppression de partitions mensuelles côté base
+(ADR-059) — jamais par une requête applicative, qui serait par construction une
+route capable de réécrire l'histoire.
+
+Ce qui y est écrit : les changements de rôle, les entrées et sorties d'espace,
+l'émission et la révocation de liens, la connexion et la déconnexion
+d'intégrations, les suppressions. Ce qui n'y est **pas** écrit : les lectures. Un
+journal qui consigne chaque consultation grossit plus vite que les données
+elles-mêmes et n'est jamais relu.
+
+### 17.3 `GET /v1/admin/health`
+
+```json
+{ "data": { "embedding_backlog": 37, "failing_connections": 1,
+            "audit_partition_ready": true, "oldest_pending_capture_age_s": 12 } }
+```
+
+`audit_partition_ready` mérite son existence : sans partition pour le mois qui
+vient, **chaque insertion d'audit échouera** le premier du mois, sans aucun
+symptôme avant. C'est le seul champ de cette réponse qui prédit une panne au lieu
+de la constater.
