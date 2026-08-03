@@ -63,10 +63,17 @@ const shellDestinations = <ShellDestination>[
     route: Routes.notes,
   ),
   ShellDestination(
+    label: 'Assistant',
+    icon: Icons.auto_awesome_outlined,
+    selectedIcon: Icons.auto_awesome,
+    route: Routes.assistant,
+  ),
+  ShellDestination(
     label: 'Notifications',
     icon: Icons.notifications_none,
     selectedIcon: Icons.notifications,
     route: Routes.notifications,
+    compact: false,
   ),
   ShellDestination(
     label: 'Calendrier',
@@ -94,6 +101,20 @@ const shellDestinations = <ShellDestination>[
     icon: Icons.history,
     selectedIcon: Icons.history,
     route: Routes.timeline,
+    compact: false,
+  ),
+  ShellDestination(
+    label: 'Connaissances',
+    icon: Icons.hub_outlined,
+    selectedIcon: Icons.hub,
+    route: Routes.knowledge,
+    compact: false,
+  ),
+  ShellDestination(
+    label: 'Résumés',
+    icon: Icons.article_outlined,
+    selectedIcon: Icons.article,
+    route: Routes.digests,
     compact: false,
   ),
 ];
@@ -172,6 +193,33 @@ class _AppShellState extends ConsumerState<AppShell> {
           ref.read(searchQueryProvider.notifier).state = 'is:review';
           context.go(Routes.search);
         },
+      ),
+      PaletteAction(
+        id: 'assistant',
+        label: 'Demander à l\'assistant',
+        icon: Icons.auto_awesome_outlined,
+        keywords: const ['ia', 'chat', 'question', 'assistant'],
+        onInvoke: (context, _) => context.go(Routes.assistant),
+      ),
+      PaletteAction(
+        id: 'knowledge',
+        label: 'Connaissances',
+        icon: Icons.hub_outlined,
+        keywords: const [
+          'entites',
+          'personnes',
+          'projets',
+          'memoire',
+          'sujets'
+        ],
+        onInvoke: (context, _) => context.go(Routes.knowledge),
+      ),
+      PaletteAction(
+        id: 'digests',
+        label: 'Résumés',
+        icon: Icons.article_outlined,
+        keywords: const ['resume', 'bilan', 'quotidien', 'hebdomadaire'],
+        onInvoke: (context, _) => context.go(Routes.digests),
       ),
       PaletteAction(
         id: 'search',

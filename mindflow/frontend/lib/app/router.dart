@@ -20,6 +20,9 @@ import '../features/capture/record_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/notes/note_detail_screen.dart';
 import '../features/notes/notes_screen.dart';
+import '../features/assistant/assistant_screen.dart';
+import '../features/assistant/digests_screen.dart';
+import '../features/assistant/knowledge_screen.dart';
 import '../features/planning/agenda_screen.dart';
 import '../features/planning/analytics_screen.dart';
 import '../features/planning/calendar_screen.dart';
@@ -43,6 +46,11 @@ class Routes {
   static const timeline = '/history';
   static const notifications = '/notifications';
   static const library = '/library';
+
+  // Phase 3
+  static const assistant = '/assistant';
+  static const knowledge = '/knowledge';
+  static const digests = '/digests';
 
   static String note(String id) => '/notes/$id';
   static String capture(String id) => '/captures/$id';
@@ -131,6 +139,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: Routes.analytics,
               builder: (_, __) => const AnalyticsScreen()),
+          GoRoute(
+              path: Routes.assistant,
+              builder: (_, __) => const AssistantScreen()),
+          GoRoute(
+              path: Routes.knowledge,
+              builder: (_, __) => const KnowledgeScreen()),
+          GoRoute(
+              path: Routes.digests, builder: (_, __) => const DigestsScreen()),
           GoRoute(
               path: Routes.timeline,
               builder: (_, __) => const TimelineScreen()),

@@ -1,11 +1,13 @@
 /// HTTP client for the MindFlow API.
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'assistant_models.dart';
 import 'errors.dart';
 import 'models.dart';
 import 'planning_models.dart';
@@ -568,6 +570,161 @@ class MindflowApi {
         _unwrap(response)['data'] as Map<String, dynamic>);
   }
 
+  // -- Assistant, semantic search, entities, digests, memory (Phase 3) -----
+
+  /// Ask the assistant. [clientMessageId] makes a retry idempotent: a phone on
+  /// a flaky connection must not ask — or be billed — twice (ADR-009).
+  Future<Answer> ask(
+    String question, {
+    String? conversationId,
+    String? clientMessageId,
+  }) async {
+    final data = await _post('/v1/assistant/chat', body: {
+      'question': question,
+      if (conversationId != null) 'conversation_id': conversationId,
+      if (clientMessageId != null) 'client_message_id': clientMessageId,
+    });
+    return Answer.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  /// Ask, receiving the answer as it is written.
+  ///
+  /// Yields text fragments, then one final [Answer] carrying the citations. A
+  /// caller that only wants the finished answer can ignore every fragment and
+  /// take the last event — which is exactly what [ask] does over one round
+  /// trip, so the two paths never diverge.
+  Stream<AssistantEvent> askStreaming(
+    String question, {
+    String? conversationId,
+    String? clientMessageId,
+  }) async* {
+    final response = await _dio.post<ResponseBody>(
+      '/v1/assistant/chat/stream',
+      data: {
+        'question': question,
+        if (conversationId != null) 'conversation_id': conversationId,
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
+      },
+      options: Options(responseType: ResponseType.stream, headers: {
+        'accept': 'text/event-stream',
+      }),
+    );
+
+    final body = response.data;
+    if (body == null) return;
+
+    // Server-sent events arrive split across arbitrary chunk boundaries, so a
+    // buffer is not optional: parsing each chunk on its own would truncate
+    // every event that happens to straddle two packets.
+    var buffer = '';
+    await for (final chunk in body.stream) {
+      buffer += utf8.decode(chunk, allowMalformed: true);
+      while (true) {
+        final split = buffer.indexOf('\n\n');
+        if (split < 0) break;
+        final frame = buffer.substring(0, split);
+        buffer = buffer.substring(split + 2);
+
+        final event = _parseEvent(frame);
+        if (event != null) yield event;
+      }
+    }
+  }
+
+  AssistantEvent? _parseEvent(String frame) {
+    String? name;
+    final payload = StringBuffer();
+    for (final line in frame.split('\n')) {
+      if (line.startsWith('event: ')) {
+        name = line.substring(7).trim();
+      } else if (line.startsWith('data: ')) {
+        payload.write(line.substring(6));
+      }
+    }
+    if (name == null || payload.isEmpty) return null;
+
+    final decoded = jsonDecode(payload.toString());
+    if (name == 'delta') {
+      return AssistantEvent.delta(asMap(decoded)['text'] as String? ?? '');
+    }
+    if (name == 'answer') {
+      return AssistantEvent.done(Answer.fromJson(asMap(decoded)));
+    }
+    return null;
+  }
+
+  Future<List<Conversation>> listConversations() async {
+    final data = await _get('/v1/assistant/conversations');
+    return _list(data, Conversation.fromJson);
+  }
+
+  Future<List<ChatMessage>> conversationMessages(String conversationId) async {
+    final data = await _get('/v1/assistant/conversations/$conversationId');
+    return _list(data, ChatMessage.fromJson);
+  }
+
+  Future<SemanticResults> semanticSearch(
+    String query, {
+    int limit = 10,
+    List<String> entryTypes = const [],
+  }) async {
+    final data = await _post('/v1/search/semantic', body: {
+      'query': query,
+      'limit': limit,
+      if (entryTypes.isNotEmpty) 'entry_types': entryTypes,
+    });
+    return SemanticResults.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<IndexStatus> indexStatus() async {
+    final data = await _get('/v1/search/index-status');
+    return IndexStatus.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<KnownEntity>> listEntities(
+      {EntityKind? kind, String? query}) async {
+    final data = await _get('/v1/entities', query: {
+      if (kind != null) 'kind': kind.param,
+      if (query != null && query.isNotEmpty) 'q': query,
+    });
+    return _list(data, KnownEntity.fromJson);
+  }
+
+  Future<List<RecurringTheme>> themes({int days = 90}) async {
+    final data = await _get('/v1/entities/themes', query: {'days': days});
+    return _list(data, RecurringTheme.fromJson);
+  }
+
+  Future<List<Digest>> listDigests({DigestPeriod? period}) async {
+    final data = await _get('/v1/digests', query: {
+      if (period != null) 'period': period.param,
+    });
+    return _list(data, Digest.fromJson);
+  }
+
+  Future<Digest> generateDigest(DigestPeriod period,
+      {bool force = false}) async {
+    final data = await _post('/v1/digests',
+        body: {'period': period.param, if (force) 'force': true});
+    return Digest.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<Digest> markDigestRead(String digestId) async {
+    final data = await _post('/v1/digests/$digestId/read');
+    return Digest.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<Memory>> listMemories() async {
+    final data = await _get('/v1/memory');
+    return _list(data, Memory.fromJson);
+  }
+
+  Future<void> forgetMemory(String memoryId) async {
+    final response =
+        await _dio.delete<Map<String, dynamic>>('/v1/memory/$memoryId');
+    if ((response.statusCode ?? 500) >= 400) _unwrap(response);
+  }
+
   /// Collections always arrive wrapped in `data` (API.md §3.2).
   List<T> _list<T>(
           Map<String, dynamic> data, T Function(Map<String, dynamic>) parse) =>
@@ -584,3 +741,26 @@ class MindflowApi {
 final apiProvider = Provider<MindflowApi>((ref) {
   throw UnimplementedError('apiProvider must be overridden at app start');
 });
+
+/// One event from the streaming assistant endpoint.
+///
+/// A sealed pair rather than a nullable field: "a fragment arrived" and "the
+/// answer is finished" are different things, and a single class with both
+/// optional would let a caller read the wrong one without the compiler
+/// objecting.
+sealed class AssistantEvent {
+  const AssistantEvent();
+
+  factory AssistantEvent.delta(String text) = AssistantDelta;
+  factory AssistantEvent.done(Answer answer) = AssistantDone;
+}
+
+class AssistantDelta extends AssistantEvent {
+  const AssistantDelta(this.text);
+  final String text;
+}
+
+class AssistantDone extends AssistantEvent {
+  const AssistantDone(this.answer);
+  final Answer answer;
+}
