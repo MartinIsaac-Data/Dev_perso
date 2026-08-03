@@ -1,0 +1,17 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    prefer_single_quotes: true
+    avoid_print: true
+    unawaited_futures: true
+    # `require_trailing_commas` is deliberately off: `dart format` is the single
+    # authority on layout here, and on this SDK the two disagree — the rule asks
+    # for commas the formatter then removes. Two tools fighting over the same
+    # file is worse than either convention.
+
+analyzer:
+  errors:
+    missing_required_param: error
+    missing_return: error
+    invalid_annotation_target: ignore

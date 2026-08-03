@@ -725,6 +725,39 @@ lib/
     └── android/                    service de premier plan, tuile, Wear OS
 ```
 
+#### État d'implémentation à la fin de la phase 1
+
+La structure ci-dessus est la cible. Le MVP en réalise le squelette et laisse
+vides les branches dont il n'a pas besoin — un dossier créé « pour plus tard »
+est un dossier que personne n'ose supprimer.
+
+```
+lib/
+├── main.dart                       init Supabase, surcharges de providers
+├── app/{app,router,theme}.dart     racine, routage gardé, thème
+├── core/
+│   ├── api/{client,models,errors}.dart
+│   ├── audio/recorder.dart         enregistrement vers fichier
+│   ├── auth/                       dépôt Supabase + dépôt local de développement
+│   ├── time/device_timezone.dart   fuseau IANA de l'appareil (ADR-035)
+│   └── ui/formatting.dart          dates et durées en français
+└── features/
+    ├── auth/                       connexion
+    ├── capture/                    enregistrement, file locale, lecture audio
+    ├── dashboard/                  accueil
+    └── notes/                      liste, détail, actions
+```
+
+Écarts assumés par rapport à la cible, et leur raison :
+
+| Cible | MVP | Raison |
+| --- | --- | --- |
+| Base locale Drift | `pending_captures.json` | La file contient quelques lignes ; une base embarquée serait une dépendance permanente pour un gain non mesurable (ADR-034) |
+| `core/sync/` | absent | La synchronisation multi-appareils n'est pas dans le périmètre du MVP (TODO D6) |
+| `core/i18n/` | chaînes en dur | Un seul marché à ce stade ; l'extraction ARB est mécanique le jour venu (TODO D11) |
+| `platform/` | absent | Aucun widget d'écran verrouillé ni intégration Watch/CarPlay dans le MVP |
+| Découpage `domain/data/application/presentation` par feature | contrôleur + écrans | Quatre couches pour trois classes seraient de la cérémonie ; le découpage revient quand une feature le justifie |
+
 ### 6.3 Flux de données côté client
 
 ```mermaid

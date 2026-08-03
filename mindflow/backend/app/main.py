@@ -56,13 +56,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(CorrelationMiddleware)
     register_error_handlers(app)
 
-    from app.api.v1 import captures, entries, health, me, projects
+    from app.api.v1 import captures, entries, health, me, projects, storage
 
     app.include_router(health.router, tags=["health"])
     app.include_router(me.router, prefix=settings.api_prefix, tags=["me"])
     app.include_router(captures.router, prefix=settings.api_prefix, tags=["captures"])
     app.include_router(entries.router, prefix=settings.api_prefix, tags=["entries"])
     app.include_router(projects.router, prefix=settings.api_prefix, tags=["projects"])
+    if settings.storage_backend == "local":
+        # Local-only: lets the client follow the same signed-URL flow it will use
+        # against Supabase Storage in production.
+        app.include_router(storage.router, prefix=settings.api_prefix)
 
     @app.get("/metrics", include_in_schema=False)
     async def prometheus_metrics() -> Response:

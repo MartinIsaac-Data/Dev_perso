@@ -1,10 +1,10 @@
 # MindFlow AI — TODO
 
-> État à la clôture de la **phase 0 (conception)**. Ce document recense ce qui reste
+> État à la clôture de la **phase 1 (MVP)**. Ce document recense ce qui reste
 > à faire, ce qui reste à décider, et ce qui a été délibérément laissé de côté.
 > Il est mis à jour à chaque fin de phase.
 
-**Dernière mise à jour** : 2026-08-02 · Clôture de la phase 0
+**Dernière mise à jour** : 2026-08-03 · Clôture de la phase 1
 
 **Légende de priorité**
 
@@ -14,6 +14,26 @@
 | 🟠 | Important — à traiter pendant la phase 1 |
 | 🟡 | Souhaitable — à traiter avant l'ouverture publique |
 | ⚪ | Différé — consigné pour ne pas être oublié |
+
+---
+
+## 0. Dette ouverte par la phase 1
+
+Ce que le MVP laisse en l'état, constaté à la livraison plutôt qu'anticipé.
+
+| # | Élément | Priorité | Pourquoi maintenant |
+| --- | --- | --- | --- |
+| D1 | Corpus d'évaluation annoté (AI.md §7) | 🔴 | Sans lui, toute modification de prompt est un pari. Préalable à Q1 et Q2 |
+| D2 | Reprise automatique des captures en mode dégradé | 🔴 | Elles ne sont aujourd'hui **jamais** reprises : le quota différé devient un abandon |
+| D3 | Budget de coût par compte | 🟠 | Le prix par jeton est instrumenté, aucun plafond n'est appliqué |
+| D4 | RAG (AI.md §6) | 🟠 | Le rattachement à un projet repose sur une correspondance floue de libellés ; cela plafonnera |
+| D5 | Notifications d'échéance | 🟠 | Une tâche extraite mais jamais rappelée n'a presque aucune valeur d'usage |
+| D6 | Synchronisation multi-appareils (API.md §9) | 🟠 | La file locale ne couvre que « pas encore parti », pas « modifié ailleurs » |
+| D7 | Tests de bout en bout du client contre un back-end réel | 🟠 | Les tests actuels couvrent la logique, pas l'assemblage |
+| D8 | Pagination par curseur exposée au client | 🟡 | L'API la fournit ; le client charge une page fixe |
+| D9 | Purge des fichiers audio orphelins du stockage objet | 🟡 | Une suppression de capture retire la ligne ; un échec de suppression d'objet n'est pas retenté |
+| D10 | Exécution locale de `docker compose` | 🟡 | Jamais lancée faute de démon Docker en environnement de développement ; seule la CI la valide |
+| D11 | Traduction des messages d'erreur | ⚪ | Tout est en français en dur ; à reprendre au premier marché non francophone |
 
 ---
 

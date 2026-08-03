@@ -1,0 +1,166 @@
+# MindFlow backend CI (Architecture.md §13.2).
+#
+# Stage order is chosen so the cheapest gate fails first: a formatting error must
+# not wait on a database container. Every gate here is blocking — a pipeline that
+# reports problems without stopping the merge is a dashboard, not a gate.
+
+name: mindflow-backend
+
+on:
+  push:
+    branches: [main]
+    paths: ["mindflow/backend/**", ".github/workflows/mindflow-backend.yml"]
+  pull_request:
+    paths: ["mindflow/backend/**", ".github/workflows/mindflow-backend.yml"]
+
+concurrency:
+  group: mindflow-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: mindflow/backend
+
+env:
+  UV_VERSION: "0.5.11"
+
+jobs:
+  # ~90 s. Lint, types and — the one that matters — the architecture contracts.
+  # Without import-linter blocking, the modular monolith of ADR-001 degrades into
+  # a plain monolith within months.
+  static:
+    name: Lint, types, architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --all-groups
+      - name: Format
+        run: uv run ruff format --check app tests migrations
+      - name: Lint
+        run: uv run ruff check app tests migrations
+      - name: Types
+        run: uv run mypy app
+      - name: Architecture contracts
+        run: uv run lint-imports
+
+  tests:
+    name: Tests (real PostgreSQL)
+    runs-on: ubuntu-latest
+    needs: static
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mindflow_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      # A real PostgreSQL, not a substitute: RLS, partial indexes and SET LOCAL
+      # semantics are exactly what the tests need to prove (Sprint01 DoD).
+      MINDFLOW_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/mindflow_test
+      MINDFLOW_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --all-groups
+
+      - name: Migrations apply and roll back
+        env:
+          MINDFLOW_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/mindflow_test
+        run: |
+          uv run alembic upgrade head
+          # Every migration must have a working downgrade: a rollback is not
+          # something to improvise during an incident (Database.md §11.2).
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
+      - name: Test suite
+        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Coverage floor on the domain
+        run: uv run coverage report --include="app/domain/*" --fail-under=85
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: mindflow/backend/coverage.xml
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    needs: static
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --all-groups
+
+      - name: Dependency vulnerabilities
+        run: uv run --with pip-audit pip-audit --strict || exit 1
+
+      - name: Static analysis
+        run: uv run --with bandit bandit -r app -ll -x app/infra/ai/prompts.py
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  image:
+    name: Build image
+    runs-on: ubuntu-latest
+    needs: [tests, security]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: mindflow/backend
+          target: runtime
+          push: false
+          load: true
+          tags: mindflow-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Image vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: mindflow-backend:${{ github.sha }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: Smoke test the image
+        run: |
+          docker run --rm -d --name smoke -p 8000:8000 \
+            -e MINDFLOW_ENV=local mindflow-backend:${{ github.sha }}
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8000/health && break || sleep 2
+          done
+          curl -fsS http://localhost:8000/health
+          curl -fsS http://localhost:8000/openapi.json > /dev/null
+          docker stop smoke

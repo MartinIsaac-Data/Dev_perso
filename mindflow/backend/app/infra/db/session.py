@@ -67,19 +67,44 @@ def _factory() -> async_sessionmaker[AsyncSession]:
     return _sessionmaker
 
 
+async def set_tenant_context(
+    session: AsyncSession,
+    *,
+    account_id: uuid.UUID | str | None = None,
+    auth_subject: str | None = None,
+) -> None:
+    """Post the RLS context for the current transaction.
+
+    `set_config(..., true)` is the function form of `SET LOCAL`: scoped to the
+    transaction, released on commit or rollback. The non-local form would leak
+    one tenant's context into the next request served by the same pooled
+    connection.
+    """
+    if account_id is not None:
+        await session.execute(
+            text("SELECT set_config('app.account_id', :value, true)"),
+            {"value": str(account_id)},
+        )
+    if auth_subject is not None:
+        await session.execute(
+            text("SELECT set_config('app.auth_subject', :value, true)"),
+            {"value": auth_subject},
+        )
+
+
 @asynccontextmanager
-async def tenant_session(account_id: uuid.UUID | str | None) -> AsyncIterator[AsyncSession]:
+async def tenant_session(
+    account_id: uuid.UUID | str | None,
+    *,
+    auth_subject: str | None = None,
+) -> AsyncIterator[AsyncSession]:
     """Open a session whose transaction carries the RLS tenant context.
 
     Passing `None` opens a session with no tenant context: under RLS that sees
     nothing, which is the safe default for anonymous paths.
     """
     async with _factory()() as session, session.begin():
-        if account_id is not None:
-            await session.execute(
-                text("SELECT set_config('app.account_id', :account_id, true)"),
-                {"account_id": str(account_id)},
-            )
+        await set_tenant_context(session, account_id=account_id, auth_subject=auth_subject)
         yield session
 
 

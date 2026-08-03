@@ -1,0 +1,110 @@
+# Local stack. `docker compose up` gives a working MindFlow with no external
+# account: fake AI backends, local object storage, and the same signed-URL upload
+# flow the production path uses.
+#
+# To exercise the real pipeline, set MINDFLOW_STT_BACKEND / MINDFLOW_LLM_BACKEND
+# and the matching API key in backend/.env.
+
+name: mindflow
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: mindflow
+      POSTGRES_PASSWORD: mindflow
+      POSTGRES_DB: mindflow
+    ports: ["5432:5432"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` alone returns healthy before the database accepts queries.
+      test: ["CMD-SHELL", "pg_isready -U mindflow -d mindflow && psql -U mindflow -d mindflow -c 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Migrations run as a separate one-shot service rather than in the API's
+  # entrypoint: with more than one API replica, an entrypoint migration is a
+  # race between replicas.
+  migrate:
+    build:
+      context: ./backend
+      target: runtime
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      MINDFLOW_ENV: local
+      MINDFLOW_DATABASE_URL: postgresql+asyncpg://mindflow:mindflow@postgres:5432/mindflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      target: runtime
+    ports: ["8000:8000"]
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      MINDFLOW_ENV: local
+      MINDFLOW_DATABASE_URL: postgresql+asyncpg://mindflow:mindflow@postgres:5432/mindflow
+      MINDFLOW_REDIS_URL: redis://redis:6379/0
+      MINDFLOW_QUEUE_BACKEND: arq
+      MINDFLOW_STORAGE_BACKEND: local
+      MINDFLOW_LOG_FORMAT: console
+    volumes:
+      - object_data:/var/lib/mindflow/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./backend
+      target: runtime
+    command: ["arq", "app.workers.settings.WorkerSettings"]
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      MINDFLOW_ENV: local
+      MINDFLOW_DATABASE_URL: postgresql+asyncpg://mindflow:mindflow@postgres:5432/mindflow
+      MINDFLOW_REDIS_URL: redis://redis:6379/0
+      MINDFLOW_STORAGE_BACKEND: local
+      MINDFLOW_LOG_FORMAT: console
+    volumes:
+      # Shares the object root with the API: the worker reads the audio the API
+      # never touched. With Supabase Storage this volume is not needed.
+      - object_data:/var/lib/mindflow/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  object_data:

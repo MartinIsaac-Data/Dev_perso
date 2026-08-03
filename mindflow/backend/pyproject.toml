@@ -58,6 +58,9 @@ ignore = [
 "migrations/*" = ["E501", "N999", "S608"]
 # `UUID as PgUUID` disambiguates the dialect type from uuid.UUID; N811 misreads it.
 "app/infra/db/models/*" = ["N811"]
+# French typography in prompt text is deliberate — the prompt is the product,
+# not source code to be normalised into ASCII.
+"app/infra/ai/prompts.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.11"

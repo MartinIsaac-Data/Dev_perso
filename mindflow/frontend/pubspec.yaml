@@ -1,0 +1,49 @@
+name: mindflow
+description: MindFlow AI — capture vocale, transcription et extraction structurée.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management (ADR-014). Declarative, testable without a widget tree.
+  flutter_riverpod: ^2.6.1
+
+  # Routing
+  go_router: ^14.6.2
+
+  # Auth (ADR-029). The client talks to Supabase for identity only; every
+  # business call goes to the MindFlow API with the Supabase access token.
+  supabase_flutter: ^2.8.0
+
+  # HTTP
+  dio: ^5.7.0
+
+  # Audio capture and playback. `record` writes straight to a file, which is what
+  # lets the capture survive the app being killed mid-recording (ADR-009).
+  record: ^5.1.2
+  just_audio: ^0.9.42
+  path_provider: ^2.1.5
+
+  # The IANA zone name of the device. `DateTime.timeZoneName` only yields an
+  # abbreviation ("CEST"), which is ambiguous and unusable for the deterministic
+  # date resolution the backend performs (ADR-020).
+  flutter_timezone: ^3.0.1
+
+  intl: ^0.19.0
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true

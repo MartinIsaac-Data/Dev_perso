@@ -1121,3 +1121,84 @@ de la suite.
 **Coût accepté.** Un rôle de plus à provisionner dans chaque environnement, et une
 configuration de connexion qui ne peut pas être « simplifiée » en superutilisateur
 sans faire échouer les tests — ce qui est l'effet recherché.
+
+<a id="adr-034"></a>
+## ADR-034 — File d'attente des captures persistée sur l'appareil
+
+**Statut** ✅ Acceptée · Phase 1 · **Complète** [ADR-009](#adr-009)
+
+**Contexte.** ADR-009 rend le serveur idempotent sur `client_capture_id` : rejouer
+une déclaration ne crée pas de doublon. Cela règle la moitié du problème. L'autre
+moitié est côté client : si l'application est tuée entre l'arrêt de l'enregistrement
+et l'accusé de réception du serveur, l'idempotence serveur ne sert à rien — personne
+ne rejouera jamais l'appel. Or le métro, l'ascenseur et l'avion sont exactement les
+lieux où l'on capture une pensée.
+
+**Décision.** L'enregistrement est écrit dans un fichier avant tout appel réseau, et
+une ligne est ajoutée à `pending_captures.json` **avant** la déclaration. La ligne
+n'est retirée qu'après le `complete` accepté par le serveur. Le tableau de bord
+rejoue la file à chaque affichage ; l'écran de capture propose un rejeu manuel.
+
+Le rejeu repart de l'étape `declared` même si l'envoi avait réussi : chaque appel
+serveur étant idempotent, rejouer trop tôt est sûr, alors que deviner où l'échec
+s'est produit ne l'est pas.
+
+**Alternative écartée.** SQLite sur l'appareil. La file contient une poignée de
+lignes et subit une écriture par capture ; une base embarquée serait une dépendance
+à maintenir pour toujours au profit d'un gain non mesurable.
+
+**Coût accepté.** Un fichier JSON réécrit intégralement à chaque modification —
+acceptable à cette volumétrie, à revoir si la file dépasse quelques centaines de
+lignes. Une écriture interrompue produit un JSON tronqué : le chargeur le détecte,
+supprime le fichier et repart à vide plutôt que de bloquer la file définitivement.
+Les fichiers audio, eux, survivent.
+
+**Réexamen.** Si la synchronisation multi-appareils (Roadmap v0.4) impose un état
+local plus riche que « ce qui n'est pas encore parti ».
+
+<a id="adr-035"></a>
+## ADR-035 — Le fuseau IANA de l'appareil accompagne chaque capture
+
+**Statut** ✅ Acceptée · Phase 1 · **Complète** [ADR-020](#adr-020)
+
+**Contexte.** ADR-020 confie la résolution des dates à un module déterministe côté
+serveur. Ce module ne peut résoudre « jeudi » ou « fin de mois » qu'en connaissant le
+fuseau dans lequel les mots ont été prononcés. `DateTime.timeZoneName` en Dart ne
+renvoie qu'une abréviation (« CEST »), ambiguë entre plusieurs zones et muette sur
+les règles de changement d'heure du mois prochain.
+
+**Décision.** Le client résout le nom IANA (`Europe/Paris`) via `flutter_timezone`
+et l'envoie dans `capture_timezone` à la déclaration. En cas d'échec de la
+plateforme, repli sur `Europe/Paris` — un fuseau erroné décale une échéance de
+quelques heures, refuser d'enregistrer coûterait la pensée entière.
+
+**Coût accepté.** Une dépendance de plus, et un repli qui peut être faux pour un
+utilisateur hors d'Europe dont la plateforme ne répond pas. Le champ est stocké sur
+la capture : une résolution erronée reste auditable et re-calculable.
+
+<a id="adr-036"></a>
+## ADR-036 — Mode d'authentification locale pour le développement
+
+**Statut** ✅ Acceptée · Phase 1 · **Complète** [ADR-029](#adr-029)
+
+**Contexte.** Exiger un projet Supabase pour lancer `docker compose up` et le client
+en local ajoute un compte tiers au chemin de démarrage. Un projet dont on ne peut pas
+faire tourner la pile en cinq minutes est un projet où l'on teste moins.
+
+**Décision.** Un indicateur de compilation `MINDFLOW_LOCAL_AUTH=true` remplace le
+dépôt Supabase par une identité locale produisant le même jeton non signé que
+`make_local_token` côté serveur. Trois verrous indépendants empêchent que cela
+devienne un contournement d'authentification :
+
+1. `Settings` refuse de démarrer en `staging` ou `production` sans méthode de
+   vérification de jeton configurée ;
+2. `TokenVerifier` ne saute la vérification de signature qu'en `local` et `test` ;
+3. l'indicateur est un constant de compilation absent des builds de production.
+
+**Alternative écartée.** Un compte de démonstration partagé sur un vrai projet
+Supabase. Cela déplace le secret dans le dépôt au lieu de le supprimer.
+
+**Coût accepté.** Un chemin d'authentification supplémentaire à maintenir, et une
+règle à ne jamais assouplir : si un jour le back-end acceptait des jetons non
+vérifiés hors `local`/`test`, ce mode deviendrait une porte ouverte. Le test
+`test_production_requires_an_auth_verification_method` garde cette propriété.
