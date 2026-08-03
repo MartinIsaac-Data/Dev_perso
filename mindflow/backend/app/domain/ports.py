@@ -330,6 +330,11 @@ class ChatPort(ABC):
     def stream(self, request: ChatRequest) -> AsyncIterator[ChatChunk]: ...
 
     async def complete(self, request: ChatRequest) -> ChatResponse:
+        """Collect a stream into one response.
+
+        Implemented here rather than per adapter so that five providers cannot
+        drift into five subtly different notions of when an answer is finished.
+        """
         parts: list[str] = []
         usage = AiUsage(model=self.model)
         finish = "stop"
@@ -338,7 +343,14 @@ class ChatPort(ABC):
             if chunk.done:
                 usage = chunk.usage or usage
                 finish = chunk.finish_reason or finish
-        return ChatResponse(text="".join(parts), usage=usage, finish_reason=finish)
+        return ChatResponse(
+            text="".join(parts),
+            usage=usage,
+            finish_reason=finish,
+            # Every adapter normalises its provider's decline signal to this one
+            # word, so the caller never learns which provider refused.
+            refused=finish == "refusal",
+        )
 
     async def health(self) -> bool:
         return True
