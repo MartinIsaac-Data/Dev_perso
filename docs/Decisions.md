@@ -80,6 +80,7 @@
 | [059](#adr-059) | Le journal d'audit est partitionné par mois | ✅ | 4 |
 | [060](#adr-060) | Les dossiers de plateforme que l'on modifie sont du source | ✅ | 4 |
 | [061](#adr-061) | Le stockage local est un port, pas `dart:io` | ✅ | 4 |
+| [062](#adr-062) | L'analyse en réunion se déclenche sur un signal, pas sur une horloge | ✅ | 4 |
 
 ---
 
@@ -2164,3 +2165,67 @@ vert qui ne marche pas.
 **Réexamen.** Si un jour le mode hors ligne doit conserver aussi les *notes*
 consultables — le vrai chantier B4 —, `DocumentStore` sera trop petit et le
 navigateur passera lui aussi à IndexedDB. Le port ne changera pas.
+
+---
+
+<a id="adr-062"></a>
+## ADR-062 — L'analyse en direct se déclenche sur un signal, pas sur une horloge
+
+**Statut** ✅ Acceptée · Phase 4 · **Applique** [ADR-047](#adr-047) · **Complète** [ADR-013](#adr-013)
+
+**Contexte.** Une réunion en direct produit du texte en continu. La façon
+évidente d'en tirer des actions est d'appeler un modèle à intervalle régulier —
+toutes les trente secondes, disons. Sur une réunion de quarante-cinq minutes,
+cela fait quatre-vingt-dix appels pour, typiquement, trois ou quatre engagements
+réellement pris.
+
+C'est le même problème qu'ADR-047, à un autre endroit : dépenser un appel là où
+il n'y a rien à analyser.
+
+**Décision.** L'analyse se déclenche sur `should_analyse`, une fonction pure :
+
+| Condition | Effet |
+| --- | --- |
+| Moins de 25 mots nouveaux | Jamais |
+| 70 mots nouveaux | Analyse |
+| Entre les deux, avec une **phrase d'engagement** | Analyse tout de suite |
+| À la clôture | Une dernière passe, quoi qu'il arrive |
+
+Les phrases d'engagement — « on décide », « il faut que », « je m'en occupe »,
+« d'ici lundi » — sont détectées sur du texte aplati (accents, apostrophes,
+traits d'union), comme le routeur d'intentions de la phase 3, parce que la
+dictée ne restitue pas la ponctuation de façon fiable.
+
+**La passe de clôture n'est pas une politesse.** Les trente dernières secondes
+sont le moment le plus probable pour un engagement : c'est là que les gens
+conviennent de ce qui se passe ensuite.
+
+**Décision connexe : le recollement se fait sur les mots, pas sur les
+caractères.** Les blocs audio se chevauchent (ADR-013), donc une transcription
+répète la couture de la précédente. `stitch` supprime la répétition — ce qui
+**réécrit la fin du texte stocké**. Un décalage en caractères noté avant un
+recollement pointerait au milieu d'un mot après. D'où `analysed_words`, un
+compte de mots, que le recollement ne déplace jamais.
+
+**Le plancher de recollement est un compromis assumé.** Une couture de moins de
+douze caractères n'est pas supprimée : « de » est un suffixe de presque tout, et
+un plancher assez bas pour l'attraper se mettrait à effacer de vrais mots. Le
+coût est un léger bégaiement dans la transcription, visible et inoffensif ; le
+coût inverse est un mot supprimé, invisible et faux. Un test épingle ce choix
+pour qu'il reste une décision.
+
+**Alternative écartée.** Analyser à chaque bloc. Plus simple, prévisible, et
+vingt fois plus cher pour un résultat identique sur les longs passages où
+personne ne décide rien — c'est-à-dire la plus grande partie d'une réunion.
+
+**Coût accepté.** Un engagement formulé sans aucune des phrases connues, dans un
+passage court, attend le seuil de mots. Le retard maximal est d'environ trente
+secondes de parole, et la passe de clôture le rattrape de toute façon. La liste
+de phrases est française et devra être traduite en même temps que l'interface
+(E11).
+
+**Réexamen.** Quand `meeting_analyses_total` sera mesuré en production. Le
+signal à surveiller est simple : ce compteur doit croître avec le nombre
+d'**engagements**, pas avec les minutes de réunion. S'il suit les minutes, la
+logique de déclenchement a cessé de fonctionner et chaque réunion paie une
+horloge.

@@ -25,6 +25,8 @@ heures du matin. Voici ceux qui déclenchent une action.
 | `integration_syncs_total{outcome="failed"}` | > 20 % sur 1 h | Un fournisseur externe est en panne ou nos jetons sont révoqués | Regarder `last_error` par connexion |
 | `reminder_delivery_lag_seconds` p95 | > 120 s | Les rappels arrivent en retard, ce que l'utilisateur remarque immédiatement | Vérifier le worker planifié et Redis |
 | `audit_partition_gap` | `true` | Le mois prochain n'a pas de partition. **Chaque insertion d'audit échouera** | `SELECT ensure_audit_partitions(3)` |
+| `meeting_analyses_total` | Suit les **minutes** de réunion | Le déclenchement sur signal a cessé de fonctionner : chaque réunion paie une horloge | Vérifier `domain/meeting.should_analyse` |
+| `meeting_blocks_total{outcome="failed"}` | > 5 % | Les transcriptions de réunion ont des trous, donc les comptes rendus sont confiants et incomplets | Vérifier le fournisseur STT |
 
 **Le dernier est le plus insidieux** : il n'a aucun symptôme avant le 1er du
 mois, où il en a beaucoup d'un coup.

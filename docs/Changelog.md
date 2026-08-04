@@ -30,6 +30,89 @@ Rien pour l'instant.
 
 ---
 
+## [0.6.0] — 2026-08-04
+
+**L'IA en réunion.** La table `meeting_session` existait depuis la 0.5.0 et
+n'était remplie par rien. 892 tests côté serveur, 166 côté client.
+
+### Ajouté — Domaine (`domain/meeting.py`)
+
+Trois problèmes, trois fonctions pures, aucune E/S — ce qui est la seule façon
+de tester cette fonctionnalité du tout : l'alternative demanderait un micro, un
+fournisseur de parole et quarante-cinq minutes.
+
+- **Recollement.** Les blocs audio se chevauchent (ADR-013), donc une
+  transcription répète la couture de la précédente. `stitch` trouve le plus long
+  suffixe de ce qu'on a qui soit aussi un préfixe de ce qui arrive.
+- **Déclenchement.** `should_analyse` : jamais sous 25 mots nouveaux, toujours
+  au-delà de 70, et immédiatement sur une **phrase d'engagement** (« on décide »,
+  « je m'en occupe », « d'ici lundi »). Détectées sur du texte aplati, comme le
+  routeur d'intentions de la phase 3, parce que la dictée ne restitue pas la
+  ponctuation.
+- **Déduplication.** L'extraction incrémentale repropose ce qu'elle a déjà
+  proposé ; une liste qui se répète est une liste que personne ne lit jusqu'au
+  bout.
+
+39 tests unitaires sur ces trois fonctions seules.
+
+### Ajouté — Prompts, service, API, écran
+
+- `meeting_live` et `meeting_summary`. Le premier a pour instruction principale
+  de **ne rien renvoyer** quand rien n'a été décidé — le cas le plus fréquent.
+- `MeetingService`, avec un contrat de dégradation plus strict que le reste du
+  produit (voir ci-dessous).
+- Neuf routes (`API.md` §18), dont un flux SSE pour un second écran.
+- Un écran de réunion : chronomètre, panneau en direct, compte rendu.
+- Migration 0009 : `analysed_words` et un index partiel sur les réunions en
+  cours.
+
+### Le contrat de dégradation
+
+**Une fonctionnalité en direct se dégrade en enregistrement, jamais en panne.**
+Quelqu'un est dans une pièce avec d'autres gens ; la réunion ne s'interrompt pas
+pour attendre notre fournisseur.
+
+| Ce qui échoue | Ce qui se passe |
+| --- | --- |
+| La transcription d'un bloc | Un trou, le bloc suivant arrive quand même |
+| Une analyse | `analysed_words` n'avance pas : la fenêtre est réessayée |
+| Un refus du modèle | La fenêtre avance : la réessayer serait refusée à l'identique |
+| Le compte rendu final | Rapport **dégradé** : ce que la passe en direct avait trouvé, et il le dit |
+
+Les blocs perdus sont **affichés**. Une transcription trouée produit un compte
+rendu confiant et incomplet, et seule la personne présente peut juger si cela
+compte.
+
+### Décisions
+
+- [ADR-062] L'analyse en direct se déclenche sur un signal, pas sur une horloge
+
+Une horloge à trente secondes ferait quatre-vingt-dix appels sur une réunion de
+trois quarts d'heure, pour trois ou quatre engagements réellement pris. C'est
+ADR-047 appliqué à un autre endroit.
+
+### Un compromis épinglé par un test
+
+Une couture de moins de douze caractères n'est pas supprimée : « de » est un
+suffixe de presque tout, et un plancher assez bas pour l'attraper effacerait de
+vrais mots. Le coût est un léger bégaiement — visible et inoffensif — contre un
+mot supprimé, invisible et faux. Un test fixe ce choix pour qu'il reste une
+décision plutôt qu'un oubli.
+
+### Ce qui reste ouvert
+
+- **Aucune réunion réelle n'a été transcrite** (B17). Le service est testé contre
+  un transcripteur et un modèle scriptés ; les seuils de recollement sont réglés
+  sur des chevauchements supposés.
+- Le client ne consomme pas encore le flux SSE : il reçoit ses suggestions sur
+  la réponse de chaque bloc, ce qui suffit à l'appareil qui enregistre (B15).
+- Les phrases de déclenchement sont françaises (B16).
+
+**De la liste d'origine de la phase 4, il ne reste que B4** : le mode hors ligne
+au-delà de la capture.
+
+---
+
 ## [0.5.4] — 2026-08-04
 
 **Le web peut capturer.** La 0.5.3 livrait un build web qui compilait,

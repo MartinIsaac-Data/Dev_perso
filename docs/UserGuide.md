@@ -108,6 +108,33 @@ Un lien de partage donne accès à **une** note, en lecture, à qui l'a.
 
 ---
 
+## 4 bis. Pendant une réunion
+
+Démarrez, posez le téléphone, parlez normalement.
+
+- **Ce qui est relevé** : les décisions prises, les actions convenues avec leur
+  responsable si un nom a été prononcé, et les questions restées sans réponse.
+- **Le panneau reste souvent vide, et c'est normal.** Il ne se remplit que quand
+  quelque chose a été décidé. Un assistant qui propose sans arrêt est un
+  assistant qu'on cesse de lire.
+- **Le compte rendu arrive à la fin**, en quelques secondes, parce que la
+  transcription s'est faite au fil de la réunion.
+
+**Si le réseau lâche, la réunion continue.** Les passages qui n'ont pas pu être
+transcrits vous sont signalés, pour que vous sachiez sur quels moments le compte
+rendu sera muet.
+
+**Si le compte rendu ne peut pas être rédigé**, MindFlow vous donne quand même
+ce qu'il avait relevé pendant la réunion, et vous dit que c'est incomplet.
+
+**Si vous fermez l'application par erreur**, la réunion vous est proposée à la
+reprise : la transcription n'était pas dans votre téléphone.
+
+**Une réunion peut ne rien produire.** MindFlow le dit plutôt que d'inventer
+trois phrases.
+
+---
+
 ## 5. Connecter vos outils
 
 | Service | Ce que MindFlow fait |

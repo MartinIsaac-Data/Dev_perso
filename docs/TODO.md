@@ -219,7 +219,7 @@ raison, indépendamment de leur difficulté.
 | --- | --- | --- | --- |
 | B1 | ~~`partition_job` n'existe pas~~ | ✅ **Fait** | Quotidien à 03:11 et au démarrage du worker, avec rétention désactivée par défaut. 16 tests, dont un qui épingle le comportement PostgreSQL dont tout le reste découle |
 | B2 | ~~`sync_job` n'existe pas~~ | ✅ **Fait** | Toutes les 5 minutes, inter-locataires, avec retard exponentiel plafonné à 1 h et abandon après six échecs. 33 tests |
-| B3 | **IA temps réel en réunion non implémentée.** `meeting_session` est créée et n'est remplie par rien | 🔴 Haute | Demande un canal de transcription en flux et une extraction incrémentale — un chantier de la taille d'une phase, pas d'un module. Cadré en `RoadmapV2.md` §5 |
+| B3 | ~~IA temps réel en réunion non implémentée~~ | ✅ **Fait** | Domaine pur (recollement, déclenchement, déduplication), deux prompts, service, neuf routes et un écran. 60 tests côté serveur, 14 côté client |
 | B4 | **Mode hors ligne incomplet.** La capture l'est sur toutes les plateformes, y compris le web ; le reste ne l'est nulle part | 🟠 Moyenne | Consulter, cocher, commenter et chercher exigent un miroir local et une file de mutations. Dette E6, ouverte depuis la phase 2. Cadré en `RoadmapV2.md` §6 |
 | B5 | ~~Aucun écran Flutter d'entreprise~~ | ✅ **Fait** | Espaces, équipe, mentions, intégrations, administration, plus le panneau de commentaires et la feuille de partage sur le détail d'une note. 39 tests |
 | B6 | ~~Aucun build Desktop ni Web produit~~ | ⚠️ **Partiel** | Web et Linux compilés et vérifiés. **Windows et macOS restent non compilés** : Flutter édite les liens contre le SDK de la plateforme, il n'y a pas de compilation croisée, et aucun hôte Windows ou macOS n'est disponible ici. Scaffoldés, script de build écrit, matrice CI câblée — jamais exécutée |
@@ -230,14 +230,14 @@ raison, indépendamment de leur difficulté.
 | B11 | **Aucune restauration de sauvegarde testée**, aucun manifeste de déploiement | 🔴 Haute | Le démon Docker est resté indisponible pendant les quatre phases (A8). Une sauvegarde jamais restaurée n'est pas une sauvegarde |
 | B12 | **Un seul propriétaire de compte peut tout** — aucune séparation des pouvoirs | 🟡 Basse | Acceptable à cette échelle ; une organisation de plusieurs centaines de personnes exigera une validation à deux |
 
-**B1, B2 et B5 sont traités, B6 à moitié.** Le déséquilibre énoncé plus haut —
-une API complète et invisible — est levé, la seule échéance datée du produit est
-supprimée, la synchronisation n'attend plus un clic, et le client compile pour
-le web et pour Linux.
+**B1, B2, B3 et B5 sont traités, B6 à moitié.** Le déséquilibre énoncé plus
+haut — une API complète et invisible — est levé, la seule échéance datée du
+produit est supprimée, la synchronisation n'attend plus un clic, le client
+compile pour le web et pour Linux, et l'IA en réunion existe.
 
-**Ce qui reste : B3 (temps réel en réunion) et B4 (hors ligne au-delà de la
-capture)**, deux chantiers de la taille d'une phase, cadrés en `RoadmapV2.md` §5
-et §6.
+**Ce qui reste de la liste d'origine : B4**, le hors ligne au-delà de la
+capture. C'est le dernier chantier de la taille d'une phase, cadré en
+`RoadmapV2.md` §6.
 
 **La capture web est réparée** (ADR-061). Le stockage local est passé derrière
 deux ports, avec IndexedDB et `localStorage` côté navigateur ; l'application
@@ -262,6 +262,9 @@ document en faveur d'une vérification qui exécute le produit.
 | --- | --- | --- | --- |
 | B13 | Aucune signature de code ni notariat | 🟠 Moyenne | Un `.app` non notarié est refusé par Gatekeeper, un `.exe` non signé déclenche SmartScreen. Demande des certificats, donc un budget et une entité juridique |
 | B14 | Le jeu `record` est figé à son niveau de 2024 | 🟡 Basse | Le seul jeu de versions cohérent sous Flutter 3.27. Le débloquer demande `record ^7`, qui demande Flutter ≥ 3.44.8 |
+| B15 | Le client ne consomme pas `GET /v1/meetings/{id}/stream` | 🟡 Basse | L'écran de réunion reçoit ses suggestions sur la réponse de chaque bloc, ce qui suffit à l'appareil qui enregistre. Le flux SSE existe et sert au second écran, qui n'est pas construit |
+| B16 | Les phrases de déclenchement en réunion sont en français uniquement | 🟡 Basse | `_CUE_PHRASES` est une liste française. À traduire en même temps que l'interface (E11) ; en attendant, une réunion en anglais retombe sur le seuil de mots, qui fonctionne mais réagit plus tard |
+| B17 | Aucune réunion réelle n'a été transcrite | 🔴 Haute | Le service est testé contre un transcripteur et un modèle scriptés. Ce qu'un vrai fournisseur de parole rend sur une pièce à quatre personnes reste inconnu, et le recollement est réglé sur des chevauchements supposés |
 
 **B8 reste le risque le plus sous-estimé.** `sync_job` déclenche maintenant sept
 connecteurs qui n'ont jamais parlé à un vrai serveur. Le job est testé contre un
@@ -293,8 +296,9 @@ Les choses à faire en premier, dans l'ordre.
 | 4 | Prototyper la RLS et le contexte de session (sprint 01, R1) | Le risque technique le plus élevé du premier sprint |
 | 5 | Arbitrer la durée du sprint 01 (2 ou 3 semaines) | Le backlog dépasse la capacité de 65 % — voir `Sprint01.md` §4 |
 | 6 | **Passer un appel réel à chacun des cinq fournisseurs** (A1) | Toute la couche IA repose sur des formats de fil vérifiés uniquement contre des simulations |
-| 7 | **Passer un vrai appel OAuth sur au moins un connecteur** (B8) | `sync_job` déclenche désormais sept adaptateurs écrits contre des documentations ; le premier contact réel dira lesquels sont faux |
-| 8 | **Faire tourner la matrice CI desktop une fois** (B6) | Windows et macOS sont écrits et jamais exécutés ; c'est la seule façon de savoir s'ils compilent |
+| 7 | **Transcrire une vraie réunion** (B17) | Le recollement est réglé sur des chevauchements supposés ; une pièce à quatre personnes dira si les seuils tiennent |
+| 8 | **Passer un vrai appel OAuth sur au moins un connecteur** (B8) | `sync_job` déclenche désormais sept adaptateurs écrits contre des documentations ; le premier contact réel dira lesquels sont faux |
+| 9 | **Faire tourner la matrice CI desktop une fois** (B6) | Windows et macOS sont écrits et jamais exécutés ; c'est la seule façon de savoir s'ils compilent |
 
 ---
 

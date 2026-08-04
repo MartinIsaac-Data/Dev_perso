@@ -1692,7 +1692,7 @@ erDiagram
 | `share_link` | Lien public en lecture | Condensat SHA-256, compteur d'ouvertures |
 | `integration_connection` | Un service connecté | Jetons **chiffrés**, `consecutive_failures` |
 | `external_link` | Correspondance local ↔ distant | Les deux empreintes de la dernière sync |
-| `meeting_session` | Une réunion | **Créée, non utilisée** — voir `Architecture.md` §17.5 |
+| `meeting_session` | Une réunion en direct | Transcription provisoire, suggestions en JSONB, `analysed_words` |
 
 **`entry.workspace_id` est la seule colonne ajoutée à une table existante.** Elle
 est nullable, sans valeur par défaut : l'ajout est une opération de catalogue, et
@@ -1801,3 +1801,44 @@ droits et la pose des privilèges par défaut.
 **C'est la deuxième fois que ce rôle produit un défaut invisible** (voir ADR-042).
 Le contrôle est désormais dans `DevOps.md` §2 : un travail inter-locataires qui
 renvoie systématiquement zéro est suspect, pas rassurant.
+
+
+---
+
+## 17. Extension de la phase 4 — la fenêtre de réunion
+
+Migration `0009_meeting_live_window`.
+
+`meeting_session` existait depuis 0007 et n'était jamais écrite : la table
+existait pour une fonctionnalité qui n'existait pas. La migration ajoute la
+seule colonne dont la fenêtre en direct a besoin, et l'index dont le chemin de
+reprise a besoin.
+
+| Ajout | Rôle |
+| --- | --- |
+| `analysed_words int NOT NULL DEFAULT 0` | Combien de mots de `live_transcript` un modèle a déjà lus |
+| `meeting_session_live_idx` partiel sur `status = 'live'` | « Ai-je une réunion à reprendre ? », posée à chaque démarrage |
+
+### 17.1 Pourquoi un compte de mots et pas un décalage
+
+Les blocs audio se chevauchent (ADR-013), donc une transcription répète la
+couture de la précédente et le recollement **réécrit la fin** de ce qui est
+stocké. Un décalage en caractères enregistré avant un recollement pointerait au
+milieu d'un mot après lui. Un compte de mots survit à la réécriture, parce que
+le recollement ne change jamais le nombre de mots complets qui précèdent la
+couture (ADR-062).
+
+### 17.2 Pourquoi l'index est partiel
+
+La question « ai-je une réunion à reprendre ? » ne se pose que sur `live`, et une
+réunion passe quelques minutes en direct contre des mois terminée. Indexer les
+lignes terminées coûterait de l'écriture pour une requête que personne ne fait.
+
+### 17.3 Ce qui reste provisoire
+
+`live_transcript` et `live_suggestions` sont provisoires par nature — le premier
+est réécrit à chaque recollement, le second est remplacé à chaque passe. Ils sont
+sur la session plutôt que dans `transcript` et `entry` pour cette raison : une
+transcription qui devient définitive et un panneau qui se réécrit toutes les
+trente secondes ne peuvent pas partager une table sans que l'une des deux
+sémantiques devienne un mensonge.

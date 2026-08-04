@@ -32,6 +32,7 @@
 15. [Surface phase 3](#15-surface-ajoutée-en-phase-3--assistant-recherche-sémantique-connaissances)
 16. [Surface phase 4](#16-surface-ajoutée-en-phase-4--organisation-collaboration-intégrations)
 17. [Administration](#17-surface-dadministration)
+18. [Réunions en direct](#18-réunions-en-direct)
 
 ---
 
@@ -1409,3 +1410,106 @@ elles-mêmes et n'est jamais relu.
 vient, **chaque insertion d'audit échouera** le premier du mois, sans aucun
 symptôme avant. C'est le seul champ de cette réponse qui prédit une panne au lieu
 de la constater.
+
+---
+
+## 18. Réunions en direct
+
+### 18.1 Catalogue
+
+| Méthode | Chemin | Rôle |
+| --- | --- | --- |
+| POST | `/v1/meetings` | Démarrer. Refuse une seconde réunion en cours |
+| GET | `/v1/meetings/live` | La réunion encore ouverte, ou `null` |
+| GET | `/v1/meetings` | Réunions récentes |
+| GET | `/v1/meetings/{id}` | Une réunion, transcription comprise |
+| POST | `/v1/meetings/{id}/audio` | Un bloc de l'enregistrement (multipart) |
+| POST | `/v1/meetings/{id}/text` | Du texte déjà transcrit par l'appareil |
+| GET | `/v1/meetings/{id}/stream` | SSE : suivre en direct depuis un second écran |
+| POST | `/v1/meetings/{id}/close` | Terminer et produire le compte rendu |
+| DELETE | `/v1/meetings/{id}` | Abandonner sans rien produire |
+
+### 18.2 Pourquoi des blocs et pas un WebSocket
+
+Un WebSocket demanderait son propre chemin d'authentification, sa propre reprise
+et sa propre configuration de proxy, en échange d'une latence dont cette
+fonctionnalité n'a pas besoin : un bloc toutes les trente secondes est largement
+dans la fenêtre où une suggestion sert encore dans la pièce.
+
+Un `POST` réutilise le jeton, les délais et le format d'erreur que le reste du
+produit possède déjà. Une connexion perdue devient une requête retentée plutôt
+qu'un protocole de reprise à écrire.
+
+### 18.3 Un bloc, et ce qu'il rend
+
+```json
+{ "data": { "meeting_id": "018f…", "word_count": 412,
+            "new_suggestions": [
+              { "kind": "action", "label": "Action",
+                "text": "relancer le DAF", "owner": "Marie",
+                "confidence": 0.9, "at_word": 400 } ] } }
+```
+
+**`new_suggestions` est le delta, pas la liste entière**, pour que le client
+anime exactement ce qui vient d'apparaître.
+
+**Un bloc dont la transcription échoue répond quand même `200`, sans nouvelle
+suggestion.** La réunion n'est pas finie, et transformer un hoquet de
+fournisseur en erreur ferait cesser d'envoyer au client — ce qui perdrait le
+reste de la réunion pour sauver un bloc.
+
+**`POST /text` existe pour les clients qui transcrivent sur l'appareil.** Un
+navigateur a l'API Web Speech, un téléphone a un moteur local ; les deux sont
+gratuits, privés et instantanés comparés à l'envoi d'audio. Ce n'est pas un
+raccourci : c'est le chemin préférable là où il existe.
+
+### 18.4 Le flux
+
+```
+event: suggestion
+data: {"kind":"decision","text":"Reporter au 12 janvier", …}
+
+event: transcript
+data: {"word_count":412}
+
+event: end
+data: {"status":"ended"}
+```
+
+**C'est un second écran, pas le canal principal.** Le client qui enregistre
+reçoit ses suggestions sur la réponse du bloc ; ce flux sert à suivre depuis un
+portable posé à côté du téléphone. Un client qui ne lit jamais ce flux est
+complet.
+
+### 18.5 La clôture
+
+```json
+{ "data": { "meeting": { … },
+            "report": { "summary": "…", "decisions": ["…"],
+                        "actions": [{"text":"…","owner":"Marie","due":"2026-06-12"}],
+                        "open_questions": ["…"],
+                        "degraded": false, "reason": "" } } }
+```
+
+**`degraded` n'est jamais masqué.** Il vaut `true` quand le compte rendu est ce
+que la passe en direct avait déjà trouvé plutôt qu'un texte rédigé — fournisseur
+indisponible, réunion trop courte, réponse illisible. Un rapport qui a l'air
+complet sans l'être est précisément l'échec que cette fonctionnalité doit
+éviter, et `reason` dit lequel des trois cas s'est produit.
+
+**Une réunion peut n'avoir produit aucune décision.** Le rapport le dit ; il
+n'invente pas trois phrases pour remplir l'écran.
+
+**Terminer est une requête, jamais un délai d'inactivité.** Une réunion qui se
+fermerait après cinq minutes sans bloc se fermerait pendant le long silence où
+quelqu'un lit un document.
+
+### 18.6 Erreurs propres au direct
+
+| Code | Statut | Quand |
+| --- | --- | --- |
+| `validation_failed` | 422 | Une réunion est déjà en cours ; réunion déjà terminée ; bloc trop volumineux |
+| `not_found` | 404 | Réunion inconnue — **ou celle de quelqu'un d'autre** |
+
+Une réunion appartient à la personne qui l'enregistre : celle d'un collègue
+n'est pas seulement interdite, elle n'est pas à voir.

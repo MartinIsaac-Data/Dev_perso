@@ -2172,7 +2172,7 @@ testable sans réseau — et testée, avec 35 cas.
 
 | Prévu | État |
 | --- | --- |
-| Table `meeting_session` | ✅ Créée, **jamais remplie** — aucun service temps réel |
+| IA temps réel en réunion | ✅ Domaine, prompts, service, API et écran. Voir §17.10 |
 | Mode hors ligne complet | ❌ Seule la capture est hors ligne, depuis la phase 1 |
 | Écrans Flutter d'entreprise | ✅ Espaces, équipe, mentions, intégrations, administration, commentaires, partage |
 | Version Desktop / Web | ❌ Flutter les cible ; aucun build n'a été produit |
@@ -2182,9 +2182,9 @@ testable sans réseau — et testée, avec 35 cas.
 
 | Builds Desktop et Web | ✅ Web et Linux produits et vérifiés ; Windows et macOS scaffoldés et câblés en CI. Voir §17.8 |
 
-**Ce qui reste ouvert tient en deux lignes** : le service temps réel de réunion
-et le mode hors ligne au-delà de la capture. Aucun n'est un module ; chacun est
-un chantier de la taille d'une phase, cadré en `RoadmapV2.md` §5 et §6.
+**Ce qui reste ouvert tient en une ligne** : le mode hors ligne au-delà de la
+capture — consulter, cocher, commenter et chercher sans réseau. Cadré en
+`RoadmapV2.md` §6.
 
 ### 17.6 Le job de partitionnement
 
@@ -2345,3 +2345,59 @@ que le mode hors ligne existe, parce qu'aucun test unitaire ne peut le voir.
 démarre sans réseau et la file de captures survit à la coupure. Elle ne conserve
 **pas** les notes déjà écrites pour consultation hors ligne : c'est le chantier
 B4, et il reste ouvert (`TODO.md`).
+
+### 17.10 L'IA en réunion
+
+```mermaid
+flowchart LR
+    MIC[Micro] -->|bloc de 30 s| API["POST /meetings/id/audio"]
+    API --> STT[TranscriberPort]
+    STT --> ST["stitch()<br/>retire la couture"]
+    ST --> CUE{{"should_analyse()<br/>pur"}}
+    CUE -->|non| WAIT([on attend])
+    CUE -->|oui| LLM[ChatPort · meeting_live]
+    LLM --> DEDUP["merge_suggestions()"]
+    DEDUP --> PANEL[Panneau en direct]
+    CLOSE["POST /close"] --> SUM[ChatPort · meeting_summary]
+```
+
+**Trois problèmes, trois fonctions pures.** Le recollement, le déclenchement et
+la déduplication vivent dans `domain/meeting.py` et ne font aucune E/S. C'est ce
+qui rend la fonctionnalité testable du tout : l'alternative serait un test qui
+demande un micro, un fournisseur de parole et quarante-cinq minutes. 39 tests
+unitaires sur ces trois fonctions seules.
+
+**L'analyse se déclenche sur un signal, pas sur une horloge** (ADR-062). Une
+horloge à trente secondes ferait quatre-vingt-dix appels sur une réunion de
+trois quarts d'heure, pour trois ou quatre engagements réellement pris.
+
+**Le contrat de dégradation est plus strict qu'ailleurs dans le produit :
+*une fonctionnalité en direct se dégrade en enregistrement, jamais en panne.***
+Quelqu'un est dans une pièce avec d'autres gens ; la réunion ne s'interrompt pas
+pour attendre notre fournisseur. Donc :
+
+| Ce qui échoue | Ce qui se passe |
+| --- | --- |
+| La transcription d'un bloc | Un trou dans la transcription, le bloc suivant arrive quand même |
+| Une analyse | `analysed_words` n'avance pas : la même fenêtre est réessayée au signal suivant |
+| Un refus du modèle | La fenêtre avance : la réessayer serait refusée à l'identique, pour toujours |
+| Le compte rendu final | Le rapport est **dégradé** : il liste ce que la passe en direct avait trouvé, et le dit |
+
+**Les blocs perdus sont affichés, pas masqués.** Une transcription trouée produit
+un compte rendu qui est confiant et incomplet, et seule la personne présente
+peut juger si cela compte.
+
+**Blocs `POST`, pas WebSocket.** Un WebSocket demanderait son propre chemin
+d'authentification, sa propre reprise et sa propre configuration de proxy, en
+échange d'une latence dont cette fonctionnalité n'a pas besoin : un bloc toutes
+les trente secondes est largement dans la fenêtre où une suggestion sert encore
+dans la pièce. Un `POST` réutilise le jeton, les délais et le format d'erreur
+que le reste du produit possède déjà, et une connexion perdue est une requête
+retentée plutôt qu'un protocole de reprise.
+
+**Le flux SSE est un second écran, pas le canal principal.** Il relit la ligne
+toutes les deux secondes plutôt que de s'abonner à un bus — une limite assumée :
+un bus de diffusion permettrait beaucoup de spectateurs par réunion, et rien
+n'indique que quiconque en veuille. Deux secondes sur une clé primaire coûtent
+peu ; un courtier de messages pour l'économiser serait un composant à exploiter
+pour toujours.
