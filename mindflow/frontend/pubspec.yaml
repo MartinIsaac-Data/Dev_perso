@@ -72,6 +72,12 @@ dependencies:
   intl: ^0.19.0
   uuid: ^4.5.1
 
+  # Browser bindings, used only by the web half of the storage layer
+  # (`core/storage/*_web.dart`). Pulled in on every platform because a
+  # conditional import still has to resolve, and never linked into a native
+  # build because nothing outside those files imports it.
+  web: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -80,4 +86,24 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Roboto, bundled rather than fetched.
+  #
+  # Flutter's web engine downloads its default font from `fonts.gstatic.com` at
+  # start-up. An application whose point is working without a network cannot
+  # begin by fetching its typeface from a third party — and when that fetch
+  # fails the interface renders *completely without text*, which is far worse
+  # than a fallback font. Verified in a headless browser, not assumed.
+  #
+  # Three weights, matching what the theme asks for: 400, 500 and 600/700.
+  # 512 kB in the bundle, against a hard dependency on a CDN.
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Roboto-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
 

@@ -18,6 +18,11 @@ ThemeData buildAppTheme(Brightness brightness) {
 
   return ThemeData(
     useMaterial3: true,
+    // Named explicitly so the *bundled* Roboto is used rather than the one the
+    // web engine would fetch from `fonts.gstatic.com`. Without this the web
+    // build renders every screen with no text at all when that fetch fails —
+    // not a fallback font, no text (see `pubspec.yaml`).
+    fontFamily: 'Roboto',
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
     textTheme: text,

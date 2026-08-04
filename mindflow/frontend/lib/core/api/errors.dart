@@ -27,6 +27,11 @@ class ApiException implements Exception {
   final int? currentVersion;
 
   bool get isAuth => code == 'token_expired' || code == 'unauthenticated';
+
+  /// The request never reached the server. Distinct from every other failure
+  /// because it is the one the offline queue exists for: nothing is lost, and
+  /// the user must be told that rather than that something went wrong.
+  bool get isOffline => code == 'network_error';
   bool get isConflict => code == 'entry_version_conflict';
   bool get isQuota => code == 'quota_exceeded';
 
@@ -45,6 +50,11 @@ class ApiException implements Exception {
         'entry_version_conflict' =>
           'Cette entrée a été modifiée ailleurs. Rechargez pour voir la version à jour.',
         'resource_not_found' => 'Introuvable.',
+        // Deliberately neutral: this message is read on the search screen and
+        // the assistant as well as during a capture. The reassurance that
+        // nothing was lost belongs to the caller that knows something was
+        // queued — see `isOffline` and `CaptureController`.
+        'network_error' => 'Pas de réseau. Vérifiez votre connexion.',
         'internal_error' =>
           'Une erreur est survenue. Réessayez dans un instant.',
         _ => detail,

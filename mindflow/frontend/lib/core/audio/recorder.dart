@@ -1,38 +1,32 @@
 /// Microphone capture.
 ///
-/// Two decisions worth stating, because both are load-bearing:
+/// Three decisions worth stating, because all three are load-bearing:
 ///
-/// 1. **The recorder writes to a file, not to memory.** A three-minute capture
+/// 1. **The recorder writes to storage, not to memory.** A three-minute capture
 ///    held in RAM is lost when the OS kills a backgrounded app — precisely the
-///    moment a voice-first product cannot afford to lose data. On disk, the
-///    partial file survives and the capture can still be sent.
+///    moment a voice-first product cannot afford to lose data.
 ///
 /// 2. **The `client_capture_id` is generated before recording starts**, and the
-///    file is named after it. That is what makes the whole offline-retry story
-///    work (ADR-009): the identity of a capture exists before its bytes do, so a
-///    retry after a crash refers to the same capture instead of creating a
-///    second one.
+///    bytes are stored under it. That is what makes the whole offline-retry
+///    story work (ADR-009): the identity of a capture exists before its bytes
+///    do, so a retry after a crash refers to the same capture instead of
+///    creating a second one.
+///
+/// 3. **Where those bytes live is not this class's business** (ADR-061). Phase 1
+///    returned a `File`, which is a lie in a browser — `dart:io` compiles for
+///    the web and throws at run time. The result now carries the *key*, and the
+///    `BlobStore` behind it knows whether that means a file or an IndexedDB
+///    row.
 library;
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:uuid/uuid.dart';
 
-/// 16 kHz mono AAC. Whisper resamples to 16 kHz anyway, so recording higher
-/// only inflates the upload; mono because a voice memo has one speaker and
-/// stereo doubles the bytes for nothing.
-const kRecordConfig = RecordConfig(
-  encoder: AudioEncoder.aacLc,
-  sampleRate: 16000,
-  numChannels: 1,
-  bitRate: 32000,
-);
-
-const kAudioFormat = 'm4a';
+import '../storage/blob_store.dart';
+import 'audio_profile.dart';
 
 /// Below the ceiling enforced by the API, so the user is told before uploading
 /// rather than after (Settings.max_capture_duration_ms).
@@ -48,14 +42,18 @@ class MicrophonePermissionDenied implements Exception {
 class RecordingResult {
   const RecordingResult({
     required this.clientCaptureId,
-    required this.file,
+    required this.audioFormat,
     required this.duration,
     required this.startedAt,
   });
 
-  /// Generated before the first byte was recorded — the idempotency key.
+  /// Generated before the first byte was recorded — the idempotency key, and
+  /// the key the audio is stored under.
   final String clientCaptureId;
-  final File file;
+
+  /// `m4a` on native, `webm` in a browser. Carried rather than assumed: the
+  /// queue may declare this capture weeks later.
+  final String audioFormat;
   final Duration duration;
   final DateTime startedAt;
 
@@ -63,18 +61,27 @@ class RecordingResult {
 }
 
 class VoiceRecorder {
-  VoiceRecorder({AudioRecorder? recorder, Uuid? uuid})
-      : _recorder = recorder ?? AudioRecorder(),
+  VoiceRecorder({
+    AudioRecorder? recorder,
+    BlobStore? blobs,
+    AudioProfile? profile,
+    Uuid? uuid,
+  })  : _recorder = recorder ?? AudioRecorder(),
+        _blobs = blobs ?? createBlobStore(),
+        _profile = profile ?? AudioProfile.forPlatform(),
         _uuid = uuid ?? const Uuid();
 
   final AudioRecorder _recorder;
+  final BlobStore _blobs;
+  final AudioProfile _profile;
   final Uuid _uuid;
 
   String? _clientCaptureId;
-  String? _path;
   DateTime? _startedAt;
 
   bool get isRecording => _startedAt != null;
+
+  String get audioFormat => _profile.format;
 
   /// Live input level, in dBFS, for the waveform. Silent input sits near -60.
   Stream<double> amplitudes(
@@ -89,41 +96,40 @@ class VoiceRecorder {
     }
 
     final id = _uuid.v4();
-    final directory = await getApplicationDocumentsDirectory();
-    final captures = Directory('${directory.path}/captures');
-    if (!captures.existsSync()) {
-      captures.createSync(recursive: true);
-    }
-    final path = '${captures.path}/$id.$kAudioFormat';
+    // Null in a browser: `MediaRecorder` picks its own destination and hands
+    // back a blob URL at the end. `record` wants the argument regardless, and
+    // an empty string is how its web implementation reads "your choice".
+    final target = await _blobs.recordingTarget(id, _profile.format);
 
-    await _recorder.start(kRecordConfig, path: path);
+    await _recorder.start(_profile.config, path: target ?? '');
     _clientCaptureId = id;
-    _path = path;
     _startedAt = DateTime.now();
     return id;
   }
 
-  /// Stops and returns the file. Null when nothing was being recorded, or when
-  /// the platform handed back no file — a real case on a denied permission that
-  /// slipped past the check.
+  /// Stops and stores the audio. Null when nothing was being recorded, or when
+  /// the platform handed back nothing storable — a real case on a permission
+  /// revoked mid-recording.
   Future<RecordingResult?> stop() async {
     final id = _clientCaptureId;
     final startedAt = _startedAt;
     if (id == null || startedAt == null) return null;
 
-    final resultPath = await _recorder.stop() ?? _path;
+    final source = await _recorder.stop();
     final duration = DateTime.now().difference(startedAt);
     _clientCaptureId = null;
     _startedAt = null;
-    _path = null;
 
-    if (resultPath == null) return null;
-    final file = File(resultPath);
-    if (!file.existsSync()) return null;
+    if (source == null) return null;
+    // Awaited before returning: the caller's next act is to write a queue entry
+    // pointing at this key, and an entry pointing at bytes that never landed is
+    // worse than no entry at all.
+    final stored = await _blobs.ingest(id, source, extension: _profile.format);
+    if (!stored) return null;
 
     return RecordingResult(
       clientCaptureId: id,
-      file: file,
+      audioFormat: _profile.format,
       duration: duration,
       startedAt: startedAt,
     );
@@ -133,27 +139,27 @@ class VoiceRecorder {
   /// not linger on the device.
   Future<void> cancel() async {
     if (_startedAt == null) return;
-    final path = await _recorder.stop() ?? _path;
+    final id = _clientCaptureId;
+    final source = await _recorder.stop();
     _clientCaptureId = null;
     _startedAt = null;
-    _path = null;
-    if (path != null) {
-      final file = File(path);
-      if (file.existsSync()) {
-        try {
-          await file.delete();
-        } on FileSystemException {
-          // A leftover temp file is not worth failing a cancel over.
-        }
-      }
+    if (id == null) return;
+    // Ingest, then delete. On native the recorder wrote straight to the target
+    // and there is a file to remove; in a browser the object URL has to be
+    // revoked, and `ingest` is what does that.
+    if (source != null) {
+      await _blobs.ingest(id, source, extension: _profile.format);
     }
+    await _blobs.delete(id);
   }
 
   Future<void> dispose() => _recorder.dispose();
 }
 
+final blobStoreProvider = Provider<BlobStore>((ref) => createBlobStore());
+
 final voiceRecorderProvider = Provider<VoiceRecorder>((ref) {
-  final recorder = VoiceRecorder();
+  final recorder = VoiceRecorder(blobs: ref.watch(blobStoreProvider));
   ref.onDispose(recorder.dispose);
   return recorder;
 });

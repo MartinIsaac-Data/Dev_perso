@@ -45,6 +45,7 @@ mindflow/frontend/.packages
 mindflow/frontend/android/
 mindflow/frontend/ios/
 mindflow/frontend/coverage/
+mindflow/frontend/node_modules/
 mindflow/frontend/*.iml
 mindflow/frontend/linux/flutter/ephemeral/
 mindflow/frontend/macos/Flutter/ephemeral/

@@ -45,6 +45,32 @@ class MindflowApi {
           }
           handler.next(options);
         },
+        // A transport failure never reaches `_unwrap`: Dio throws before there
+        // is a response to unwrap, so it escaped as a raw `DioException`. A
+        // phone in a tunnel therefore produced a generic "l'envoi a échoué"
+        // instead of "pas de réseau, la capture est conservée" — the one
+        // message the offline queue exists to make true. `ApiException.fromDio`
+        // was written for this in phase 1, tested, and never called.
+        //
+        // Resolved into a synthetic problem document rather than rejected,
+        // because `_unwrap` is the single place this client decodes an error.
+        // Routing transport failures through it means every caller already
+        // handles them, instead of each one needing its own `on DioException`.
+        onError: (error, handler) {
+          if (error.response != null) return handler.next(error);
+          final mapped = ApiException.fromDio(error);
+          handler.resolve(
+            Response<Map<String, dynamic>>(
+              requestOptions: error.requestOptions,
+              statusCode: 599,
+              data: {
+                'code': mapped.code,
+                'title': mapped.title,
+                'detail': mapped.detail,
+              },
+            ),
+          );
+        },
       ),
     );
   }
@@ -132,14 +158,22 @@ class MindflowApi {
     required Uint8List bytes,
     required Map<String, String> headers,
   }) async {
-    final response = await Dio().putUri<void>(
-      Uri.parse(url),
-      data: Stream.fromIterable([bytes]),
-      options: Options(
-        headers: {...headers, 'content-length': bytes.length},
-        validateStatus: (status) => status != null && status < 500,
-      ),
-    );
+    // A bare Dio, deliberately: this request goes to object storage, not to
+    // the API, and must not carry the bearer token. It therefore misses the
+    // interceptor too, so the transport failure is mapped here by hand.
+    final Response<void> response;
+    try {
+      response = await Dio().putUri<void>(
+        Uri.parse(url),
+        data: Stream.fromIterable([bytes]),
+        options: Options(
+          headers: {...headers, 'content-length': bytes.length},
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
     final status = response.statusCode ?? 500;
     if (status >= 400) {
       throw ApiException(

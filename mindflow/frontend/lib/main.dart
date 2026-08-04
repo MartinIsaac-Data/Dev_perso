@@ -12,6 +12,7 @@ import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_repository.dart';
 import 'core/auth/local_auth_repository.dart';
 import 'core/notifications/notification_bootstrap.dart';
+import 'core/storage/boot_screen.dart';
 import 'core/time/device_timezone.dart';
 
 /// Supabase project credentials, injected at build time. The anon key is a
@@ -87,6 +88,10 @@ class _BootstrapState extends ConsumerState<_Bootstrap> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // The first frame is up, so the placeholder in `web/index.html` has done
+      // its job. Nothing removes it on its own — the engine appends its view
+      // and leaves the rest of the document alone.
+      dismissBootScreen();
       unawaited(ref.read(deviceTimezoneProvider).refresh());
     });
 

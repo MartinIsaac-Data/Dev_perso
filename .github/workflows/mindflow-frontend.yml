@@ -125,6 +125,19 @@ jobs:
         env:
           MINDFLOW_API_BASE_URL: https://api.example.invalid
         run: ./tool/build.sh ${{ matrix.target }} --release
+      # The web build is the only target whose failure modes are invisible to
+      # every other gate: it compiles, analyses and unit-tests clean while
+      # fetching its renderer and its font from a CDN and never removing its own
+      # boot screen. All three happened; all three are asserted here.
+      - name: Offline smoke test
+        if: matrix.target == 'web'
+        run: |
+          npm install --no-save playwright-core
+          npx playwright install chromium
+          CHROME_EXECUTABLE="$(node -e "
+            const {chromium} = require('playwright-core');
+            console.log(chromium.executablePath());
+          ")" node tool/smoke_web.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: mindflow-${{ matrix.target }}

@@ -1,47 +1,41 @@
 /// Tiny key–value store on disk.
 ///
-/// A JSON file rather than `shared_preferences`, for the same reason the pending
-/// capture queue is a JSON file: the app stores a handful of scalars, and a
+/// One JSON document rather than `shared_preferences`, for the same reason the
+/// pending capture queue is one: the app stores a handful of scalars, and a
 /// platform-channel dependency for that is a dependency to maintain forever in
-/// exchange for nothing measurable.
+/// exchange for nothing measurable. It goes through `DocumentStore`, so it is a
+/// file on a device and a `localStorage` entry in a browser (ADR-061).
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'document_store.dart';
+
+const _documentName = 'prefs.json';
 
 class LocalPrefs {
-  LocalPrefs({Directory? directory}) : _directory = directory;
+  LocalPrefs({DocumentStore? documents})
+      : _documents = documents ?? createDocumentStore();
 
-  final Directory? _directory;
-  File? _file;
+  final DocumentStore _documents;
   Map<String, dynamic>? _cache;
-
-  Future<File> _open() async {
-    final existing = _file;
-    if (existing != null) return existing;
-    final directory = _directory ?? await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/prefs.json');
-    _file = file;
-    return file;
-  }
 
   Future<Map<String, dynamic>> _load() async {
     final cached = _cache;
     if (cached != null) return cached;
 
-    final file = await _open();
-    if (!file.existsSync()) return _cache = <String, dynamic>{};
+    final raw = await _documents.read(_documentName);
+    if (raw == null || raw.isEmpty) return _cache = <String, dynamic>{};
     try {
-      final decoded = jsonDecode(await file.readAsString());
+      final decoded = jsonDecode(raw);
       return _cache =
           decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
     } on FormatException {
       // A truncated write must not brick the app; the values here are all
       // regenerable.
-      await file.delete();
+      await _documents.delete(_documentName);
       return _cache = <String, dynamic>{};
     }
   }
@@ -64,10 +58,8 @@ class LocalPrefs {
     await _flush(data);
   }
 
-  Future<void> _flush(Map<String, dynamic> data) async {
-    final file = await _open();
-    await file.writeAsString(jsonEncode(data), flush: true);
-  }
+  Future<void> _flush(Map<String, dynamic> data) =>
+      _documents.write(_documentName, jsonEncode(data));
 }
 
 final localPrefsProvider = Provider<LocalPrefs>((ref) => LocalPrefs());

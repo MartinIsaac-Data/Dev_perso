@@ -84,6 +84,19 @@ void main() {
       );
       expect(error.code, 'network_error');
       expect(error.userMessage, contains('connexion'));
+      // The flag the offline queue branches on: the request never left, so
+      // nothing the caller queued is lost.
+      expect(error.isOffline, isTrue);
+    });
+
+    test('only a transport failure counts as offline', () {
+      const quota = ApiException(
+        code: 'quota_exceeded',
+        title: 'Quota',
+        detail: 'x',
+        status: 402,
+      );
+      expect(quota.isOffline, isFalse);
     });
   });
 

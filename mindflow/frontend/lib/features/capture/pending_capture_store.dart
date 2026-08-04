@@ -6,16 +6,23 @@
 /// not a precondition. Losing a thought because the metro went into a tunnel is
 /// the single failure this product cannot have.
 ///
-/// Persisted as a plain JSON file rather than a local database: the queue holds
+/// Persisted as one JSON document rather than a local database: the queue holds
 /// a handful of rows, is written once per capture, and adding sqlite for that
 /// would be a dependency to maintain forever for no measurable gain.
+///
+/// The document goes through `DocumentStore`, so the same queue is a file on a
+/// phone and a `localStorage` entry in a browser (ADR-061). The audio it points
+/// at goes through `BlobStore` — different sizes, different stakes, different
+/// mechanisms.
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+
+import '../../core/audio/recorder.dart' show blobStoreProvider;
+import '../../core/storage/blob_store.dart';
+import '../../core/storage/document_store.dart';
 
 /// How far a capture got. Each stage is idempotent server-side, so replaying
 /// from an earlier stage than strictly necessary is safe — and simpler than
@@ -25,17 +32,21 @@ enum PendingStage { declared, uploaded }
 class PendingCapture {
   const PendingCapture({
     required this.clientCaptureId,
-    required this.filePath,
     required this.durationMs,
     required this.capturedAt,
     required this.timezone,
+    this.audioFormat = 'm4a',
     this.serverCaptureId,
     this.stage = PendingStage.declared,
     this.attempts = 0,
   });
 
   final String clientCaptureId;
-  final String filePath;
+
+  /// The format the audio was recorded in, carried because this entry may be
+  /// declared to the server weeks after the browser or device that produced it
+  /// decided on it.
+  final String audioFormat;
   final int durationMs;
   final DateTime capturedAt;
   final String timezone;
@@ -44,13 +55,14 @@ class PendingCapture {
   final int attempts;
 
   PendingCapture copyWith({
+    String? audioFormat,
     String? serverCaptureId,
     PendingStage? stage,
     int? attempts,
   }) =>
       PendingCapture(
         clientCaptureId: clientCaptureId,
-        filePath: filePath,
+        audioFormat: audioFormat ?? this.audioFormat,
         durationMs: durationMs,
         capturedAt: capturedAt,
         timezone: timezone,
@@ -61,7 +73,7 @@ class PendingCapture {
 
   Map<String, dynamic> toJson() => {
         'client_capture_id': clientCaptureId,
-        'file_path': filePath,
+        'audio_format': audioFormat,
         'duration_ms': durationMs,
         'captured_at': capturedAt.toUtc().toIso8601String(),
         'timezone': timezone,
@@ -72,13 +84,12 @@ class PendingCapture {
 
   static PendingCapture? fromJson(Map<String, dynamic> json) {
     final id = json['client_capture_id'] as String?;
-    final path = json['file_path'] as String?;
     final capturedAt =
         DateTime.tryParse((json['captured_at'] as String?) ?? '');
-    if (id == null || path == null || capturedAt == null) return null;
+    if (id == null || capturedAt == null) return null;
     return PendingCapture(
       clientCaptureId: id,
-      filePath: path,
+      audioFormat: (json['audio_format'] as String?) ?? 'm4a',
       durationMs: (json['duration_ms'] as num?)?.toInt() ?? 0,
       capturedAt: capturedAt,
       timezone: (json['timezone'] as String?) ?? 'Europe/Paris',
@@ -92,26 +103,21 @@ class PendingCapture {
   }
 }
 
+const _documentName = 'pending_captures.json';
+
 class PendingCaptureStore {
-  PendingCaptureStore({Directory? directory}) : _directory = directory;
+  PendingCaptureStore({DocumentStore? documents, BlobStore? blobs})
+      : _documents = documents ?? createDocumentStore(),
+        _blobs = blobs ?? createBlobStore();
 
-  final Directory? _directory;
-  File? _file;
-
-  Future<File> _open() async {
-    final existing = _file;
-    if (existing != null) return existing;
-    final directory = _directory ?? await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/pending_captures.json');
-    _file = file;
-    return file;
-  }
+  final DocumentStore _documents;
+  final BlobStore _blobs;
 
   Future<List<PendingCapture>> load() async {
-    final file = await _open();
-    if (!file.existsSync()) return const [];
+    final raw = await _documents.read(_documentName);
+    if (raw == null || raw.isEmpty) return const [];
     try {
-      final decoded = jsonDecode(await file.readAsString());
+      final decoded = jsonDecode(raw);
       if (decoded is! List) return const [];
       return decoded
           .whereType<Map<String, dynamic>>()
@@ -120,20 +126,17 @@ class PendingCaptureStore {
           .toList();
     } on FormatException {
       // A truncated write (app killed mid-save) must not brick the queue for
-      // good. Drop the file and carry on: the audio files themselves are still
-      // on disk and the worst case is a capture the user re-sends by hand.
-      await file.delete();
+      // good. Drop the document and carry on: the audio itself is still stored
+      // and the worst case is a capture the user re-sends by hand.
+      await _documents.delete(_documentName);
       return const [];
     }
   }
 
-  Future<void> _save(List<PendingCapture> captures) async {
-    final file = await _open();
-    await file.writeAsString(
-      jsonEncode(captures.map((capture) => capture.toJson()).toList()),
-      flush: true,
-    );
-  }
+  Future<void> _save(List<PendingCapture> captures) => _documents.write(
+        _documentName,
+        jsonEncode(captures.map((capture) => capture.toJson()).toList()),
+      );
 
   Future<void> put(PendingCapture capture) async {
     final captures = [...await load()]
@@ -142,30 +145,17 @@ class PendingCaptureStore {
     await _save(captures);
   }
 
-  Future<void> remove(String clientCaptureId, {bool deleteFile = true}) async {
+  Future<void> remove(String clientCaptureId, {bool deleteAudio = true}) async {
     final captures = await load();
-    String? matchedPath;
-    for (final item in captures) {
-      if (item.clientCaptureId == clientCaptureId) matchedPath = item.filePath;
-    }
     await _save(
       captures
           .where((item) => item.clientCaptureId != clientCaptureId)
           .toList(),
     );
-    if (deleteFile && matchedPath != null) {
-      final file = File(matchedPath);
-      if (file.existsSync()) {
-        try {
-          await file.delete();
-        } on FileSystemException {
-          // Best effort: an orphan audio file costs disk, not correctness.
-        }
-      }
-    }
+    if (deleteAudio) await _blobs.delete(clientCaptureId);
   }
 }
 
 final pendingCaptureStoreProvider = Provider<PendingCaptureStore>((ref) {
-  return PendingCaptureStore();
+  return PendingCaptureStore(blobs: ref.watch(blobStoreProvider));
 });

@@ -75,8 +75,31 @@ echo "→ flutter build $TARGET $MODE  (api: $API_BASE_URL)"
 
 case "$TARGET" in
   web)
+    # CanvasKit is served from our own origin, not from gstatic.com.
+    #
+    # By default a Flutter web build fetches its renderer from a Google CDN at
+    # start-up. That is fatal here for two separate reasons: an application
+    # whose entire point is working without a network cannot begin by
+    # downloading 19 MB from a third party, and any deployment behind a proxy
+    # that does not allow gstatic.com shows a blank page with a console error
+    # nobody outside the team can interpret. Verified, not assumed — the first
+    # build of this client failed to boot in a headless Chromium for exactly
+    # this reason.
+    #
+    # `--no-web-resources-cdn` is what makes the renderer local. It emits
+    # `canvaskit/` into the bundle and sets `useLocalCanvasKit` in the loader
+    # config, so the bootstrap stops falling back to the CDN.
+    #
     # `--base-href` only applies to web; passing it elsewhere is an error.
-    flutter build web "$MODE" --base-href "$WEB_BASE_HREF" "${DEFINES[@]}"
+    flutter build web "$MODE" \
+      --base-href "$WEB_BASE_HREF" \
+      --no-web-resources-cdn \
+      "${DEFINES[@]}"
+
+    if [[ ! -d build/web/canvaskit ]]; then
+      echo "warning: no local canvaskit/ in the bundle — this build will fetch" >&2
+      echo "         its renderer from gstatic.com and fail without a network." >&2
+    fi
     echo "→ build/web"
     ;;
   linux)

@@ -3,7 +3,6 @@
 // mean to forbid.
 // ignore_for_file: invalid_use_of_protected_member
 
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +14,17 @@ import 'package:mindflow/core/time/device_timezone.dart';
 import 'package:mindflow/features/capture/capture_controller.dart';
 import 'package:mindflow/features/capture/pending_capture_store.dart';
 
+import 'support/fake_storage.dart';
+
+/// What the client raises when a request never reached the server. Built by the
+/// API client's interceptor from a Dio transport failure; here it stands in for
+/// a phone in a tunnel.
+const _offline = ApiException(
+  code: 'network_error',
+  title: 'Connexion impossible',
+  detail: 'Vérifiez votre connexion réseau.',
+);
+
 /// Only the calls the capture path makes are implemented; anything else is a
 /// test that reached further than it meant to, and should say so loudly.
 class FakeApi implements MindflowApi {
@@ -24,6 +34,7 @@ class FakeApi implements MindflowApi {
   Object? completeFailure;
 
   int declareCalls = 0;
+  final declaredFormats = <String>[];
   int uploadCalls = 0;
   int completeCalls = 0;
   String? quotaWarning;
@@ -44,6 +55,7 @@ class FakeApi implements MindflowApi {
   }) async {
     declareCalls += 1;
     declaredIds.add(clientCaptureId);
+    declaredFormats.add(audioFormat);
     final failure = declareFailure;
     if (failure != null) throw failure;
     return DeclaredCapture(
@@ -88,16 +100,23 @@ class FakeApi implements MindflowApi {
 }
 
 class FakeRecorder implements VoiceRecorder {
-  FakeRecorder(this.directory);
+  FakeRecorder(this.blobs);
 
-  final Directory directory;
+  final FakeBlobStore blobs;
   String? _id;
   Duration duration = const Duration(seconds: 4);
   int cancels = 0;
   var _counter = 0;
 
+  /// Set to model a platform that handed back nothing storable — a permission
+  /// revoked mid-recording, or a browser tab that lost its blob.
+  bool losesTheRecording = false;
+
   @override
   bool get isRecording => _id != null;
+
+  @override
+  String get audioFormat => 'm4a';
 
   @override
   Stream<double> amplitudes(
@@ -116,11 +135,13 @@ class FakeRecorder implements VoiceRecorder {
     final id = _id;
     if (id == null) return null;
     _id = null;
-    final file = File('${directory.path}/$id.m4a')
-      ..writeAsBytesSync([1, 2, 3, 4]);
+    if (losesTheRecording) return null;
+    // A real recorder stores the bytes before returning, because the caller's
+    // next act is to queue an entry pointing at them.
+    await blobs.ingest(id, '/tmp/$id.m4a', extension: 'm4a');
     return RecordingResult(
       clientCaptureId: id,
-      file: file,
+      audioFormat: 'm4a',
       duration: duration,
       startedAt: DateTime.utc(2026, 6, 10, 8),
     );
@@ -137,29 +158,29 @@ class FakeRecorder implements VoiceRecorder {
 }
 
 void main() {
-  late Directory directory;
+  late FakeBlobStore blobs;
+  late FakeDocumentStore documents;
   late FakeApi api;
   late FakeRecorder recorder;
   late PendingCaptureStore store;
   late CaptureController controller;
 
   setUp(() {
-    directory = Directory.systemTemp.createTempSync('mindflow_capture');
+    blobs = FakeBlobStore();
+    documents = FakeDocumentStore();
     api = FakeApi();
-    recorder = FakeRecorder(directory);
-    store = PendingCaptureStore(directory: directory);
+    recorder = FakeRecorder(blobs);
+    store = PendingCaptureStore(documents: documents, blobs: blobs);
     controller = CaptureController(
       api: api,
       recorder: recorder,
       store: store,
       timezone: DeviceTimezone(resolve: () async => 'Europe/Paris'),
+      blobs: blobs,
     );
   });
 
-  tearDown(() {
-    controller.dispose();
-    if (directory.existsSync()) directory.deleteSync(recursive: true);
-  });
+  tearDown(() => controller.dispose());
 
   test('runs declare, upload and complete in order, then polls', () async {
     await controller.startRecording();
@@ -186,21 +207,24 @@ void main() {
   });
 
   test('keeps the capture on the device when the network is down', () async {
-    api.declareFailure = const SocketException('offline');
+    api.declareFailure = _offline;
 
     await controller.startRecording();
     await controller.stopAndSend();
 
     expect(controller.state.phase, CapturePhase.failed);
+    // Says "pas de réseau", not "l'envoi a échoué": nothing was lost, and the
+    // message has to say so or the user re-records.
+    expect(controller.state.message, contains('Pas de réseau'));
     final queued = await store.load();
     expect(queued, hasLength(1));
     // The audio is still there — that is the whole point (ADR-009).
-    expect(File(queued.single.filePath).existsSync(), isTrue);
+    expect(await blobs.exists(queued.single.clientCaptureId), isTrue);
     expect(queued.single.attempts, 1);
   });
 
   test('flushPending replays the same client id, never a new one', () async {
-    api.declareFailure = const SocketException('offline');
+    api.declareFailure = _offline;
     await controller.startRecording();
     await controller.stopAndSend();
 
@@ -266,19 +290,40 @@ void main() {
     expect(queued.single.attempts, 0);
   });
 
-  test('drops a queued capture whose audio file vanished', () async {
-    api.declareFailure = const SocketException('offline');
+  test('drops a queued capture whose audio vanished', () async {
+    api.declareFailure = _offline;
     await controller.startRecording();
     await controller.stopAndSend();
 
     final queued = await store.load();
-    File(queued.single.filePath).deleteSync();
+    await blobs.delete(queued.single.clientCaptureId);
 
     api.declareFailure = null;
     await controller.flushPending();
 
     expect(api.declareCalls, 1); // only the original, failed attempt
     expect(await store.load(), isEmpty);
+  });
+
+  test('declares the format the recording was actually made in', () async {
+    // A browser records WebM. Declaring m4a would make the server store the
+    // bytes under a name that says the wrong thing, and the transcriber read
+    // it accordingly.
+    await controller.startRecording();
+    await controller.stopAndSend();
+
+    expect(api.declaredFormats, ['m4a']);
+  });
+
+  test('a recording the platform lost is reported, not queued', () async {
+    recorder.losesTheRecording = true;
+
+    await controller.startRecording();
+    await controller.stopAndSend();
+
+    expect(controller.state.phase, CapturePhase.failed);
+    expect(await store.load(), isEmpty);
+    expect(api.declareCalls, 0);
   });
 
   test('cancelling stops the recorder and clears the state', () async {

@@ -5,13 +5,17 @@
 ///     record → declare → PUT audio → complete → poll until terminal
 ///
 /// Each server call is idempotent on `client_capture_id`, so every failure is
-/// answered by *retrying the same call*, never by starting over. The audio file
-/// stays on disk until the server acknowledges the capture, which is what lets
-/// the app be killed at any point in this sequence without losing the thought.
+/// answered by *retrying the same call*, never by starting over. The audio
+/// stays in the blob store until the server acknowledges the capture, which is
+/// what lets the app be killed at any point in this sequence without losing the
+/// thought.
+///
+/// Nothing here knows where that audio lives (ADR-061). Phase 1 reached for
+/// `dart:io` in four places; a browser has none of them, and the web build
+/// recorded nothing while compiling perfectly.
 library;
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,6 +23,7 @@ import '../../core/api/client.dart';
 import '../../core/api/errors.dart';
 import '../../core/api/models.dart';
 import '../../core/audio/recorder.dart';
+import '../../core/storage/blob_store.dart';
 import '../../core/time/device_timezone.dart';
 import 'pending_capture_store.dart';
 
@@ -95,16 +100,19 @@ class CaptureController extends StateNotifier<CaptureState> {
     required VoiceRecorder recorder,
     required PendingCaptureStore store,
     required DeviceTimezone timezone,
+    required BlobStore blobs,
   })  : _api = api,
         _recorder = recorder,
         _store = store,
         _timezone = timezone,
+        _blobs = blobs,
         super(const CaptureState());
 
   final MindflowApi _api;
   final VoiceRecorder _recorder;
   final PendingCaptureStore _store;
   final DeviceTimezone _timezone;
+  final BlobStore _blobs;
 
   Timer? _ticker;
   StreamSubscription<double>? _levels;
@@ -204,18 +212,14 @@ class CaptureController extends StateNotifier<CaptureState> {
       return;
     }
     if (recording.isTooShort) {
-      try {
-        await recording.file.delete();
-      } on FileSystemException {
-        // Nothing to do; an empty file is harmless.
-      }
+      await _blobs.delete(recording.clientCaptureId);
       _set(const CaptureState(message: 'Enregistrement trop court.'));
       return;
     }
 
     final pending = PendingCapture(
       clientCaptureId: recording.clientCaptureId,
-      filePath: recording.file.path,
+      audioFormat: recording.audioFormat,
       durationMs: recording.duration.inMilliseconds,
       capturedAt: recording.startedAt,
       timezone: await _timezone.refresh(),
@@ -241,7 +245,8 @@ class CaptureController extends StateNotifier<CaptureState> {
           durationMs: current.durationMs,
           capturedAt: current.capturedAt,
           timezone: current.timezone,
-          audioBytes: await _sizeOf(current.filePath),
+          audioFormat: current.audioFormat,
+          audioBytes: await _blobs.size(current.clientCaptureId),
         );
         current = current.copyWith(serverCaptureId: declared.id);
         await _store.put(current);
@@ -250,7 +255,14 @@ class CaptureController extends StateNotifier<CaptureState> {
 
         // No upload URL on a replay whose audio the server already holds.
         if (declared.uploadUrl != null) {
-          final bytes = await File(current.filePath).readAsBytes();
+          final bytes = await _blobs.read(current.clientCaptureId);
+          if (bytes == null) {
+            // The audio is gone but the server has a row for it. Dropping the
+            // queue entry is the only honest move: replaying forever would
+            // never produce the bytes.
+            await _store.remove(current.clientCaptureId, deleteAudio: false);
+            throw StateError('audio introuvable pour cette capture');
+          }
           await _api.uploadAudio(
             url: declared.uploadUrl!,
             bytes: bytes,
@@ -274,13 +286,16 @@ class CaptureController extends StateNotifier<CaptureState> {
           state.copyWith(phase: CapturePhase.processing, captureId: captureId));
       await _pollUntilTerminal(captureId);
     } on ApiException catch (error) {
-      await _handleSendFailure(pending, error.userMessage,
-          retriable: !error.isAuth);
-    } on SocketException {
+      // `network_error` is the offline case, and it must read as one: the
+      // capture is safe, and saying "l'envoi a échoué" would make the user
+      // think otherwise.
       await _handleSendFailure(
         pending,
-        'Pas de réseau. La capture est conservée et sera envoyée automatiquement.',
-        retriable: true,
+        error.isOffline
+            ? 'Pas de réseau. La capture est conservée et sera envoyée '
+                'automatiquement.'
+            : error.userMessage,
+        retriable: !error.isAuth,
       );
     } catch (_) {
       await _handleSendFailure(
@@ -301,11 +316,6 @@ class CaptureController extends StateNotifier<CaptureState> {
     }
     _set(state.copyWith(phase: CapturePhase.failed, message: message));
     await refreshPendingCount();
-  }
-
-  Future<int?> _sizeOf(String path) async {
-    final file = File(path);
-    return file.existsSync() ? file.lengthSync() : null;
   }
 
   Future<void> _pollUntilTerminal(String captureId) async {
@@ -362,9 +372,9 @@ class CaptureController extends StateNotifier<CaptureState> {
   Future<void> flushPending() async {
     final pending = await _store.load();
     for (final capture in pending) {
-      if (!File(capture.filePath).existsSync()) {
-        // The OS reclaimed the file; nothing left to send.
-        await _store.remove(capture.clientCaptureId, deleteFile: false);
+      if (!await _blobs.exists(capture.clientCaptureId)) {
+        // The platform reclaimed the audio; nothing left to send.
+        await _store.remove(capture.clientCaptureId, deleteAudio: false);
         continue;
       }
       _set(state.copyWith(phase: CapturePhase.sending, clearMessage: true));
@@ -384,5 +394,6 @@ final captureControllerProvider =
     recorder: ref.watch(voiceRecorderProvider),
     store: ref.watch(pendingCaptureStoreProvider),
     timezone: ref.watch(deviceTimezoneProvider),
+    blobs: ref.watch(blobStoreProvider),
   );
 });
