@@ -131,6 +131,14 @@ class Settings(BaseSettings):
     # Public base for share links and invitations. Wrong here means every link
     # a user sends points at localhost.
     public_base_url: str = "http://localhost:3000"
+    # Audit partitions created ahead of time (ADR-059). Three months is the
+    # margin: a worker that has been down for a full quarter has a louder
+    # problem than its audit log.
+    audit_partition_months_ahead: int = 3
+    # Retention. Zero disables dropping entirely, which is the default: losing
+    # audit history because nobody configured a retention is worse than a table
+    # that grows. Dropping is irreversible, so it must be asked for.
+    audit_retention_months: int = 0
 
     # -- Retrieval (Phase 3) -----------------------------------------------
     # Candidates pulled from *each* retriever before fusion. Fusion needs depth

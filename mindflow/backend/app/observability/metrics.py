@@ -153,3 +153,11 @@ share_links_total = Counter("share_links_total", "Share links", ["action"], regi
 permission_denials_total = Counter(
     "permission_denials_total", "Denied actions", ["action"], registry=REGISTRY
 )
+
+# Partition bookkeeping (ADR-059). `audit_partition_gap` is the only gauge in
+# the product that predicts an outage instead of reporting one: it goes to 1
+# before the month that will fail, not during it.
+audit_partitions = Gauge("audit_partitions", "Monthly partitions on audit_log", registry=REGISTRY)
+audit_partition_gap = Gauge(
+    "audit_partition_gap", "1 when next month has no partition", registry=REGISTRY
+)

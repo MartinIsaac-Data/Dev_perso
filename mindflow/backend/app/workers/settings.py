@@ -20,6 +20,7 @@ from app.workers.pipeline.runner import PROCESS_CAPTURE, process_capture
 from app.workers.scheduled.digester import generate_due_digests
 from app.workers.scheduled.extractor import extract_entities
 from app.workers.scheduled.indexer import embed_backlog
+from app.workers.scheduled.partitioner import maintain_audit_partitions
 from app.workers.scheduled.reminder_dispatcher import dispatch_due_reminders, sweep_snoozed
 from app.workers.scheduled.sweeper import sweep_stuck_captures
 
@@ -78,6 +79,10 @@ async def extract_job(ctx: dict[str, Any]) -> int:
     return await extract_entities(ctx["settings"])
 
 
+async def partition_job(ctx: dict[str, Any]) -> int:
+    return await maintain_audit_partitions(ctx["settings"])
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [process_capture_job]
     cron_jobs: ClassVar[list[Any]] = [
@@ -105,6 +110,13 @@ class WorkerSettings:
         # knowledge graph current at the edges beats one complete at the
         # beginning.
         cron(extract_job, minute={7, 27, 47}),
+        # Audit partitions. Daily is far more often than needed — the job
+        # creates three months ahead — and that is the point: the failure it
+        # prevents is dated and total, so the cheapest possible insurance is
+        # worth taking every day. `run_at_startup` covers the case where the
+        # worker has been down across a month boundary, which is exactly when
+        # nobody was watching.
+        cron(partition_job, hour={3}, minute={11}, run_at_startup=True),
     ]
     on_startup = startup
     on_shutdown = shutdown
