@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'assistant_models.dart';
 import 'enterprise_models.dart';
+import 'meeting_models.dart';
 import 'errors.dart';
 import 'models.dart';
 import 'planning_models.dart';
@@ -998,6 +999,77 @@ class MindflowApi {
     final data = await _get('/v1/admin/health');
     return OperationalHealth.fromJson(data['data'] as Map<String, dynamic>);
   }
+
+  // -- Live meetings (Phase 4) --------------------------------------------
+
+  Future<Meeting> openMeeting({String? title}) async {
+    final data = await _post('/v1/meetings', body: {
+      if (title != null && title.isNotEmpty) 'title': title,
+    });
+    return Meeting.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  /// The meeting still open, if there is one.
+  ///
+  /// Asked at every start: a meeting survives the application being killed,
+  /// because the transcript is on the server rather than in this client's
+  /// memory. Offering to resume is the honest behaviour; silently starting over
+  /// would lose forty minutes of somebody's afternoon.
+  Future<Meeting?> liveMeeting() async {
+    final data = await _get('/v1/meetings/live');
+    final body = data['data'];
+    if (body == null) return null;
+    return Meeting.fromJson(body as Map<String, dynamic>);
+  }
+
+  Future<List<Meeting>> listMeetings({int limit = 20}) async {
+    final data = await _get('/v1/meetings', query: {'limit': limit});
+    return _list(data, Meeting.fromJson);
+  }
+
+  Future<Meeting> getMeeting(String meetingId) async {
+    final data = await _get('/v1/meetings/\$meetingId');
+    return Meeting.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  /// Send one block of the live recording.
+  Future<MeetingBlock> sendMeetingAudio(
+    String meetingId,
+    Uint8List bytes, {
+    String mediaType = 'audio/webm',
+  }) async {
+    final form = FormData.fromMap({
+      'block': MultipartFile.fromBytes(
+        bytes,
+        filename: 'block',
+        contentType: DioMediaType.parse(mediaType),
+      ),
+    });
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/meetings/\$meetingId/audio',
+      data: form,
+    );
+    final data = _unwrap(response);
+    return MeetingBlock.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  /// Send text this device already transcribed.
+  ///
+  /// Cheaper and more private than shipping audio, where the platform offers a
+  /// recogniser. Not a shortcut — the preferred path where it exists.
+  Future<MeetingBlock> sendMeetingText(String meetingId, String text) async {
+    final data =
+        await _post('/v1/meetings/\$meetingId/text', body: {'text': text});
+    return MeetingBlock.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<MeetingOutcome> closeMeeting(String meetingId) async {
+    final data = await _post('/v1/meetings/\$meetingId/close');
+    return MeetingOutcome.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> abandonMeeting(String meetingId) =>
+      _delete('/v1/meetings/\$meetingId');
 
   /// Collections always arrive wrapped in `data` (API.md §3.2).
   List<T> _list<T>(

@@ -156,6 +156,13 @@ const shellDestinations = <ShellDestination>[
     route: Routes.admin,
     compact: false,
   ),
+  ShellDestination(
+    label: 'Réunion',
+    icon: Icons.groups_outlined,
+    selectedIcon: Icons.groups,
+    route: Routes.meeting,
+    compact: false,
+  ),
 ];
 
 class AppShell extends ConsumerStatefulWidget {
@@ -287,6 +294,13 @@ class _AppShellState extends ConsumerState<AppShell> {
         icon: Icons.notifications_none,
         keywords: const ['rappels', 'alertes'],
         onInvoke: (context, _) => context.go(Routes.notifications),
+      ),
+      PaletteAction(
+        id: 'meeting',
+        label: 'Démarrer une réunion',
+        icon: Icons.groups_outlined,
+        keywords: const ['reunion', 'meeting', 'transcrire', 'compte rendu'],
+        onInvoke: (context, _) => context.go(Routes.meeting),
       ),
       PaletteAction(
         id: 'workspaces',

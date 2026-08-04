@@ -23,6 +23,7 @@ import '../features/enterprise/integrations_screen.dart';
 import '../features/enterprise/mentions_screen.dart';
 import '../features/enterprise/team_screen.dart';
 import '../features/enterprise/workspaces_screen.dart';
+import '../features/meeting/meeting_screen.dart';
 import '../features/notes/note_detail_screen.dart';
 import '../features/notes/notes_screen.dart';
 import '../features/assistant/assistant_screen.dart';
@@ -63,6 +64,7 @@ class Routes {
   static const mentions = '/mentions';
   static const integrations = '/integrations';
   static const admin = '/admin';
+  static const meeting = '/meeting';
 
   static String note(String id) => '/notes/$id';
   static String capture(String id) => '/captures/$id';
@@ -179,6 +181,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               path: Routes.integrations,
               builder: (_, __) => const IntegrationsScreen()),
           GoRoute(path: Routes.admin, builder: (_, __) => const AdminScreen()),
+          GoRoute(
+              path: Routes.meeting, builder: (_, __) => const MeetingScreen()),
         ],
       ),
     ],
