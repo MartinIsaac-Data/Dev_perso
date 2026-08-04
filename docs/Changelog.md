@@ -30,6 +30,82 @@ Rien pour l'instant.
 
 ---
 
+## [0.5.3] — 2026-08-04
+
+**Le client se compile.** Jusqu'ici il n'avait jamais été compilé pour aucune
+cible : le projet ne contenait aucun dossier de plateforme. 147 tests Flutter
+inchangés.
+
+### Ajouté
+
+- Dossiers de plateforme `web/`, `linux/`, `macos/`, `windows/`, générés puis
+  personnalisés — titre de fenêtre, taille initiale, écran de démarrage web.
+- `tool/build.sh`, un script par cible, qui **refuse** une cible que l'hôte ne
+  peut pas produire plutôt que de laisser lire une erreur de chaîne d'outils.
+- Matrice CI à quatre entrées, un exécutant par système.
+- Écran de démarrage web : un bundle Flutter met plusieurs secondes à démarrer
+  sur un cache froid, et une page blanche pendant trois secondes est
+  indiscernable d'un déploiement cassé.
+
+| Cible | État |
+| --- | --- |
+| **Web** | ✅ Compilé, servi et vérifié (26 Mo) |
+| **Linux** | ✅ Compilé, binaire ELF vérifié, aucune bibliothèque manquante (27 Mo) |
+| **Windows** | ⚠️ Scaffoldé et câblé en CI, **jamais compilé** |
+| **macOS** | ⚠️ Idem |
+
+**Windows et macOS ne sont pas « à faire », ils sont « impossibles ici ».**
+Flutter édite les liens contre le SDK de la plateforme ; il n'y a pas de
+compilation croisée, et aucun hôte Windows ou macOS n'était disponible.
+
+### Corrigé
+
+- **Le build Linux ne compilait pas**, et la cause était en amont.
+  `record 5.2.1` sous-contraint ses propres implémentations : il accepte
+  `record_platform_interface ^1.2.0` à côté de `record_linux >=0.5.0 <1.0.0`, et
+  les plus récents des deux ne s'assemblent pas — `record_linux 0.7.2`
+  implémente l'interface telle qu'elle était en 1.2, 1.3 a ajouté un argument
+  nommé à `hasPermission`, 1.5 a ajouté `startStream` et `streamBufferSize`.
+  Résoudre au plus récent produit soit un plugin Linux auquel il manque des
+  membres abstraits, soit un plugin web qui lit un champ inexistant.
+
+  Il existe exactement un jeu cohérent sous Flutter 3.27, et il est désormais
+  épinglé avec de **vraies contraintes** plutôt qu'un `dependency_overrides` :
+  un override tait les contraintes des autres paquets au lieu de les satisfaire,
+  donc il aurait réparé Linux en laissant le web cassé — silencieusement.
+
+  Coût accepté : le module d'enregistrement reste à son niveau de 2024 sur
+  toutes les plateformes. Le débloquer demande `record ^7`, qui demande
+  Flutter ≥ 3.44.8.
+
+### Modifié
+
+- `.gitignore` : les quatre dossiers de plateforme personnalisés sont désormais
+  versionnés (ADR-060). `android/` et `ios/` restent ignorés — rien ne les a
+  personnalisés, donc `flutter create` les reproduit à l'identique.
+
+### Décisions
+
+- [ADR-060] Un dossier de plateforme que l'on modifie n'est plus de la sortie
+  d'outil
+
+### Ce que le build web révèle, et qui n'est pas une bonne nouvelle
+
+**Le web ne peut pas capturer.** Le client utilise `dart:io` pour la file de
+captures locale ; sur le web cette bibliothèque compile et lève à l'exécution.
+Le web sert donc à consulter, chercher et interroger — pas à enregistrer une
+note vocale, c'est-à-dire pas à faire la chose pour laquelle le produit existe.
+Ce n'est pas un réglage à corriger mais une limite à traiter dans le chantier
+hors ligne (`TODO.md` B4).
+
+### Ouvert par cette version
+
+- Aucune signature de code ni notariat : un `.app` non notarié est refusé par
+  Gatekeeper, un `.exe` non signé déclenche SmartScreen (B13).
+- La matrice CI desktop est écrite et n'a jamais tourné (B6).
+
+---
+
 ## [0.5.2] — 2026-08-04
 
 **La synchronisation devient automatique.** C'était le dernier écart entre ce

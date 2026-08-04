@@ -2180,10 +2180,11 @@ testable sans réseau — et testée, avec 35 cas.
 | `partition_job` | ✅ Quotidien, `run_at_startup`. Voir §17.6 |
 | `sync_job` | ✅ Toutes les 5 minutes. Voir §17.7 |
 
-**Ce qui reste ouvert tient maintenant en trois lignes** : le service temps réel
-de réunion, le mode hors ligne au-delà de la capture, et les builds Desktop et
-Web. Aucun n'est un module ; chacun est un chantier de la taille d'une phase,
-cadré en `RoadmapV2.md`.
+| Builds Desktop et Web | ✅ Web et Linux produits et vérifiés ; Windows et macOS scaffoldés et câblés en CI. Voir §17.8 |
+
+**Ce qui reste ouvert tient en deux lignes** : le service temps réel de réunion
+et le mode hors ligne au-delà de la capture. Aucun n'est un module ; chacun est
+un chantier de la taille d'une phase, cadré en `RoadmapV2.md` §5 et §6.
 
 ### 17.6 Le job de partitionnement
 
@@ -2255,3 +2256,53 @@ sur elle seule.
 **Un tick est borné** (40 connexions) et sert **la plus ancienne d'abord**, pour
 qu'un retard s'écoule dans l'ordre qui fait le moins de mal, et qu'un compte
 avec sept fournisseurs n'affame pas l'agenda de tout le monde.
+
+### 17.8 Cibles de compilation
+
+| Cible | État | Produit où |
+| --- | --- | --- |
+| **Web** | ✅ Compilé et servi | Partout |
+| **Linux** | ✅ Compilé, binaire ELF vérifié | Hôte Linux, avec `libgtk-3-dev` |
+| **Windows** | ⚠️ Scaffoldé, jamais compilé | **Hôte Windows uniquement** |
+| **macOS** | ⚠️ Scaffoldé, jamais compilé | **Hôte macOS uniquement** |
+| Android / iOS | Inchangé depuis la phase 1 | CI |
+
+**Windows et macOS ne sont pas « à faire », ils sont « impossibles ici ».**
+Flutter édite les liens contre le SDK de la plateforme ; il n'y a pas de
+compilation croisée. La matrice CI porte donc un exécutant par système, et
+`tool/build.sh` **refuse** explicitement une cible que l'hôte ne peut pas
+produire, plutôt que de laisser l'utilisateur lire une erreur de chaîne d'outils
+qui ressemble à un bogue de Flutter.
+
+```mermaid
+flowchart LR
+    SRC[lib/ — un seul code] --> WEB[web · ubuntu]
+    SRC --> LIN[linux · ubuntu + GTK]
+    SRC --> WIN[windows · windows-latest]
+    SRC --> MAC[macos · macos-latest]
+    SRC --> AND[android · ubuntu]
+```
+
+**`tool/build.sh` existe parce que la configuration de compilation n'est ni
+optionnelle ni mémorisable.** L'URL de l'API et les identifiants Supabase
+arrivent par `--dart-define` ; un build qui les oublie compile proprement et
+produit une application qui pointe sur `localhost:8000` et ne peut connecter
+personne. Ce défaut n'apparaît qu'à l'exécution de l'artefact, généralement chez
+quelqu'un d'autre.
+
+**Ce qui a bloqué le build Linux, et qui vaut d'être connu.** `record 5.2.1`
+sous-contraint ses propres implémentations : il accepte
+`record_platform_interface ^1.2.0` à côté de `record_linux >=0.5.0 <1.0.0`, et
+les plus récents des deux ne s'assemblent pas. Résoudre au plus récent produit
+soit un plugin Linux auquel il manque des membres abstraits, soit un plugin web
+qui lit un champ inexistant — jamais les deux qui compilent. Il existe
+exactement un jeu cohérent sous ce SDK, et il est épinglé dans `pubspec.yaml`
+avec de vraies contraintes plutôt qu'un `dependency_overrides` : un override
+tait les contraintes des autres paquets au lieu de les satisfaire, donc il
+aurait réparé Linux en laissant le web cassé, sans le dire.
+
+**Le mode hors ligne n'est pas résolu par le build web** — il l'aggrave. Le
+client utilise `dart:io` pour la file de captures locale ; sur le web, cette
+bibliothèque compile et lève à l'exécution. Le web est donc utilisable pour
+consulter, chercher et interroger, et **pas pour capturer**. C'est une limite
+réelle, pas un réglage (`TODO.md` B4).

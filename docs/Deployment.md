@@ -225,7 +225,36 @@ l'extérieur, d'une recherche correcte.
 
 ---
 
-## 9. Ce que ce plan ne couvre pas
+## 9. Le client
+
+| Cible | Commande | Hôte requis |
+| --- | --- | --- |
+| Web | `./tool/build.sh web` | N'importe lequel |
+| Linux | `./tool/build.sh linux` | Linux + `libgtk-3-dev` |
+| Windows | `./tool/build.sh windows` | **Windows** |
+| macOS | `./tool/build.sh macos` | **macOS + Xcode** |
+
+```bash
+MINDFLOW_API_BASE_URL=https://api.mindflow.ai \
+SUPABASE_URL=… SUPABASE_ANON_KEY=… \
+  ./tool/build.sh web
+```
+
+**`WEB_BASE_HREF` si le site n'est pas servi à la racine.** Le laisser à `/`
+sous un sous-chemin produit une page qui demande ses propres ressources en 404 —
+visible immédiatement, ce qui est la seule bonne nouvelle de ce réglage.
+
+**Le web doit être servi en application monopage** : toute route inconnue rend
+`index.html`, sinon un lien de partage rechargé donne un 404 du serveur.
+
+**Web et Linux ont été produits et vérifiés ici. Windows et macOS non**, et pas
+par manque de temps : Flutter édite les liens contre le SDK de la plateforme, et
+il n'y a pas de compilation croisée. La matrice CI les couvre ; aucun binaire
+Windows ou macOS n'existe à ce jour.
+
+---
+
+## 10. Ce que ce plan ne couvre pas
 
 Énoncé plutôt qu'omis.
 
@@ -234,6 +263,10 @@ l'extérieur, d'une recherche correcte.
 - **Aucune restauration de sauvegarde n'a été testée.** Une sauvegarde jamais
   restaurée n'est pas une sauvegarde.
 - **Aucun test de charge.** Les chiffres du §8 sont des hypothèses.
+- **Aucun binaire Windows ni macOS n'a été produit.** Impossible depuis un hôte
+  Linux ; la CI est écrite et n'a jamais tourné.
+- **Aucune signature de code, aucun notariat.** Un `.app` non notarié est refusé
+  par Gatekeeper, un `.exe` non signé déclenche SmartScreen.
 - **Le déploiement multi-région n'est pas conçu.** `account.data_region` existe
   depuis la phase 1 et n'a jamais servi.
 - **Pas de plan de reprise après sinistre.** RTO et RPO ne sont pas définis.

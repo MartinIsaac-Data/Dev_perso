@@ -222,7 +222,7 @@ raison, indépendamment de leur difficulté.
 | B3 | **IA temps réel en réunion non implémentée.** `meeting_session` est créée et n'est remplie par rien | 🔴 Haute | Demande un canal de transcription en flux et une extraction incrémentale — un chantier de la taille d'une phase, pas d'un module. Cadré en `RoadmapV2.md` §5 |
 | B4 | **Mode hors ligne incomplet.** Seule la capture l'est, depuis la phase 1 | 🔴 Haute | Consulter, cocher, commenter et chercher exigent un miroir local et une file de mutations. Dette E6, ouverte depuis la phase 2. Cadré en `RoadmapV2.md` §6 |
 | B5 | ~~Aucun écran Flutter d'entreprise~~ | ✅ **Fait** | Espaces, équipe, mentions, intégrations, administration, plus le panneau de commentaires et la feuille de partage sur le détail d'une note. 39 tests |
-| B6 | **Aucun build Desktop ni Web produit.** Flutter cible les deux | 🟠 Moyenne | Aucun `flutter build` n'a été lancé pour ces cibles ; rien ne prouve qu'ils compilent |
+| B6 | ~~Aucun build Desktop ni Web produit~~ | ⚠️ **Partiel** | Web et Linux compilés et vérifiés. **Windows et macOS restent non compilés** : Flutter édite les liens contre le SDK de la plateforme, il n'y a pas de compilation croisée, et aucun hôte Windows ou macOS n'est disponible ici. Scaffoldés, script de build écrit, matrice CI câblée — jamais exécutée |
 | B7 | **Notifications intelligentes** : les types `mention` et `comment` existent, aucune logique de regroupement ni de silence | 🟠 Moyenne | « Intelligent » demande une règle mesurable. Sans usage réel, toute règle serait une supposition |
 | B8 | **Aucun appel réel à un fournisseur d'intégration.** Les sept connecteurs sont écrits contre des documentations | 🔴 Haute | Même blocage que A1. Il faut s'attendre à ce que plusieurs adaptateurs soient faux — ADR-057 en assume le coût |
 | B9 | **Le worker planifié ne s'étend pas horizontalement.** `ensure_audit_partitions` et les résumés ne sont pas protégés par `SKIP LOCKED` | 🟠 Moyenne | Un verrou consultatif par job suffirait ; non écrit. Vrai plafond structurel, cadré en `RoadmapV2.md` §7 |
@@ -230,14 +230,27 @@ raison, indépendamment de leur difficulté.
 | B11 | **Aucune restauration de sauvegarde testée**, aucun manifeste de déploiement | 🔴 Haute | Le démon Docker est resté indisponible pendant les quatre phases (A8). Une sauvegarde jamais restaurée n'est pas une sauvegarde |
 | B12 | **Un seul propriétaire de compte peut tout** — aucune séparation des pouvoirs | 🟡 Basse | Acceptable à cette échelle ; une organisation de plusieurs centaines de personnes exigera une validation à deux |
 
-**B1, B2 et B5 sont traités.** Le déséquilibre énoncé plus haut — une API
-complète et invisible — est levé, la seule échéance datée du produit est
-supprimée, et la synchronisation n'attend plus un clic.
+**B1, B2 et B5 sont traités, B6 à moitié.** Le déséquilibre énoncé plus haut —
+une API complète et invisible — est levé, la seule échéance datée du produit est
+supprimée, la synchronisation n'attend plus un clic, et le client compile pour
+le web et pour Linux.
 
-**Ce qui reste tient en trois lignes, et aucune n'est un module** : B3 (temps
-réel en réunion), B4 (hors ligne au-delà de la capture) et B6 (builds Desktop et
-Web). Les deux premières sont des chantiers de la taille d'une phase, cadrés en
-`RoadmapV2.md` §5 et §6.
+**Ce qui reste : B3 (temps réel en réunion) et B4 (hors ligne au-delà de la
+capture)**, deux chantiers de la taille d'une phase, cadrés en `RoadmapV2.md` §5
+et §6.
+
+**Le build web aggrave B4 au lieu de l'aider.** Le client utilise `dart:io` pour
+la file de captures locale ; sur le web cette bibliothèque compile et lève à
+l'exécution. Le web sert donc à consulter, chercher et interroger — **pas à
+capturer**, ce qui est la fonction première du produit. Ce n'est pas un réglage
+à corriger mais une limite à traiter dans B4.
+
+**Deux nouvelles lignes ouvertes par les builds** :
+
+| # | Manque | Gravité | Pourquoi |
+| --- | --- | --- | --- |
+| B13 | Aucune signature de code ni notariat | 🟠 Moyenne | Un `.app` non notarié est refusé par Gatekeeper, un `.exe` non signé déclenche SmartScreen. Demande des certificats, donc un budget et une entité juridique |
+| B14 | Le jeu `record` est figé à son niveau de 2024 | 🟡 Basse | Le seul jeu de versions cohérent sous Flutter 3.27. Le débloquer demande `record ^7`, qui demande Flutter ≥ 3.44.8 |
 
 **B8 reste le risque le plus sous-estimé.** `sync_job` déclenche maintenant sept
 connecteurs qui n'ont jamais parlé à un vrai serveur. Le job est testé contre un
@@ -270,7 +283,7 @@ Les choses à faire en premier, dans l'ordre.
 | 5 | Arbitrer la durée du sprint 01 (2 ou 3 semaines) | Le backlog dépasse la capacité de 65 % — voir `Sprint01.md` §4 |
 | 6 | **Passer un appel réel à chacun des cinq fournisseurs** (A1) | Toute la couche IA repose sur des formats de fil vérifiés uniquement contre des simulations |
 | 7 | **Passer un vrai appel OAuth sur au moins un connecteur** (B8) | `sync_job` déclenche désormais sept adaptateurs écrits contre des documentations ; le premier contact réel dira lesquels sont faux |
-| 8 | **Produire un build Desktop et Web** (B6) | Flutter les cible et rien ne prouve qu'ils compilent |
+| 8 | **Faire tourner la matrice CI desktop une fois** (B6) | Windows et macOS sont écrits et jamais exécutés ; c'est la seule façon de savoir s'ils compilent |
 
 ---
 

@@ -78,6 +78,7 @@
 | [057](#adr-057) | Un seul port pour sept connecteurs, dont un qui n'est pas un service | ✅ | 4 |
 | [058](#adr-058) | Les jetons sont chiffrés avec un trousseau versionné | ✅ | 4 |
 | [059](#adr-059) | Le journal d'audit est partitionné par mois | ✅ | 4 |
+| [060](#adr-060) | Les dossiers de plateforme que l'on modifie sont du source | ✅ | 4 |
 
 ---
 
@@ -2043,3 +2044,54 @@ La clé primaire devient composite, `(id, occurred_at)` — PostgreSQL exige que
 clé de partitionnement en fasse partie. Aucun code du produit ne référence un
 enregistrement d'audit par identifiant, donc cela ne coûte rien ici ; cela le
 coûterait dans une table où quelque chose pointe vers les lignes.
+
+---
+
+<a id="adr-060"></a>
+## ADR-060 — Un dossier de plateforme que l'on modifie n'est plus de la sortie d'outil
+
+**Statut** ✅ Acceptée · Phase 4 · **Remplace** une décision implicite de la phase 1
+
+**Contexte.** Depuis la phase 1, `.gitignore` excluait les six dossiers de
+plateforme de Flutter, avec ce commentaire : *« ce sont des sorties d'outil,
+régénérées par `flutter create` — les committer n'apporte rien et coûte un
+conflit de fusion à chaque montée de SDK. »*
+
+C'était vrai tant que personne ne les touchait. Aucun build n'avait jamais été
+produit, et aucun fichier de plateforme ne contenait autre chose que ce que le
+générateur avait écrit.
+
+La phase 4 a produit les builds. Et un build utilisable exige d'éditer ces
+fichiers : le titre de la fenêtre — sinon la barre de titre affiche `mindflow`
+en minuscules —, la taille initiale (1280×720 est une résolution vidéo, pas une
+taille de travail pour une interface à trois panneaux avec une barre latérale de
+248 px), et pour le web un `index.html` qui dit quelque chose pendant le
+démarrage du moteur.
+
+**Décision.** `web/`, `linux/`, `macos/` et `windows/` sont versionnés.
+`android/` et `ios/` restent ignorés.
+
+L'incohérence apparente est le critère lui-même : **on versionne ce que l'on
+modifie.** Rien dans ce projet n'a personnalisé `android/` ou `ios/`, donc
+`flutter create` les reproduit à l'identique et ils restent de la sortie
+d'outil. Les quatre autres portent des décisions qu'aucun générateur ne
+reproduira.
+
+**Alternative écartée.** Garder tout ignoré et appliquer les personnalisations
+par un script de post-génération. Rejetée : un patch appliqué après coup se
+désynchronise silencieusement du fichier qu'il patche, et l'échec se manifeste
+par une application dont la fenêtre s'appelle `mindflow` — que personne ne
+remarque en revue puisque le diff est vide.
+
+**Coût accepté.** Une montée de SDK Flutter demandera un `flutter create` de
+rafraîchissement et une relecture du diff sur ces quatre dossiers. C'est
+exactement le conflit de fusion que la décision de la phase 1 voulait éviter ;
+il est accepté parce que l'alternative est de perdre les personnalisations sans
+s'en apercevoir. Un conflit visible vaut mieux qu'une régression silencieuse.
+
+**Un dossier `linux/flutter/ephemeral/` reste ignoré** — celui-là est
+véritablement régénéré à chaque build et ne contient rien qu'on écrive.
+
+**Réexamen.** Si `android/` ou `ios/` finit par être personnalisé — une
+permission, un `Info.plist`, un lien profond — il rejoint la liste, pour la même
+raison.
