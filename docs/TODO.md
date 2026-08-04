@@ -218,7 +218,7 @@ raison, indépendamment de leur difficulté.
 | # | Manque | Gravité | Pourquoi il n'a pas été traité |
 | --- | --- | --- | --- |
 | B1 | ~~`partition_job` n'existe pas~~ | ✅ **Fait** | Quotidien à 03:11 et au démarrage du worker, avec rétention désactivée par défaut. 16 tests, dont un qui épingle le comportement PostgreSQL dont tout le reste découle |
-| B2 | **`sync_job` n'existe pas.** Les intégrations ne se synchronisent que sur appel explicite de `/v1/integrations/{id}/sync` | 🔴 Haute | Documenté dans `DevOps.md` §2, non écrit. La synchronisation automatique demandée n'est donc pas automatique |
+| B2 | ~~`sync_job` n'existe pas~~ | ✅ **Fait** | Toutes les 5 minutes, inter-locataires, avec retard exponentiel plafonné à 1 h et abandon après six échecs. 33 tests |
 | B3 | **IA temps réel en réunion non implémentée.** `meeting_session` est créée et n'est remplie par rien | 🔴 Haute | Demande un canal de transcription en flux et une extraction incrémentale — un chantier de la taille d'une phase, pas d'un module. Cadré en `RoadmapV2.md` §5 |
 | B4 | **Mode hors ligne incomplet.** Seule la capture l'est, depuis la phase 1 | 🔴 Haute | Consulter, cocher, commenter et chercher exigent un miroir local et une file de mutations. Dette E6, ouverte depuis la phase 2. Cadré en `RoadmapV2.md` §6 |
 | B5 | ~~Aucun écran Flutter d'entreprise~~ | ✅ **Fait** | Espaces, équipe, mentions, intégrations, administration, plus le panneau de commentaires et la feuille de partage sur le détail d'une note. 39 tests |
@@ -230,13 +230,19 @@ raison, indépendamment de leur difficulté.
 | B11 | **Aucune restauration de sauvegarde testée**, aucun manifeste de déploiement | 🔴 Haute | Le démon Docker est resté indisponible pendant les quatre phases (A8). Une sauvegarde jamais restaurée n'est pas une sauvegarde |
 | B12 | **Un seul propriétaire de compte peut tout** — aucune séparation des pouvoirs | 🟡 Basse | Acceptable à cette échelle ; une organisation de plusieurs centaines de personnes exigera une validation à deux |
 
-**B1 et B5 sont traités.** Le déséquilibre énoncé plus haut — une API complète
-et invisible — est levé : les écrans existent et appellent les routes, et
-`partition_job` supprime la seule échéance datée du produit.
+**B1, B2 et B5 sont traités.** Le déséquilibre énoncé plus haut — une API
+complète et invisible — est levé, la seule échéance datée du produit est
+supprimée, et la synchronisation n'attend plus un clic.
 
-**Ce qui reste le plus gênant est B2.** Sans `sync_job`, la « synchronisation
-automatique » demandée en phase 4 attend un clic. Les connecteurs, le port, la
-classification des conflits et l'écran fonctionnent ; personne ne les déclenche.
+**Ce qui reste tient en trois lignes, et aucune n'est un module** : B3 (temps
+réel en réunion), B4 (hors ligne au-delà de la capture) et B6 (builds Desktop et
+Web). Les deux premières sont des chantiers de la taille d'une phase, cadrés en
+`RoadmapV2.md` §5 et §6.
+
+**B8 reste le risque le plus sous-estimé.** `sync_job` déclenche maintenant sept
+connecteurs qui n'ont jamais parlé à un vrai serveur. Le job est testé contre un
+connecteur bouchon ; ce qu'il déclenchera en production reste inconnu, et
+ADR-057 en assume le coût.
 
 **Deux bugs réels ont été trouvés par les tests d'écran**, et méritent d'être
 consignés parce qu'aucun des deux n'aurait été vu à la lecture :
@@ -263,7 +269,7 @@ Les choses à faire en premier, dans l'ordre.
 | 4 | Prototyper la RLS et le contexte de session (sprint 01, R1) | Le risque technique le plus élevé du premier sprint |
 | 5 | Arbitrer la durée du sprint 01 (2 ou 3 semaines) | Le backlog dépasse la capacité de 65 % — voir `Sprint01.md` §4 |
 | 6 | **Passer un appel réel à chacun des cinq fournisseurs** (A1) | Toute la couche IA repose sur des formats de fil vérifiés uniquement contre des simulations |
-| 7 | **Écrire `sync_job`** (B2) | Sans lui, la synchronisation automatique n'est pas automatique — c'est le dernier écart entre ce qui a été demandé en phase 4 et ce qui tourne |
+| 7 | **Passer un vrai appel OAuth sur au moins un connecteur** (B8) | `sync_job` déclenche désormais sept adaptateurs écrits contre des documentations ; le premier contact réel dira lesquels sont faux |
 | 8 | **Produire un build Desktop et Web** (B6) | Flutter les cible et rien ne prouve qu'ils compilent |
 
 ---

@@ -42,7 +42,7 @@ mois, où il en a beaucoup d'un coup.
 | `embed_job` | 2 min | oui | Le retard d'encodage monte ; recherche sémantique périmée |
 | `extract_job` | 3×/h | oui | Le graphe de connaissances cesse d'être à jour |
 | `digest_job` | 1 h | oui | Les résumés cessent d'être produits |
-| `sync_job` | 5 min | oui | **Non écrit.** La synchronisation n'a lieu que sur appel explicite de `POST /v1/integrations/{id}/sync` |
+| **`sync_job`** | **5 min** | **oui** | **Les intégrations cessent de se synchroniser.** Le bouton « Synchroniser » reste, donc la panne est discrète |
 | **`partition_job`** | **quotidien à 03:11, + au démarrage** | **oui** | **Voir §1, dernière ligne** |
 
 Tous utilisent `privileged_session()` — la seule connexion du produit qui
@@ -92,9 +92,26 @@ FROM integration_connection WHERE account_id = :account;
 
 | `status` | Signification | Action |
 | --- | --- | --- |
-| `expired` | Le grant OAuth est révoqué. **Réessayer ne servira jamais** | L'utilisateur doit reconnecter |
+| `expired` | Le grant OAuth est révoqué. **Réessayer ne servira jamais** | L'utilisateur doit reconnecter. `sync_job` ne la sélectionne plus |
 | `error` | Six échecs consécutifs. Le planificateur a abandonné | Vérifier `last_error`, puis reconnecter |
-| `active` avec `last_sync_at` ancien | Le worker ne tourne pas | §2 |
+| `active`, `consecutive_failures > 0` | En retard exponentiel, plafonné à 1 h | Attendre, ou regarder `last_error` |
+| `active` avec `last_sync_at` ancien et zéro échec | Le worker ne tourne pas | §2 |
+
+**La dernière ligne est la seule qui accuse le produit** ; les trois autres
+accusent le fournisseur. La distinguer coûte une colonne à lire et évite de
+chercher une panne chez soi quand c'est un jeton révoqué.
+
+**Ce que `sync_job` ne fait jamais** : retenter une connexion `expired`. Un
+grant révoqué ne redevient pas valide, et le retenter en boucle consomme du
+quota chez le fournisseur tout en enterrant la seule action utile — demander à
+l'utilisateur de reconnecter.
+
+**Le retard d'une connexion en échec se calcule sur `updated_at`**, pas sur
+`last_sync_at` : un échec ne met pas à jour `last_sync_at`, parce que cette
+colonne signifie « dernier moment où nous étions en phase avec le fournisseur »
+et un échec ne nous y a pas mis. Conséquence à connaître : une modification de
+la connexion par l'utilisateur touche `updated_at` et peut retarder d'une heure
+au plus un réessai.
 
 ### 3.3 « Quelqu'un voit des notes qui ne sont pas les siennes »
 

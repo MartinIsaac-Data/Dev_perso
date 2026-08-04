@@ -2178,11 +2178,12 @@ testable sans réseau — et testée, avec 35 cas.
 | Version Desktop / Web | ❌ Flutter les cible ; aucun build n'a été produit |
 | Notifications intelligentes | ⚠️ Les types `mention` et `comment` existent ; aucune logique de regroupement |
 | `partition_job` | ✅ Quotidien, `run_at_startup`. Voir §17.6 |
-| `sync_job` | ❌ Documenté dans `DevOps.md` §2, non écrit. La synchronisation reste manuelle |
+| `sync_job` | ✅ Toutes les 5 minutes. Voir §17.7 |
 
-**La ligne la plus importante est la dernière.** Sans `sync_job`, la
-« synchronisation automatique » demandée en phase 4 n'est pas automatique : elle
-attend un appel à `POST /v1/integrations/{id}/sync`.
+**Ce qui reste ouvert tient maintenant en trois lignes** : le service temps réel
+de réunion, le mode hors ligne au-delà de la capture, et les builds Desktop et
+Web. Aucun n'est un module ; chacun est un chantier de la taille d'une phase,
+cadré en `RoadmapV2.md`.
 
 ### 17.6 Le job de partitionnement
 
@@ -2214,3 +2215,43 @@ de bord, la première se découvre quand un auditeur demande l'an dernier.
 retour du job. Une création qui n'a silencieusement rien fait doit apparaître ;
 une jauge qui reflète l'intention du job plutôt que l'état de la base rassure
 au lieu d'alerter.
+
+### 17.7 Le job de synchronisation
+
+```mermaid
+flowchart TB
+    CRON[cron toutes les 5 min] --> PRIV["privileged_session()<br/>SELECT identifiants"]
+    PRIV --> DUE{{"is_due() — pur"}}
+    DUE -->|due| TEN["tenant_session(account, user)"]
+    TEN --> SVC[IntegrationService.sync]
+    SVC --> PORT{{SyncConnectorPort}}
+    DUE -->|pas due| SKIP([ignorée])
+```
+
+**La connexion privilégiée sélectionne des identifiants et rien d'autre.** Tout
+le travail se fait dans une session locataire, avec le contexte utilisateur posé
+— donc chaque écriture passe par une politique, y compris les restrictives
+d'ADR-054. C'est le seul endroit du produit qui itère sur tous les comptes, donc
+le seul où un contexte manquant passerait inaperçu : une session privilégiée qui
+lit et une session privilégiée qui *écrit* se ressemblent exactement, jusqu'au
+jour où l'événement d'agenda de quelqu'un atterrit dans le compte d'un autre.
+
+**`is_due` est une fonction pure**, et c'est toute la politique
+d'ordonnancement ; le reste du job est de la plomberie. D'où 18 tests unitaires
+sur elle seule.
+
+| Situation | Décision |
+| --- | --- |
+| Jamais synchronisée | Due immédiatement — faire attendre cinq minutes après une connexion se lit comme une connexion qui n'a pas marché |
+| Saine | Due après `sync_interval_seconds` (5 min) |
+| En échec | Due après `backoff_seconds(n)` : exponentiel, plafonné à 1 h |
+| `consecutive_failures ≥ 6` | **Jamais.** Seule une reconnexion remet le compteur à zéro |
+| `expired` | **Jamais sélectionnée.** Un grant révoqué ne guérit pas |
+| Obsidian | **Jamais sélectionnée** — `is_server_side = false` |
+
+**Le filtre de fournisseurs est dérivé, pas énuméré** : il se calcule depuis
+`Provider.is_server_side`. Un nouveau connecteur n'a pas à penser à s'y ajouter.
+
+**Un tick est borné** (40 connexions) et sert **la plus ancienne d'abord**, pour
+qu'un retard s'écoule dans l'ordre qui fait le moins de mal, et qu'un compte
+avec sept fournisseurs n'affame pas l'agenda de tout le monde.

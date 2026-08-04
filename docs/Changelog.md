@@ -30,6 +30,71 @@ Rien pour l'instant.
 
 ---
 
+## [0.5.2] — 2026-08-04
+
+**La synchronisation devient automatique.** C'était le dernier écart entre ce
+qui avait été demandé en phase 4 et ce qui tournait : les connecteurs, le port,
+la classification des conflits et l'écran fonctionnaient tous, et personne ne
+les déclenchait. 826 tests.
+
+### Ajouté — `sync_job`
+
+- Toutes les cinq minutes, inter-locataires. La connexion privilégiée
+  **sélectionne des identifiants et rien d'autre** ; tout le travail se fait
+  dans une session locataire avec le contexte utilisateur posé, donc chaque
+  écriture passe par une politique, y compris les restrictives d'ADR-054.
+- `is_due` est une **fonction pure** et constitue toute la politique
+  d'ordonnancement — le reste du job est de la plomberie. 18 tests unitaires
+  sur elle seule.
+
+| Situation | Décision |
+| --- | --- |
+| Jamais synchronisée | Due immédiatement |
+| Saine | Due après cinq minutes |
+| En échec | Retard exponentiel, plafonné à une heure |
+| Six échecs consécutifs | **Jamais.** Seule une reconnexion remet le compteur à zéro |
+| `expired` | **Jamais sélectionnée.** Un grant révoqué ne guérit pas d'un réessai |
+| Obsidian | **Jamais sélectionnée** — `is_server_side = false` |
+
+- Le filtre de fournisseurs est **dérivé de `Provider.is_server_side`**, pas
+  énuméré : un nouveau connecteur n'a pas à penser à s'y ajouter.
+- Un tick est borné à quarante connexions et sert **la plus ancienne d'abord**,
+  pour qu'un retard s'écoule dans l'ordre qui fait le moins de mal.
+- L'échec d'une connexion ne termine pas le tick. `IntegrationService.sync` ne
+  lève déjà pas pour une panne fournisseur, mais un bug dans un adaptateur ne
+  doit pas coûter leur passage aux six autres.
+
+**Le retard d'une connexion en échec se calcule sur `updated_at`**, pas sur
+`last_sync_at` : un échec ne met délibérément pas à jour `last_sync_at`, parce
+que cette colonne signifie « dernier moment où nous étions en phase avec le
+fournisseur » et un échec ne nous y a pas mis. L'imprécision est réelle et
+énoncée plutôt que masquée — une modification de la connexion par l'utilisateur
+touche aussi `updated_at` et peut retarder d'une heure au plus un réessai. C'est
+le prix accepté pour ne pas ajouter une colonne dont cette ligne serait le seul
+lecteur.
+
+### Tests
+
+- 18 unitaires sur `is_due`, 15 d'intégration sur le passage complet.
+- Dont un qui inspecte le source du job pour vérifier que le bloc privilégié ne
+  contient que le `SELECT`. Inhabituel, et justifié pour la même raison que
+  `test_the_api_always_sets_the_user_context` : aucun test fonctionnel ne
+  distingue un job qui écrit via une session locataire d'un job qui écrit
+  privilégié — les deux produisent les bonnes lignes sur un jeu de test
+  mono-locataire.
+
+### Ce qui reste ouvert
+
+Trois lignes, et aucune n'est un module : IA temps réel en réunion, mode hors
+ligne au-delà de la capture, builds Desktop et Web (`TODO.md` §6 ter).
+
+**Le risque le plus sous-estimé change de nature.** `sync_job` déclenche
+désormais sept adaptateurs qui n'ont jamais parlé à un vrai serveur. Le job est
+testé contre un connecteur bouchon ; ce qu'il déclenchera en production reste
+inconnu, et ADR-057 en assume explicitement le coût.
+
+---
+
 ## [0.5.1] — 2026-08-04
 
 **Ce que la phase 4 avait laissé de côté.** Deux des six manques énoncés dans
