@@ -1777,6 +1777,11 @@ par identifiant, donc le coût est nul ici.
 **Les deux vivent en PL/pgSQL, pas en Python** : elles doivent fonctionner quand
 le worker est arrêté — c'est-à-dire exactement quand on en a besoin.
 
+**Elles sont appelées par `partition_job`**, quotidiennement et au démarrage du
+worker (`Architecture.md` §17.6). Les deux ne font pas double emploi : la
+fonction garantit que l'opération est possible sans le worker, le job garantit
+qu'elle a lieu sans qu'on y pense.
+
 **Le piège**, répété ici parce qu'il est silencieux : une insertion dans une
 plage sans partition **échoue**. Sans partition pour le mois qui vient, chaque
 écriture d'audit échouera le premier du mois. Voir ADR-059 pour les trois

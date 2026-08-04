@@ -30,6 +30,74 @@ Rien pour l'instant.
 
 ---
 
+## [0.5.1] — 2026-08-04
+
+**Ce que la phase 4 avait laissé de côté.** Deux des six manques énoncés dans
+la 0.5.0 sont traités : le job de partitionnement, et les écrans qui rendent
+l'API d'entreprise utilisable. 793 tests côté serveur, 147 côté client.
+
+### Ajouté — `partition_job`
+
+- Quotidien à 03:11, **et au démarrage du worker** — ce dernier couvre le cas
+  où le worker a été arrêté au passage d'un mois, c'est-à-dire exactement quand
+  personne ne regardait.
+- Appelle `ensure_audit_partitions` puis, si une rétention est configurée,
+  `drop_audit_partitions_before`. Les deux fonctions vivaient déjà en base et
+  n'étaient appelées par rien.
+- `MINDFLOW_AUDIT_RETENTION_MONTHS` vaut **0 par défaut : la purge est
+  désactivée**. Supprimer de l'historique d'audit parce que personne n'a
+  configuré de rétention est un échec pire qu'une table qui grossit ; un `DROP`
+  irréversible doit être demandé, jamais subi.
+- Deux jauges, `audit_partitions` et `audit_partition_gap`, **relues depuis
+  `pg_class`** après chaque passage plutôt que déduites du travail que le job
+  croit avoir fait. Une création qui n'a silencieusement rien fait doit
+  apparaître.
+- 16 tests, dont un qui n'exerce aucun de nos codes : il épingle le fait qu'une
+  insertion dans une plage sans partition **échoue** côté PostgreSQL. C'est le
+  comportement dont tout ADR-059 découle, et le découvrir par des notes de
+  version serait une mauvaise façon de l'apprendre.
+
+### Ajouté — Écrans d'entreprise (Flutter)
+
+- **Espaces** : liste, création, archivage, membres et rôles d'espace.
+- **Équipe** : membres du compte, invitations, liens partagés — trois listes sur
+  un écran parce qu'elles répondent à une seule question, *qui peut voir quoi ?*
+- **Mentions** : séparé du centre de notifications, parce qu'une mention est la
+  seule notification qu'on veut garder en coupant les autres.
+- **Intégrations** : les sept services, leur état, et les conflits.
+- **Administration** : vue d'ensemble, journal d'audit, usage, et les deux
+  alertes opérationnelles.
+- **Commentaires** et **feuille de partage**, montés sur le détail d'une note.
+- 39 tests : 28 sur les modèles, 11 sur les écrans.
+
+Trois comportements de l'interface sont testés parce qu'ils sont des phrases
+qu'on pourrait supprimer sans qu'aucun test ne rougisse : l'écran vide des
+espaces énonce qu'une note hors espace est privée ; Obsidian n'a **pas** de
+bouton « Synchroniser » ; un accès révoqué se voit proposer « Reconnecter » et
+jamais « Réessayer ».
+
+### Corrigé
+
+Deux bugs réels, trouvés par les tests d'écran et invisibles à la lecture.
+
+- `ShareSheet.dispose` lisait `ref` après démontage. Le nettoyage du jeton en
+  clair ne s'exécutait donc **jamais**, et l'exception était avalée par le
+  framework. Le contrôleur est désormais capturé pendant que le widget est
+  vivant.
+- La carte de conflit mettait ses deux choix dans un `Row` : sur un téléphone,
+  l'un des deux était rogné. Un conflit dont une seule issue est visible est
+  exactement ce qu'ADR-056 refuse.
+
+### Ce qui reste ouvert
+
+- **`sync_job` n'existe toujours pas.** La synchronisation n'a lieu que sur
+  appel explicite de `POST /v1/integrations/{id}/sync` : la « synchronisation
+  automatique » demandée en phase 4 attend un clic.
+- IA temps réel en réunion, mode hors ligne au-delà de la capture, builds
+  Desktop et Web, notifications intelligentes : inchangés (`TODO.md` §6 ter).
+
+---
+
 ## [0.5.0] — 2026-08-03
 
 **Phase 4 — Les fonctionnalités d'entreprise.** Le produit passe d'un outil

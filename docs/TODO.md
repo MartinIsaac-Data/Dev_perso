@@ -217,11 +217,11 @@ raison, indépendamment de leur difficulté.
 
 | # | Manque | Gravité | Pourquoi il n'a pas été traité |
 | --- | --- | --- | --- |
-| B1 | **`partition_job` n'existe pas.** `ensure_audit_partitions` vit en base et rien ne l'appelle automatiquement | 🔴 Haute | Le plus urgent de cette liste : sans partition pour le mois à venir, **chaque écriture d'audit échouera** le 1er, sans symptôme avant. Voir ADR-059 |
+| B1 | ~~`partition_job` n'existe pas~~ | ✅ **Fait** | Quotidien à 03:11 et au démarrage du worker, avec rétention désactivée par défaut. 16 tests, dont un qui épingle le comportement PostgreSQL dont tout le reste découle |
 | B2 | **`sync_job` n'existe pas.** Les intégrations ne se synchronisent que sur appel explicite de `/v1/integrations/{id}/sync` | 🔴 Haute | Documenté dans `DevOps.md` §2, non écrit. La synchronisation automatique demandée n'est donc pas automatique |
 | B3 | **IA temps réel en réunion non implémentée.** `meeting_session` est créée et n'est remplie par rien | 🔴 Haute | Demande un canal de transcription en flux et une extraction incrémentale — un chantier de la taille d'une phase, pas d'un module. Cadré en `RoadmapV2.md` §5 |
 | B4 | **Mode hors ligne incomplet.** Seule la capture l'est, depuis la phase 1 | 🔴 Haute | Consulter, cocher, commenter et chercher exigent un miroir local et une file de mutations. Dette E6, ouverte depuis la phase 2. Cadré en `RoadmapV2.md` §6 |
-| B5 | **Aucun écran Flutter d'entreprise.** L'API existe ; le client ne l'appelle pas | 🔴 Haute | Espaces, membres, commentaires, partage, intégrations, administration : six écrans non construits |
+| B5 | ~~Aucun écran Flutter d'entreprise~~ | ✅ **Fait** | Espaces, équipe, mentions, intégrations, administration, plus le panneau de commentaires et la feuille de partage sur le détail d'une note. 39 tests |
 | B6 | **Aucun build Desktop ni Web produit.** Flutter cible les deux | 🟠 Moyenne | Aucun `flutter build` n'a été lancé pour ces cibles ; rien ne prouve qu'ils compilent |
 | B7 | **Notifications intelligentes** : les types `mention` et `comment` existent, aucune logique de regroupement ni de silence | 🟠 Moyenne | « Intelligent » demande une règle mesurable. Sans usage réel, toute règle serait une supposition |
 | B8 | **Aucun appel réel à un fournisseur d'intégration.** Les sept connecteurs sont écrits contre des documentations | 🔴 Haute | Même blocage que A1. Il faut s'attendre à ce que plusieurs adaptateurs soient faux — ADR-057 en assume le coût |
@@ -230,11 +230,24 @@ raison, indépendamment de leur difficulté.
 | B11 | **Aucune restauration de sauvegarde testée**, aucun manifeste de déploiement | 🔴 Haute | Le démon Docker est resté indisponible pendant les quatre phases (A8). Une sauvegarde jamais restaurée n'est pas une sauvegarde |
 | B12 | **Un seul propriétaire de compte peut tout** — aucune séparation des pouvoirs | 🟡 Basse | Acceptable à cette échelle ; une organisation de plusieurs centaines de personnes exigera une validation à deux |
 
-**Le fil commun de B1 à B5** : la phase 4 a construit une fondation complète et
-correcte, et n'a pas construit ce qui la rend visible. L'API d'entreprise existe
-et fonctionne, prouvée par 53 tests d'intégration ; **un utilisateur du produit
-ne peut aujourd'hui rien en faire**, faute d'écrans. C'est le manque le plus
-honnête à énoncer de cette phase.
+**B1 et B5 sont traités.** Le déséquilibre énoncé plus haut — une API complète
+et invisible — est levé : les écrans existent et appellent les routes, et
+`partition_job` supprime la seule échéance datée du produit.
+
+**Ce qui reste le plus gênant est B2.** Sans `sync_job`, la « synchronisation
+automatique » demandée en phase 4 attend un clic. Les connecteurs, le port, la
+classification des conflits et l'écran fonctionnent ; personne ne les déclenche.
+
+**Deux bugs réels ont été trouvés par les tests d'écran**, et méritent d'être
+consignés parce qu'aucun des deux n'aurait été vu à la lecture :
+
+1. `ShareSheet.dispose` lisait `ref` après démontage — le nettoyage du jeton en
+   clair ne s'exécutait donc jamais, et l'exception était avalée par le
+   framework. Corrigé en capturant le contrôleur pendant que le widget est
+   vivant.
+2. La carte de conflit mettait ses deux choix dans un `Row` : sur un téléphone,
+   l'un des deux était rogné. Un conflit avec une seule issue visible est
+   exactement ce qu'ADR-056 refuse.
 
 ---
 
@@ -250,8 +263,8 @@ Les choses à faire en premier, dans l'ordre.
 | 4 | Prototyper la RLS et le contexte de session (sprint 01, R1) | Le risque technique le plus élevé du premier sprint |
 | 5 | Arbitrer la durée du sprint 01 (2 ou 3 semaines) | Le backlog dépasse la capacité de 65 % — voir `Sprint01.md` §4 |
 | 6 | **Passer un appel réel à chacun des cinq fournisseurs** (A1) | Toute la couche IA repose sur des formats de fil vérifiés uniquement contre des simulations |
-| 7 | **Écrire `partition_job`** (B1) | Le seul manque de cette liste dont l'échéance est une date : le 1er du mois suivant celui de la dernière partition créée |
-| 8 | **Construire les écrans Flutter d'entreprise** (B5) | Sans eux, toute la phase 4 est inaccessible à un utilisateur du produit |
+| 7 | **Écrire `sync_job`** (B2) | Sans lui, la synchronisation automatique n'est pas automatique — c'est le dernier écart entre ce qui a été demandé en phase 4 et ce qui tourne |
+| 8 | **Produire un build Desktop et Web** (B6) | Flutter les cible et rien ne prouve qu'ils compilent |
 
 ---
 

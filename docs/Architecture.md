@@ -2174,11 +2174,43 @@ testable sans réseau — et testée, avec 35 cas.
 | --- | --- |
 | Table `meeting_session` | ✅ Créée, **jamais remplie** — aucun service temps réel |
 | Mode hors ligne complet | ❌ Seule la capture est hors ligne, depuis la phase 1 |
-| Écrans Flutter d'entreprise | ❌ L'API existe, le client ne l'appelle pas |
+| Écrans Flutter d'entreprise | ✅ Espaces, équipe, mentions, intégrations, administration, commentaires, partage |
 | Version Desktop / Web | ❌ Flutter les cible ; aucun build n'a été produit |
 | Notifications intelligentes | ⚠️ Les types `mention` et `comment` existent ; aucune logique de regroupement |
-| `sync_job`, `partition_job` | ❌ Documentés dans `DevOps.md` §2, non écrits |
+| `partition_job` | ✅ Quotidien, `run_at_startup`. Voir §17.6 |
+| `sync_job` | ❌ Documenté dans `DevOps.md` §2, non écrit. La synchronisation reste manuelle |
 
-**La ligne la plus importante est la dernière.** `ensure_audit_partitions` existe
-en base et n'est appelée par rien d'automatique. Tant que ce job n'existe pas,
-la protection d'ADR-059 repose sur quelqu'un qui y pense.
+**La ligne la plus importante est la dernière.** Sans `sync_job`, la
+« synchronisation automatique » demandée en phase 4 n'est pas automatique : elle
+attend un appel à `POST /v1/integrations/{id}/sync`.
+
+### 17.6 Le job de partitionnement
+
+```mermaid
+flowchart LR
+    CRON[cron 03:11<br/>+ run_at_startup] --> JOB[maintain_audit_partitions]
+    JOB --> ENS["ensure_audit_partitions(3)"]
+    JOB --> RET["drop_audit_partitions_before(cutoff)<br/>si rétention configurée"]
+    JOB --> GAUGE[["pg_class → audit_partitions<br/>audit_partition_gap"]]
+```
+
+**Les fonctions SQL et le job ne sont pas redondants, ils sont
+complémentaires.** Les fonctions vivent dans la base pour rester utilisables
+quand le worker est arrêté ; le job est ce qui les appelle sans qu'on y pense.
+Une fonction que personne n'appelle ne protège rien.
+
+**Quotidien, alors que le job crée trois mois d'avance.** C'est délibéré : la
+panne évitée est datée et totale, donc l'assurance la moins chère possible vaut
+la peine d'être prise tous les jours. `run_at_startup` couvre le cas où le
+worker a été arrêté au passage d'un mois — c'est-à-dire exactement quand
+personne ne regardait.
+
+**La rétention est désactivée par défaut** (`audit_retention_months = 0`).
+Supprimer de l'historique d'audit parce que personne n'a configuré de rétention
+est un échec pire qu'une table qui grossit : la seconde se voit sur un tableau
+de bord, la première se découvre quand un auditeur demande l'an dernier.
+
+**Les jauges sont relues depuis `pg_class`**, pas déduites de la valeur de
+retour du job. Une création qui n'a silencieusement rien fait doit apparaître ;
+une jauge qui reflète l'intention du job plutôt que l'état de la base rassure
+au lieu d'alerter.

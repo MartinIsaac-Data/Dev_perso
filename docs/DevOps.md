@@ -42,8 +42,8 @@ mois, où il en a beaucoup d'un coup.
 | `embed_job` | 2 min | oui | Le retard d'encodage monte ; recherche sémantique périmée |
 | `extract_job` | 3×/h | oui | Le graphe de connaissances cesse d'être à jour |
 | `digest_job` | 1 h | oui | Les résumés cessent d'être produits |
-| **`sync_job`** | **5 min** | **oui** | **Les intégrations cessent de se synchroniser** |
-| **`partition_job`** | **quotidien** | **oui** | **Voir §1, dernière ligne** |
+| `sync_job` | 5 min | oui | **Non écrit.** La synchronisation n'a lieu que sur appel explicite de `POST /v1/integrations/{id}/sync` |
+| **`partition_job`** | **quotidien à 03:11, + au démarrage** | **oui** | **Voir §1, dernière ligne** |
 
 Tous utilisent `privileged_session()` — la seule connexion du produit qui
 contourne RLS (ADR-042) — puis rentrent dans une session locataire par compte,
@@ -121,6 +121,10 @@ grep -n "user_id=principal.user_id" app/api/deps.py  # doit renvoyer une ligne
 
 ### 3.4 « Les partitions d'audit manquent »
 
+`partition_job` tourne tous les jours et au démarrage du worker. S'il manque une
+partition, c'est que le job ne tourne pas — vérifier §2 avant de réparer à la
+main.
+
 ```sql
 SELECT ensure_audit_partitions(3);         -- crée ce qui manque
 SELECT drop_audit_partitions_before('2025-01-01');  -- rétention
@@ -128,6 +132,16 @@ SELECT drop_audit_partitions_before('2025-01-01');  -- rétention
 
 `DROP` sur une partition plutôt que `DELETE` : instantané, récupère l'espace, ne
 verrouille pas le reste de la table.
+
+| Réglage | Défaut | Effet |
+| --- | --- | --- |
+| `MINDFLOW_AUDIT_PARTITION_MONTHS_AHEAD` | `3` | Marge de création |
+| `MINDFLOW_AUDIT_RETENTION_MONTHS` | `0` | **Rétention désactivée.** Un `DROP` est irréversible : il doit être demandé, jamais subi |
+
+**La jauge `audit_partition_gap` est relue depuis `pg_class` après chaque
+passage**, pas déduite du travail que le job croit avoir fait. Si elle reste à 1
+alors que le job vient de tourner, ce n'est pas un retard : c'est une fonction
+cassée ou un problème de droits, et le journal d'audit tombera le 1er.
 
 ### 3.5 Rotation d'une clé de chiffrement
 
