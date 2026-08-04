@@ -161,3 +161,21 @@ audit_partitions = Gauge("audit_partitions", "Monthly partitions on audit_log", 
 audit_partition_gap = Gauge(
     "audit_partition_gap", "1 when next month has no partition", registry=REGISTRY
 )
+
+# -- Live meetings (Phase 4) -------------------------------------------------
+meetings_total = Counter("meetings_total", "Meeting sessions", ["outcome"], registry=REGISTRY)
+# Audio blocks that reached the transcriber. A `failed` rate above a few percent
+# means the transcript has holes, and a transcript with holes produces a summary
+# that is confidently incomplete.
+meeting_blocks_total = Counter(
+    "meeting_blocks_total", "Meeting audio blocks", ["outcome"], registry=REGISTRY
+)
+# Live analysis passes. This is the cost signal: it should grow with the number
+# of *commitments* made, not with meeting minutes. If it tracks minutes, the cue
+# logic has stopped working and every meeting is paying for a timer.
+meeting_analyses_total = Counter(
+    "meeting_analyses_total", "Live analysis passes", ["outcome"], registry=REGISTRY
+)
+meeting_suggestions_total = Counter(
+    "meeting_suggestions_total", "Suggestions surfaced during meetings", registry=REGISTRY
+)

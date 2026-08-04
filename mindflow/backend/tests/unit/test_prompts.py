@@ -32,6 +32,8 @@ class TestRegistry:
             "extract_entities",
             "extract_memory",
             "extract_note_analysis",
+            "meeting_live",
+            "meeting_summary",
             "narrate_themes",
         }
 

@@ -422,6 +422,14 @@ class MeetingSession(Base, TimestampMixin):
     # Appended as partial transcripts arrive. Kept on the session rather than in
     # `transcript` because it is provisional until the meeting closes.
     live_transcript: Mapped[str | None] = mapped_column(Text)
+    # How much of `live_transcript` a model has already looked at, in words.
+    #
+    # A word count rather than a character offset, because stitching rewrites
+    # the tail of the transcript when a block overlaps the previous one — an
+    # offset would end up pointing into the middle of a word (ADR-062).
+    analysed_words: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     # Suggestions produced during the meeting: detected actions, questions
     # nobody answered, decisions. Provisional by nature.
     live_suggestions: Mapped[list[dict[str, Any]]] = mapped_column(

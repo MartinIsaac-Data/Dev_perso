@@ -14,7 +14,7 @@ imported lazily is a prompt that never gets checked for an injection guard.
 
 from __future__ import annotations
 
-from app.prompts import answer, digest, entities, extraction, insights, memory
+from app.prompts import answer, digest, entities, extraction, insights, meeting, memory
 from app.prompts.registry import Prompt, all_prompts, fingerprints, get, register
 
 __all__ = [
@@ -27,6 +27,7 @@ __all__ = [
     "fingerprints",
     "get",
     "insights",
+    "meeting",
     "memory",
     "register",
 ]

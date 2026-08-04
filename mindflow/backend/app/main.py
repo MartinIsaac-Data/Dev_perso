@@ -65,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         health,
         insights,
         me,
+        meetings,
         notifications,
         planning,
         projects,
@@ -83,6 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(notifications.router, prefix=settings.api_prefix, tags=["notifications"])
     app.include_router(insights.router, prefix=settings.api_prefix, tags=["insights"])
     app.include_router(assistant.router, prefix=settings.api_prefix, tags=["assistant"])
+    app.include_router(meetings.router, prefix=settings.api_prefix, tags=["meetings"])
     app.include_router(enterprise.router, prefix=settings.api_prefix, tags=["enterprise"])
     app.include_router(admin.router, prefix=settings.api_prefix, tags=["admin"])
     if settings.storage_backend == "local":
