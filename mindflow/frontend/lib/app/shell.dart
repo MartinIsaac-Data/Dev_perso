@@ -19,6 +19,7 @@ import '../core/api/planning_models.dart';
 import '../core/design/command_palette.dart';
 import '../core/design/components.dart';
 import '../core/design/tokens.dart';
+import '../features/enterprise/enterprise_providers.dart';
 import '../features/planning/planning_providers.dart';
 import 'router.dart';
 
@@ -115,6 +116,44 @@ const shellDestinations = <ShellDestination>[
     icon: Icons.article_outlined,
     selectedIcon: Icons.article,
     route: Routes.digests,
+    compact: false,
+  ),
+  // Phase 4. None of these are `compact`: the phone's bottom bar is already at
+  // its practical ceiling of five, and a person on a phone is capturing, not
+  // administering an organisation.
+  ShellDestination(
+    label: 'Espaces',
+    icon: Icons.workspaces_outline,
+    selectedIcon: Icons.workspaces,
+    route: Routes.workspaces,
+    compact: false,
+  ),
+  ShellDestination(
+    label: 'Mentions',
+    icon: Icons.alternate_email,
+    selectedIcon: Icons.alternate_email,
+    route: Routes.mentions,
+    compact: false,
+  ),
+  ShellDestination(
+    label: 'Équipe',
+    icon: Icons.group_outlined,
+    selectedIcon: Icons.group,
+    route: Routes.team,
+    compact: false,
+  ),
+  ShellDestination(
+    label: 'Intégrations',
+    icon: Icons.sync_alt,
+    selectedIcon: Icons.sync_alt,
+    route: Routes.integrations,
+    compact: false,
+  ),
+  ShellDestination(
+    label: 'Administration',
+    icon: Icons.shield_outlined,
+    selectedIcon: Icons.shield,
+    route: Routes.admin,
     compact: false,
   ),
 ];
@@ -250,6 +289,50 @@ class _AppShellState extends ConsumerState<AppShell> {
         onInvoke: (context, _) => context.go(Routes.notifications),
       ),
       PaletteAction(
+        id: 'workspaces',
+        label: 'Espaces partagés',
+        icon: Icons.workspaces_outline,
+        keywords: const ['espace', 'workspace', 'partage', 'equipe'],
+        onInvoke: (context, _) => context.go(Routes.workspaces),
+      ),
+      PaletteAction(
+        id: 'mentions',
+        label: 'Mes mentions',
+        icon: Icons.alternate_email,
+        keywords: const ['mention', 'arobase', 'interpelle'],
+        onInvoke: (context, _) => context.go(Routes.mentions),
+      ),
+      PaletteAction(
+        id: 'team',
+        label: 'Équipe et invitations',
+        icon: Icons.group_outlined,
+        keywords: const ['membres', 'inviter', 'roles', 'liens partages'],
+        onInvoke: (context, _) => context.go(Routes.team),
+      ),
+      PaletteAction(
+        id: 'integrations',
+        label: 'Intégrations',
+        icon: Icons.sync_alt,
+        keywords: const [
+          'google',
+          'outlook',
+          'slack',
+          'teams',
+          'notion',
+          'obsidian',
+          'calendrier',
+          'synchronisation'
+        ],
+        onInvoke: (context, _) => context.go(Routes.integrations),
+      ),
+      PaletteAction(
+        id: 'admin',
+        label: 'Administration',
+        icon: Icons.shield_outlined,
+        keywords: const ['audit', 'journal', 'usage', 'sante'],
+        onInvoke: (context, _) => context.go(Routes.admin),
+      ),
+      PaletteAction(
         id: 'library',
         label: 'Projets et tags',
         icon: Icons.folder_outlined,
@@ -330,6 +413,9 @@ class _Sidebar extends ConsumerWidget {
     // Selects only the count: the sidebar must not rebuild when the whole
     // notification list changes.
     final unread = ref.watch(unreadCountProvider);
+    // Selected as a count for the same reason as `unread`: the sidebar must not
+    // rebuild when a mention is marked read three screens away.
+    final mentions = ref.watch(unreadMentionsProvider);
 
     return SafeArea(
       child: Column(
@@ -362,8 +448,11 @@ class _Sidebar extends ConsumerWidget {
                     selected: destination.route == Routes.dashboard
                         ? location == Routes.dashboard
                         : location.startsWith(destination.route),
-                    badge:
-                        destination.route == Routes.notifications ? unread : 0,
+                    badge: switch (destination.route) {
+                      Routes.notifications => unread,
+                      Routes.mentions => mentions,
+                      _ => 0,
+                    },
                   ),
               ],
             ),

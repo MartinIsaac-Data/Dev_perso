@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'assistant_models.dart';
+import 'enterprise_models.dart';
 import 'errors.dart';
 import 'models.dart';
 import 'planning_models.dart';
@@ -61,6 +62,19 @@ class MindflowApi {
   Future<Map<String, dynamic>> _post(String path, {Object? body}) async {
     final response = await _dio.post<Map<String, dynamic>>(path, data: body);
     return _unwrap(response);
+  }
+
+  Future<Map<String, dynamic>> _patch(String path, {Object? body}) async {
+    final response = await _dio.patch<Map<String, dynamic>>(path, data: body);
+    return _unwrap(response);
+  }
+
+  /// Deletes answer `204` with no body, so there is nothing to unwrap on
+  /// success — but a failure still carries a problem document, and dropping it
+  /// would turn "you are not allowed to do that" into a silent no-op.
+  Future<void> _delete(String path) async {
+    final response = await _dio.delete<Map<String, dynamic>>(path);
+    if ((response.statusCode ?? 500) >= 400) _unwrap(response);
   }
 
   Map<String, dynamic> _unwrap(Response<Map<String, dynamic>> response) {
@@ -723,6 +737,232 @@ class MindflowApi {
     final response =
         await _dio.delete<Map<String, dynamic>>('/v1/memory/$memoryId');
     if ((response.statusCode ?? 500) >= 400) _unwrap(response);
+  }
+
+  // -- Workspaces (Phase 4) -----------------------------------------------
+
+  Future<List<Workspace>> listWorkspaces({bool includeArchived = false}) async {
+    final data = await _get('/v1/workspaces', query: {
+      if (includeArchived) 'include_archived': true,
+    });
+    return _list(data, Workspace.fromJson);
+  }
+
+  Future<Workspace> createWorkspace({
+    required String name,
+    String? description,
+    String? color,
+  }) async {
+    final data = await _post('/v1/workspaces', body: {
+      'name': name,
+      if (description != null && description.isNotEmpty)
+        'description': description,
+      if (color != null) 'color': color,
+    });
+    return Workspace.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<Workspace> updateWorkspace(
+    String workspaceId, {
+    String? name,
+    String? description,
+    bool? archived,
+  }) async {
+    final data = await _patch('/v1/workspaces/$workspaceId', body: {
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (archived != null) 'archived': archived,
+    });
+    return Workspace.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  /// Archives rather than destroys: the notes inside become private to their
+  /// authors again. Nothing is lost.
+  Future<void> deleteWorkspace(String workspaceId) =>
+      _delete('/v1/workspaces/$workspaceId');
+
+  Future<List<Member>> workspaceMembers(String workspaceId) async {
+    final data = await _get('/v1/workspaces/$workspaceId/members');
+    return _list(data, Member.fromJson);
+  }
+
+  Future<Member> addWorkspaceMember(
+    String workspaceId, {
+    required String userId,
+    WorkspaceRole role = WorkspaceRole.editor,
+  }) async {
+    final data = await _post('/v1/workspaces/$workspaceId/members',
+        body: {'user_id': userId, 'role': role.param});
+    return Member.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> removeWorkspaceMember(String workspaceId, String userId) =>
+      _delete('/v1/workspaces/$workspaceId/members/$userId');
+
+  Future<List<Member>> accountMembers() async {
+    final data = await _get('/v1/members');
+    return _list(data, Member.fromJson);
+  }
+
+  Future<Member> setMemberRole(String userId, AccountRole role) async {
+    final data =
+        await _patch('/v1/members/$userId/role', body: {'role': role.param});
+    return Member.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> removeMember(String userId) => _delete('/v1/members/$userId');
+
+  Future<List<Invitation>> listInvitations() async {
+    final data = await _get('/v1/invitations');
+    return _list(data, Invitation.fromJson);
+  }
+
+  Future<Invitation> invite({
+    required String email,
+    AccountRole role = AccountRole.member,
+    String? workspaceId,
+  }) async {
+    final data = await _post('/v1/invitations', body: {
+      'email': email,
+      'role': role.param,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+    });
+    return Invitation.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> revokeInvitation(String invitationId) =>
+      _delete('/v1/invitations/$invitationId');
+
+  Future<void> acceptInvitation(String token) async {
+    await _post('/v1/invitations/accept', body: {'token': token});
+  }
+
+  // -- Comments and mentions ----------------------------------------------
+
+  Future<List<Comment>> listComments(String entryId) async {
+    final data = await _get('/v1/entries/$entryId/comments');
+    return _list(data, Comment.fromJson);
+  }
+
+  Future<Comment> postComment(String entryId, String body,
+      {String? parentId}) async {
+    final data = await _post('/v1/entries/$entryId/comments', body: {
+      'body': body,
+      if (parentId != null) 'parent_id': parentId,
+    });
+    return Comment.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<Comment> editComment(String commentId, String body) async {
+    final data = await _patch('/v1/comments/$commentId', body: {'body': body});
+    return Comment.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteComment(String commentId) =>
+      _delete('/v1/comments/$commentId');
+
+  Future<void> resolveComment(String commentId) async {
+    await _post('/v1/comments/$commentId/resolve');
+  }
+
+  Future<List<Mention>> listMentions({bool unreadOnly = false}) async {
+    final data = await _get('/v1/mentions',
+        query: {if (unreadOnly) 'unread_only': true});
+    return _list(data, Mention.fromJson);
+  }
+
+  Future<void> markMentionRead(String mentionId) async {
+    await _post('/v1/mentions/$mentionId/read');
+  }
+
+  // -- Sharing -------------------------------------------------------------
+
+  /// The response is the only place the plaintext token exists. Nothing on the
+  /// server can produce it again, so a caller that discards it has lost it.
+  Future<ShareLink> shareEntry(
+    String entryId, {
+    DateTime? expiresAt,
+    bool allowComments = false,
+  }) async {
+    final data = await _post('/v1/entries/$entryId/share', body: {
+      if (expiresAt != null) 'expires_at': expiresAt.toUtc().toIso8601String(),
+      'allow_comments': allowComments,
+    });
+    return ShareLink.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<ShareLink>> listShares() async {
+    final data = await _get('/v1/shares');
+    return _list(data, ShareLink.fromJson);
+  }
+
+  Future<void> revokeShare(String linkId) => _delete('/v1/shares/$linkId');
+
+  // -- Integrations --------------------------------------------------------
+
+  Future<List<Connection>> listIntegrations() async {
+    final data = await _get('/v1/integrations');
+    return _list(data, Connection.fromJson);
+  }
+
+  Future<Connection> connectIntegration({
+    required SyncProvider provider,
+    required String accessToken,
+    String? refreshToken,
+    String? label,
+    SyncDirection direction = SyncDirection.pull,
+  }) async {
+    final data = await _post('/v1/integrations', body: {
+      'provider': provider.param,
+      'access_token': accessToken,
+      if (refreshToken != null) 'refresh_token': refreshToken,
+      if (label != null) 'label': label,
+      'direction': direction.param,
+    });
+    return Connection.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> disconnectIntegration(String connectionId) =>
+      _delete('/v1/integrations/$connectionId');
+
+  Future<SyncReport> syncNow(String connectionId) async {
+    final data = await _post('/v1/integrations/$connectionId/sync');
+    return SyncReport.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<SyncConflict>> listConflicts() async {
+    final data = await _get('/v1/integrations/conflicts');
+    return _list(data, SyncConflict.fromJson);
+  }
+
+  Future<void> resolveConflict(String linkId, {required String keep}) async {
+    await _post('/v1/integrations/conflicts/$linkId/resolve',
+        body: {'keep': keep});
+  }
+
+  // -- Administration ------------------------------------------------------
+
+  Future<AccountOverview> adminOverview() async {
+    final data = await _get('/v1/admin/overview');
+    return AccountOverview.fromJson(data['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<AuditEntry>> auditLog({String? action, int limit = 100}) async {
+    final data = await _get('/v1/admin/audit', query: {
+      if (action != null && action.isNotEmpty) 'action': action,
+      'limit': limit,
+    });
+    return _list(data, AuditEntry.fromJson);
+  }
+
+  Future<List<UsagePoint>> adminUsage({int days = 30}) async {
+    final data = await _get('/v1/admin/usage', query: {'days': days});
+    return _list(data, UsagePoint.fromJson);
+  }
+
+  Future<OperationalHealth> adminHealth() async {
+    final data = await _get('/v1/admin/health');
+    return OperationalHealth.fromJson(data['data'] as Map<String, dynamic>);
   }
 
   /// Collections always arrive wrapped in `data` (API.md §3.2).

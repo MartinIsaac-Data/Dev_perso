@@ -21,6 +21,8 @@ import '../../app/theme.dart';
 import '../../core/api/errors.dart';
 import '../../core/api/models.dart';
 import '../../core/ui/formatting.dart';
+import '../enterprise/comments_panel.dart';
+import '../enterprise/share_sheet.dart';
 import '../planning/task_panels.dart';
 import 'notes_providers.dart';
 
@@ -229,6 +231,12 @@ class _DetailState extends ConsumerState<_Detail> {
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 label: const Text('Modifier'),
               ),
+              OutlinedButton.icon(
+                key: const Key('detail_share'),
+                onPressed: () => showShareSheet(context, entry.id),
+                icon: const Icon(Icons.link, size: 18),
+                label: const Text('Partager'),
+              ),
               if (entry.type == EntryType.task)
                 FilledButton.tonalIcon(
                   onPressed: () async {
@@ -307,6 +315,13 @@ class _DetailState extends ConsumerState<_Detail> {
           ReminderPanel(entryId: entry.id),
         ],
         EntryHistoryPanel(entryId: entry.id),
+
+        // Phase 4. Shown on every entry rather than only on ones in a
+        // workspace: a private note with no discussion renders an empty
+        // section, whereas hiding the panel until a note is shared means the
+        // one place to start a conversation appears only after somebody has
+        // already found another way to have it.
+        CommentsPanel(entryId: entry.id),
       ],
     );
   }

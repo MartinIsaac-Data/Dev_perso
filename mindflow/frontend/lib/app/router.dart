@@ -18,6 +18,11 @@ import '../features/auth/login_screen.dart';
 import '../features/capture/capture_detail_screen.dart';
 import '../features/capture/record_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
+import '../features/enterprise/admin_screen.dart';
+import '../features/enterprise/integrations_screen.dart';
+import '../features/enterprise/mentions_screen.dart';
+import '../features/enterprise/team_screen.dart';
+import '../features/enterprise/workspaces_screen.dart';
 import '../features/notes/note_detail_screen.dart';
 import '../features/notes/notes_screen.dart';
 import '../features/assistant/assistant_screen.dart';
@@ -51,6 +56,13 @@ class Routes {
   static const assistant = '/assistant';
   static const knowledge = '/knowledge';
   static const digests = '/digests';
+
+  // Phase 4
+  static const workspaces = '/workspaces';
+  static const team = '/team';
+  static const mentions = '/mentions';
+  static const integrations = '/integrations';
+  static const admin = '/admin';
 
   static String note(String id) => '/notes/$id';
   static String capture(String id) => '/captures/$id';
@@ -156,6 +168,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
               path: Routes.library, builder: (_, __) => const LibraryScreen()),
+          GoRoute(
+              path: Routes.workspaces,
+              builder: (_, __) => const WorkspacesScreen()),
+          GoRoute(path: Routes.team, builder: (_, __) => const TeamScreen()),
+          GoRoute(
+              path: Routes.mentions,
+              builder: (_, __) => const MentionsScreen()),
+          GoRoute(
+              path: Routes.integrations,
+              builder: (_, __) => const IntegrationsScreen()),
+          GoRoute(path: Routes.admin, builder: (_, __) => const AdminScreen()),
         ],
       ),
     ],
