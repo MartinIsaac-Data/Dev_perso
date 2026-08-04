@@ -1,0 +1,35 @@
+{
+    "name": "MindFlow AI",
+    "short_name": "MindFlow",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#FCFCFD",
+    "theme_color": "#5B5BD6",
+    "description": "Capture vocale, structuration automatique et recherche dans vos propres notes.",
+    "orientation": "any",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

@@ -27,9 +27,16 @@ node_modules/
 dist/
 .vite/
 
-# Flutter. The platform folders are tool output, regenerated with
-# `flutter create --platforms=android,ios .` — committing them buys nothing and
-# costs a merge conflict on every SDK bump.
+# Flutter.
+#
+# `android/` and `ios/` stay ignored: nothing in this project has customised
+# them, so they are still tool output that `flutter create` reproduces exactly.
+#
+# `web/`, `linux/`, `macos/` and `windows/` are committed as of phase 4
+# (ADR-060). They stopped being tool output the moment they carried the window
+# title, the initial window size and the web boot screen — a generated file you
+# have to hand-edit after generating it is source, and regenerating it silently
+# reverts those edits.
 mindflow/frontend/.dart_tool/
 mindflow/frontend/build/
 mindflow/frontend/.flutter-plugins
@@ -37,11 +44,11 @@ mindflow/frontend/.flutter-plugins-dependencies
 mindflow/frontend/.packages
 mindflow/frontend/android/
 mindflow/frontend/ios/
-mindflow/frontend/linux/
-mindflow/frontend/macos/
-mindflow/frontend/windows/
-mindflow/frontend/web/
 mindflow/frontend/coverage/
+mindflow/frontend/*.iml
+mindflow/frontend/linux/flutter/ephemeral/
+mindflow/frontend/macos/Flutter/ephemeral/
+mindflow/frontend/windows/flutter/ephemeral/
 
 # Editors and OS
 .DS_Store

@@ -28,6 +28,31 @@ dependencies:
   # Audio capture and playback. `record` writes straight to a file, which is what
   # lets the capture survive the app being killed mid-recording (ADR-009).
   record: ^5.1.2
+  # The five lines below are not decoration: without them the Linux desktop
+  # build does not compile, and the failure is in a package nobody here wrote.
+  #
+  # `record 5.2.1` under-constrains its own implementations. It allows
+  # `record_platform_interface ^1.2.0` next to `record_linux >=0.5.0 <1.0.0`,
+  # and the newest of each do not fit together: `record_linux 0.7.2` implements
+  # the interface as it stood at 1.2, while 1.3 added `hasPermission({request})`
+  # and 1.5 added `startStream` and `streamBufferSize`. Solving to the newest
+  # therefore yields a set where the Linux plugin is missing abstract members
+  # and the web plugin reads a field that does not exist — one or the other,
+  # never both.
+  #
+  # There is exactly one coherent set under this Flutter SDK, and this is it.
+  # Pinned as real constraints rather than `dependency_overrides` because an
+  # override silences the other packages' constraints instead of satisfying
+  # them: it would fix Linux and leave web broken, without saying so.
+  #
+  # Accepted cost: the recorder stays at its 2024 feature level on every
+  # platform. Lifting it needs `record ^7`, which needs Flutter ≥ 3.44.8; this
+  # project is on 3.27.1.
+  record_platform_interface: ">=1.2.0 <1.3.0"
+  record_web: ">=1.1.5 <1.2.0"
+  record_android: ">=1.3.1 <1.4.0"
+  record_darwin: ">=1.2.0 <1.3.0"
+  record_windows: ">=1.0.5 <1.0.7"
   just_audio: ^0.9.42
   path_provider: ^2.1.5
 
@@ -55,3 +80,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
