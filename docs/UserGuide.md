@@ -18,7 +18,8 @@ vous pouvez ensuite poser des questions à vos propres notes.
 Appuyez, parlez, relâchez. C'est tout.
 
 - **Vous n'avez pas besoin de réseau.** La capture est enregistrée sur
-  l'appareil et envoyée quand la connexion revient.
+  l'appareil — ou dans le navigateur — et envoyée quand la connexion revient.
+  L'application se lance même sans connexion.
 - **Vous n'avez pas besoin de bien formuler.** « Faut que je rappelle le DAF de
   Vinci jeudi » devient une tâche intitulée « Rappeler le DAF de Vinci », datée
   au jeudi suivant.

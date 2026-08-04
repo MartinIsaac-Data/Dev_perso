@@ -30,6 +30,88 @@ Rien pour l'instant.
 
 ---
 
+## [0.5.4] — 2026-08-04
+
+**Le web peut capturer.** La 0.5.3 livrait un build web qui compilait,
+s'analysait, passait ses tests — et ne pouvait enregistrer aucune note, c'est-à-
+dire faire la seule chose pour laquelle le produit existe. 152 tests, et une
+vérification qui exécute réellement la page.
+
+### Corrigé — le stockage local (ADR-061)
+
+La phase 1 avait écrit la file hors ligne avec `dart:io` : un `File` pour
+l'audio, un pour la file, un pour les préférences. `dart:io` **compile** pour le
+web et lève à l'exécution — d'où un build entièrement vert et entièrement
+inutilisable.
+
+Deux ports remplacent les trois usages, séparés par la taille et par l'enjeu :
+
+| Port | Contenu | Natif | Navigateur |
+| --- | --- | --- | --- |
+| `BlobStore` | L'audio — des mégaoctets | Fichiers | **IndexedDB** |
+| `DocumentStore` | La file et les préférences | Fichiers | `localStorage` |
+
+`localStorage` pour l'audio aurait été plus simple et faux : plafonné à cinq
+mégaoctets, en base64 donc un tiers plus lourd, une capture de dix minutes
+remplirait presque le quota et la deuxième lèverait. Garder l'URL de blob
+l'aurait été davantage : l'objet qu'elle nomme meurt avec le document, donc la
+file aurait pointé sur rien après un rechargement.
+
+### Corrigé — trois défauts que seule l'ouverture de la page révèle
+
+Aucun n'était visible dans `flutter build`, `flutter analyze` ni les tests.
+
+- **Le moteur de rendu était chargé depuis `gstatic.com`** au démarrage. Une
+  application dont le sujet est de fonctionner sans réseau ne peut pas commencer
+  par télécharger 19 Mo chez un tiers. `--no-web-resources-cdn`.
+- **La police par défaut était chargée depuis `fonts.gstatic.com`.** Quand cet
+  appel échoue, l'interface s'affiche **sans aucun texte** — pas une police de
+  repli, rien. Roboto est désormais empaquetée (512 ko).
+- **L'écran de démarrage n'était retiré par personne.** Le commentaire que
+  j'avais écrit affirmait que le moteur s'en chargeait ; c'est faux, il ajoute sa
+  vue et laisse le reste du document tel quel. L'application tournait dessous.
+
+### Corrigé — le codec audio
+
+`AAC-LC` était codé en dur. Chrome et Firefox le refusent ; ils produisent de
+l'Opus en WebM, que le serveur acceptait déjà. Le format est maintenant choisi
+par plateforme **et porté** par la ligne de file, parce qu'une capture
+enregistrée dans un navigateur peut être déclarée des semaines plus tard.
+
+### Corrigé — une panne réseau ne se lisait pas comme telle
+
+`ApiException.fromDio` existait depuis la phase 1, était testée, et n'était
+appelée par rien : un échec de transport s'échappait en `DioException` brut et
+tombait dans le `catch` générique. Un téléphone dans un tunnel affichait donc
+« l'envoi a échoué » au lieu de « pas de réseau, la capture est conservée » — le
+seul message que la file hors ligne existe pour rendre vrai. Les échecs de
+transport sont désormais traduits en document de problème par l'intercepteur,
+donc chaque appelant les traite déjà.
+
+### Ajouté — `tool/smoke_web.mjs`
+
+Sert le bundle, l'ouvre dans un Chromium, **coupe le réseau et recharge**.
+Vérifie que l'application démarre sans réseau, qu'aucun écran de démarrage ne
+reste, que le texte s'affiche, et que l'audio en file survit à la coupure.
+Câblé dans la matrice CI.
+
+C'est la seule vérification du projet qui atteste que le mode hors ligne existe.
+Les quatre défauts ci-dessus sont l'argument : quatre gates verts, un produit
+qui ne marchait pas.
+
+### Décisions
+
+- [ADR-061] Le stockage local est un port, pas `dart:io`
+
+### Ce qui reste de B4
+
+L'application démarre sans réseau et la file de captures survit à la coupure.
+Elle ne conserve **pas** les notes déjà écrites pour consultation hors ligne :
+cela demande un miroir local et une file de mutations sortantes, pas une couche
+de stockage. Celle-ci existe désormais et servira de base (`RoadmapV2.md` §6).
+
+---
+
 ## [0.5.3] — 2026-08-04
 
 **Le client se compile.** Jusqu'ici il n'avait jamais été compilé pour aucune

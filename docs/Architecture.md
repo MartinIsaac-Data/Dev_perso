@@ -2301,8 +2301,47 @@ avec de vraies contraintes plutôt qu'un `dependency_overrides` : un override
 tait les contraintes des autres paquets au lieu de les satisfaire, donc il
 aurait réparé Linux en laissant le web cassé, sans le dire.
 
-**Le mode hors ligne n'est pas résolu par le build web** — il l'aggrave. Le
-client utilise `dart:io` pour la file de captures locale ; sur le web, cette
-bibliothèque compile et lève à l'exécution. Le web est donc utilisable pour
-consulter, chercher et interroger, et **pas pour capturer**. C'est une limite
-réelle, pas un réglage (`TODO.md` B4).
+### 17.9 Le stockage local, et le mode hors ligne du web
+
+```mermaid
+flowchart TB
+    REC[VoiceRecorder] --> BS{{BlobStore}}
+    QUEUE[PendingCaptureStore] --> BS
+    QUEUE --> DS{{DocumentStore}}
+    PREFS[LocalPrefs] --> DS
+    BS --> FIO[Fichiers · natif]
+    BS --> IDB[IndexedDB · navigateur]
+    DS --> FIO2[Fichiers · natif]
+    DS --> LS[localStorage · navigateur]
+```
+
+**Deux ports, séparés par la taille et par l'enjeu** (ADR-061). L'audio pèse des
+mégaoctets et va en IndexedDB ; la file et les préférences pèsent des
+kilooctets et vont en `localStorage`. Le choix se fait par import conditionnel,
+donc rien de tout cela n'est lié dans un build natif.
+
+**La clé est le `client_capture_id`**, qui existe avant les octets (ADR-009).
+Aucun appelant n'apprend jamais s'il tient un chemin, une URL de blob ou une
+clé IndexedDB.
+
+**Ce qui rendait le web inutilisable, et qui ne se voyait sur aucun indicateur.**
+Le build web de la §17.8 compilait, s'analysait et passait ses tests — et ne
+pouvait enregistrer aucune note, parce que `dart:io` compile pour le web et lève
+à l'exécution. Trois autres défauts du même genre n'ont été trouvés qu'en
+ouvrant réellement la page dans un navigateur :
+
+| Défaut | Symptôme | Correction |
+| --- | --- | --- |
+| Le moteur de rendu était chargé depuis `gstatic.com` | Page blanche sans réseau | `--no-web-resources-cdn` |
+| La police par défaut était chargée depuis `fonts.gstatic.com` | Interface **sans aucun texte**, pas une police de repli | Roboto empaquetée |
+| L'écran de démarrage n'était retiré par personne | L'application tournait dessous | Retrait explicite au premier frame |
+| `AAC-LC` codé en dur | `start()` échoue dans Chrome et Firefox | Profil audio par plateforme, Opus/WebM sur le web |
+
+**D'où `tool/smoke_web.mjs`** : il sert le bundle, l'ouvre dans un Chromium,
+coupe le réseau et recharge. C'est la seule vérification du projet qui atteste
+que le mode hors ligne existe, parce qu'aucun test unitaire ne peut le voir.
+
+**Ce que le web sait faire hors ligne, et ce qu'il ne sait pas.** L'application
+démarre sans réseau et la file de captures survit à la coupure. Elle ne conserve
+**pas** les notes déjà écrites pour consultation hors ligne : c'est le chantier
+B4, et il reste ouvert (`TODO.md`).

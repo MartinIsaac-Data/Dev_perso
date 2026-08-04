@@ -79,6 +79,7 @@
 | [058](#adr-058) | Les jetons sont chiffrés avec un trousseau versionné | ✅ | 4 |
 | [059](#adr-059) | Le journal d'audit est partitionné par mois | ✅ | 4 |
 | [060](#adr-060) | Les dossiers de plateforme que l'on modifie sont du source | ✅ | 4 |
+| [061](#adr-061) | Le stockage local est un port, pas `dart:io` | ✅ | 4 |
 
 ---
 
@@ -2095,3 +2096,71 @@ véritablement régénéré à chaque build et ne contient rien qu'on écrive.
 **Réexamen.** Si `android/` ou `ios/` finit par être personnalisé — une
 permission, un `Info.plist`, un lien profond — il rejoint la liste, pour la même
 raison.
+
+---
+
+<a id="adr-061"></a>
+## ADR-061 — Le stockage local est un port, et le navigateur en est une implémentation
+
+**Statut** ✅ Acceptée · Phase 4 · **Corrige** un défaut de la phase 1
+
+**Contexte.** La phase 1 a écrit la file de captures hors ligne avec `dart:io` :
+un `File` pour l'audio, un `File` pour la file, un `File` pour les préférences.
+C'était juste sur les cinq plateformes qui ont un système de fichiers.
+
+`dart:io` **compile** pour le web et lève à l'exécution. Le build web produit en
+phase 4 était donc parfaitement vert — il compilait, il s'analysait, ses 147
+tests passaient — et il ne pouvait enregistrer aucune note. La seule chose pour
+laquelle le produit existe.
+
+Les tests ne pouvaient pas l'attraper : ils tournaient contre un répertoire
+temporaire, donc ils testaient les quatre plateformes qui ont des fichiers et ne
+disaient rien des deux qui n'en ont pas.
+
+**Décision.** Deux ports, séparés par la taille et par l'enjeu :
+
+| Port | Contenu | Natif | Navigateur |
+| --- | --- | --- | --- |
+| `BlobStore` | L'audio — des mégaoctets | Fichiers | **IndexedDB** |
+| `DocumentStore` | La file et les préférences — des kilooctets | Fichiers | `localStorage` |
+
+Sélection par import conditionnel (`if (dart.library.js_interop)`), donc rien
+n'est lié dans un build natif.
+
+**La clé est le `client_capture_id`**, qui existe déjà avant les octets
+(ADR-009). Aucun appelant n'apprend jamais s'il tient un chemin, une URL de blob
+ou une clé IndexedDB.
+
+**Pourquoi pas `localStorage` pour l'audio.** Synchrone, plafonné à environ cinq
+mégaoctets par origine, et il ne stocke que des chaînes — donc l'audio devrait
+être en base64, un tiers plus lourd. Une capture de dix minutes à 32 kbps fait
+2,4 Mo, 3,2 Mo encodée : la première remplirait presque le quota et la seconde
+lèverait. Une file qui contient un élément n'est pas une file.
+
+**Pourquoi pas simplement garder l'URL de blob.** `AudioRecorder.stop()` en rend
+une, ce qui est tentant et faux : l'objet qu'elle nomme meurt avec le document.
+Un rechargement, un onglet tué, un Safari mis en arrière-plan un peu trop
+longtemps — et la file hors ligne pointerait sur rien. Copier les octets pendant
+que l'URL vit encore est tout le travail de `ingest`, et c'est pourquoi il
+attend avant de rendre la main.
+
+**Décision connexe : le format audio est porté, pas supposé.** La phase 1 codait
+AAC-LC en dur, que Chrome et Firefox refusent — ils produisent de l'Opus en
+WebM. Le serveur acceptait déjà les deux. `RecordingResult` et la ligne de file
+portent donc le format, parce qu'une capture enregistrée dans un navigateur peut
+être déclarée des semaines plus tard depuis une file qui ignore ce qui l'a
+produite.
+
+**Alternative écartée.** Empaqueter le web dans une coquille native pour
+retrouver un système de fichiers. Cela règle le symptôme et abandonne la seule
+chose que le web apporte : une adresse qu'on ouvre sans rien installer.
+
+**Coût accepté.** Deux implémentations à maintenir par port, et les tests
+navigateur ne s'exécutent pas dans `flutter test` — d'où `tool/smoke_web.mjs`,
+qui pilote un Chromium et vérifie ce qu'aucun test unitaire ne peut voir. Sans
+lui, on retomberait exactement dans le défaut que cet ADR corrige : un build
+vert qui ne marche pas.
+
+**Réexamen.** Si un jour le mode hors ligne doit conserver aussi les *notes*
+consultables — le vrai chantier B4 —, `DocumentStore` sera trop petit et le
+navigateur passera lui aussi à IndexedDB. Le port ne changera pas.

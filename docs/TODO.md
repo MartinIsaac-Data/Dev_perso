@@ -220,7 +220,7 @@ raison, indépendamment de leur difficulté.
 | B1 | ~~`partition_job` n'existe pas~~ | ✅ **Fait** | Quotidien à 03:11 et au démarrage du worker, avec rétention désactivée par défaut. 16 tests, dont un qui épingle le comportement PostgreSQL dont tout le reste découle |
 | B2 | ~~`sync_job` n'existe pas~~ | ✅ **Fait** | Toutes les 5 minutes, inter-locataires, avec retard exponentiel plafonné à 1 h et abandon après six échecs. 33 tests |
 | B3 | **IA temps réel en réunion non implémentée.** `meeting_session` est créée et n'est remplie par rien | 🔴 Haute | Demande un canal de transcription en flux et une extraction incrémentale — un chantier de la taille d'une phase, pas d'un module. Cadré en `RoadmapV2.md` §5 |
-| B4 | **Mode hors ligne incomplet.** Seule la capture l'est, depuis la phase 1 | 🔴 Haute | Consulter, cocher, commenter et chercher exigent un miroir local et une file de mutations. Dette E6, ouverte depuis la phase 2. Cadré en `RoadmapV2.md` §6 |
+| B4 | **Mode hors ligne incomplet.** La capture l'est sur toutes les plateformes, y compris le web ; le reste ne l'est nulle part | 🟠 Moyenne | Consulter, cocher, commenter et chercher exigent un miroir local et une file de mutations. Dette E6, ouverte depuis la phase 2. Cadré en `RoadmapV2.md` §6 |
 | B5 | ~~Aucun écran Flutter d'entreprise~~ | ✅ **Fait** | Espaces, équipe, mentions, intégrations, administration, plus le panneau de commentaires et la feuille de partage sur le détail d'une note. 39 tests |
 | B6 | ~~Aucun build Desktop ni Web produit~~ | ⚠️ **Partiel** | Web et Linux compilés et vérifiés. **Windows et macOS restent non compilés** : Flutter édite les liens contre le SDK de la plateforme, il n'y a pas de compilation croisée, et aucun hôte Windows ou macOS n'est disponible ici. Scaffoldés, script de build écrit, matrice CI câblée — jamais exécutée |
 | B7 | **Notifications intelligentes** : les types `mention` et `comment` existent, aucune logique de regroupement ni de silence | 🟠 Moyenne | « Intelligent » demande une règle mesurable. Sans usage réel, toute règle serait une supposition |
@@ -239,11 +239,22 @@ le web et pour Linux.
 capture)**, deux chantiers de la taille d'une phase, cadrés en `RoadmapV2.md` §5
 et §6.
 
-**Le build web aggrave B4 au lieu de l'aider.** Le client utilise `dart:io` pour
-la file de captures locale ; sur le web cette bibliothèque compile et lève à
-l'exécution. Le web sert donc à consulter, chercher et interroger — **pas à
-capturer**, ce qui est la fonction première du produit. Ce n'est pas un réglage
-à corriger mais une limite à traiter dans B4.
+**La capture web est réparée** (ADR-061). Le stockage local est passé derrière
+deux ports, avec IndexedDB et `localStorage` côté navigateur ; l'application
+démarre sans réseau et la file survit à la coupure, vérifié dans un Chromium par
+`tool/smoke_web.mjs`.
+
+**Ce qui reste de B4 est le vrai morceau** : consulter, cocher, commenter et
+chercher hors ligne. Cela demande un miroir local des notes et une file de
+mutations sortantes, pas une couche de stockage — celle-ci existe désormais et
+servira de base.
+
+**Quatre défauts trouvés en ouvrant la page, pas en la compilant.** Aucun n'était
+visible dans `flutter build`, `flutter analyze` ni les 152 tests : moteur de
+rendu chargé depuis un CDN, police chargée depuis un CDN — l'interface
+s'affichait **sans aucun texte** —, écran de démarrage jamais retiré, et un codec
+audio que Chrome et Firefox refusent. C'est l'argument le plus concret de ce
+document en faveur d'une vérification qui exécute le produit.
 
 **Deux nouvelles lignes ouvertes par les builds** :
 
