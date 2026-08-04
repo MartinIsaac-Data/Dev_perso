@@ -23,6 +23,7 @@ from app.workers.scheduled.indexer import embed_backlog
 from app.workers.scheduled.partitioner import maintain_audit_partitions
 from app.workers.scheduled.reminder_dispatcher import dispatch_due_reminders, sweep_snoozed
 from app.workers.scheduled.sweeper import sweep_stuck_captures
+from app.workers.scheduled.synchroniser import sync_due_connections
 
 log = get_logger("worker")
 
@@ -83,6 +84,10 @@ async def partition_job(ctx: dict[str, Any]) -> int:
     return await maintain_audit_partitions(ctx["settings"])
 
 
+async def sync_job(ctx: dict[str, Any]) -> int:
+    return await sync_due_connections(ctx["settings"])
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [process_capture_job]
     cron_jobs: ClassVar[list[Any]] = [
@@ -117,6 +122,12 @@ class WorkerSettings:
         # worker has been down across a month boundary, which is exactly when
         # nobody was watching.
         cron(partition_job, hour={3}, minute={11}, run_at_startup=True),
+        # Integrations. Five minutes is well inside every provider's rate limit
+        # and well under a user's patience; the per-connection cadence and the
+        # failure backoff are decided inside the job, not by this cron, because
+        # a connection that is failing must not be attempted as often as one
+        # that is healthy.
+        cron(sync_job, minute=set(range(2, 60, 5))),
     ]
     on_startup = startup
     on_shutdown = shutdown
