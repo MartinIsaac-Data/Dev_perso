@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings
 
 from app.config import get_settings
-from app.infra.queue.arq_queue import redis_settings
+from app.infra.queue.arq_queue import QUEUE_REALTIME
+from app.infra.queue.arq_queue import redis_settings as build_redis_settings
 from app.observability.logging import configure_logging, get_logger
 from app.workers.outbox_dispatcher import dispatch_outbox
 from app.workers.pipeline.runner import PROCESS_CAPTURE, process_capture
@@ -47,9 +48,6 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 async def process_capture_job(ctx: dict[str, Any], capture_id: str, account_id: str) -> str:
     return await process_capture(ctx["settings"], capture_id, account_id)
-
-
-process_capture_job.__name__ = PROCESS_CAPTURE
 
 
 async def sweep_job(ctx: dict[str, Any]) -> int:
@@ -89,7 +87,17 @@ async def sync_job(ctx: dict[str, Any]) -> int:
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [process_capture_job]
+    # The name the API enqueues under, stated explicitly. arq names a job from
+    # `__qualname__`, so this function would otherwise register as
+    # `process_capture_job` while `app/api/v1/captures.py` enqueues
+    # `process_capture`: the job is accepted, never run, and the capture sits at
+    # `uploaded` while the sweeper re-enqueues it under the same wrong name.
+    functions: ClassVar[list[Any]] = [func(process_capture_job, name=PROCESS_CAPTURE)]
+
+    # The queue the API actually writes to (`ArqQueue.connect` defaults to it).
+    # Left unset, arq listens on its own default queue and the two never meet —
+    # the same silent failure as a name mismatch, one layer down.
+    queue_name: ClassVar[str] = QUEUE_REALTIME
     cron_jobs: ClassVar[list[Any]] = [
         # Recovers captures whose enqueue was lost (Redis restart, crash between
         # commit and enqueue). The database is the source of truth, not the queue.
@@ -135,6 +143,10 @@ class WorkerSettings:
     job_timeout = 600
     keep_result = 3600
 
-    @staticmethod
-    def redis_settings() -> RedisSettings:
-        return redis_settings(get_settings())
+    # A value, not a method. `arq.worker.get_kwargs` reads
+    # `WorkerSettings.__dict__` rather than doing attribute lookup, so a
+    # `@staticmethod` here reaches `create_pool` as the descriptor itself and
+    # the worker dies at startup with `'staticmethod' object has no attribute
+    # 'host'`. Evaluated at import, which is when the arq CLI reads this module
+    # anyway; the API never imports it.
+    redis_settings: ClassVar[RedisSettings] = build_redis_settings(get_settings())

@@ -26,7 +26,36 @@ back-end, client, infrastructure et modèles IA. Les versions de documentation
 
 ## [Non publié]
 
-Rien pour l'instant.
+### Corrigé — Le worker ne démarrait pas
+
+Trouvés en démarrant la pile complète pour la première fois hors de la suite de
+tests (`Deployment.md` §0). Les trois défauts sont sur le chemin de lancement,
+qu'aucun test ne parcourait : la suite appelle les tâches directement.
+
+- **`WorkerSettings.redis_settings` était une `@staticmethod`.** `arq` lit
+  `WorkerSettings.__dict__` plutôt que l'attribut, reçoit le descripteur
+  lui-même et meurt sur `'staticmethod' object has no attribute 'host'` avant
+  la première tâche. C'est la commande du `docker-compose.yml`, jamais lancée
+  faute de démon Docker pendant les quatre phases.
+- **La tâche de traitement s'enregistrait sous le mauvais nom.** `arq` nomme
+  d'après `__qualname__` et non `__name__` : le worker annonçait
+  `process_capture_job` là où l'API met `process_capture` en file. Travail
+  accepté, jamais exécuté, capture immobile en `uploaded` — et le balayeur la
+  ré-enfilait sous le même mauvais nom, indéfiniment.
+- **Le worker écoutait la mauvaise file.** L'API écrit sur `capture.realtime`
+  (`ArqQueue.connect`), le worker écoutait la file par défaut d'`arq`. Même
+  silence, un étage plus bas.
+
+`tests/unit/test_worker_settings.py` passe désormais par `arq.worker.get_kwargs`
+— le chargeur d'`arq` lui-même — au lieu de contourner le point de départ.
+
+### Documentation
+
+- `Deployment.md` §0 : la marche à suivre pour faire tourner le produit en
+  local, exécutée le 2026-08-05 et non rédigée d'avance. Capture déclarée,
+  téléversée, transcrite, transformée en entrée, retrouvée dans le tableau de
+  bord — sans clé d'API, sans Docker, sans Supabase, et en disant ce que cela
+  ne prouve pas.
 
 ---
 

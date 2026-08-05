@@ -7,10 +7,99 @@
 | **Périmètre** | Mise en production initiale, montées de version, retour arrière |
 
 > **Ce document décrit un plan, pas un historique.** Aucun de ces déploiements
-> n'a été exécuté : le projet n'a jamais tourné hors d'un environnement de
+> n'a été exécuté : le produit n'a jamais tourné ailleurs que sur une machine de
 > développement, et le démon Docker n'était pas disponible pendant les quatre
 > phases. Les commandes sont écrites pour être exécutées et vérifiées, pas pour
-> être crues.
+> être crues. Le §0 fait exception : il a été exécuté, et ce qu'il a trouvé est
+> décrit à la fin.
+
+---
+
+## 0. Essayer le produit en local
+
+**Exécuté le 2026-08-05, de bout en bout.** Pas un plan : une capture déclarée,
+téléversée, transcrite par le worker, transformée en entrée, retrouvée dans le
+tableau de bord. Sans clé d'API, sans Docker, sans compte Supabase.
+
+```bash
+# 1. Les deux services d'infrastructure
+pg_ctlcluster 16 main start        # ou: docker run -p 5432:5432 pgvector/pgvector:pg16
+redis-server --daemonize yes
+
+# 2. La base et ses extensions (une seule fois)
+sudo -u postgres psql <<'SQL'
+CREATE ROLE mindflow LOGIN PASSWORD 'mindflow';
+CREATE DATABASE mindflow OWNER mindflow;
+SQL
+sudo -u postgres psql -d mindflow -c 'CREATE EXTENSION IF NOT EXISTS vector'
+
+# 3. La configuration : les valeurs par défaut suffisent en local
+cd mindflow/backend
+cp .env.example .env
+#    MINDFLOW_STORAGE_LOCAL_ROOT doit pointer sur un dossier inscriptible
+
+# 4. Le schéma — migrations 0001 à 0009
+uv run alembic upgrade head
+
+# 5. Le worker d'abord, l'API ensuite
+uv run arq app.workers.settings.WorkerSettings &
+uv run uvicorn app.main:app --port 8000 &
+
+curl -s localhost:8000/health     # {"status":"ok","version":"0.1.0","env":"local"}
+```
+
+Puis le client, au choix :
+
+```bash
+cd ../frontend
+MINDFLOW_API_BASE_URL=http://localhost:8000 ./tool/build.sh linux   # ou: web
+```
+
+**Pourquoi aucune clé n'est nécessaire.** Deux mécanismes existent exactement
+pour ça, et aucun des deux ne survit à la production :
+
+| Mécanisme | En local | Ailleurs |
+| --- | --- | --- |
+| Jetons non signés (`make_local_token`, ADR-030) | Acceptés, avec un `warning` à chaque requête | Refusés |
+| Moteurs `fake` (STT, LLM, embedding) | Renvoient du texte français plausible, hors ligne | Le contrôle de configuration refuse de démarrer (P6) |
+
+Un tour complet en ligne de commande, si vous voulez voir le pipeline tourner
+avant de compiler le client :
+
+```bash
+TOKEN=$(uv run python -c "from app.infra.auth.supabase import make_local_token
+print(make_local_token('11111111-1111-4111-8111-111111111111','vous@example.com'))")
+
+curl -X POST localhost:8000/v1/captures -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"client_capture_id":"…","kind":"quick","duration_ms":18000,"audio_format":"m4a","captured_at":"…"}'
+# → renvoie une URL signée : PUT l'audio dessus, puis POST …/complete,
+#   et le worker fait le reste en une seconde.
+```
+
+**Ce que ce premier démarrage a révélé.** Trois défauts sur le chemin de
+lancement, aucun visible depuis 892 tests au vert, parce que la suite appelle
+les tâches directement et ne démarre jamais le processus :
+
+1. `WorkerSettings.redis_settings` était une `@staticmethod`. `arq` lit
+   `WorkerSettings.__dict__` et non l'attribut : le worker mourait au démarrage
+   sur `'staticmethod' object has no attribute 'host'` — **avant** d'exécuter
+   une seule tâche. C'est la commande du `docker-compose.yml`, jamais lancée
+   faute de démon Docker.
+2. `arq` nomme une tâche d'après son `__qualname__`, pas son `__name__`. La
+   tâche s'enregistrait donc en `process_capture_job` quand l'API met
+   `process_capture` en file : travail accepté, jamais exécuté, capture bloquée
+   en `uploaded` — et le balayeur la ré-enfilait sous le même mauvais nom.
+3. Le worker écoutait la file par défaut d'`arq` alors que l'API écrit sur
+   `capture.realtime`. Même silence, un étage plus bas.
+
+Les trois sont corrigés et couverts par `tests/unit/test_worker_settings.py`,
+qui passe désormais par le chargeur d'`arq` lui-même plutôt qu'à côté.
+
+**Ce que le §0 ne prouve pas** : ni la transcription réelle (le moteur est
+`fake`), ni un fournisseur d'intégration réel, ni la tenue en charge, ni quoi
+que ce soit de la §4. Il prouve que le produit démarre, encaisse une capture et
+la rend.
 
 ---
 
@@ -259,7 +348,9 @@ Windows ou macOS n'existe à ce jour.
 Énoncé plutôt qu'omis.
 
 - **Aucun déploiement n'a été exécuté.** Ni Docker Compose, ni Kubernetes, ni
-  aucun fournisseur. Les manifestes n'existent pas.
+  aucun fournisseur. Les manifestes n'existent pas. Le §0 est un démarrage
+  local, pas un déploiement — et il a suffi à trouver trois défauts que la
+  suite de tests ne pouvait pas voir.
 - **Aucune restauration de sauvegarde n'a été testée.** Une sauvegarde jamais
   restaurée n'est pas une sauvegarde.
 - **Aucun test de charge.** Les chiffres du §8 sont des hypothèses.

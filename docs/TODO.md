@@ -266,6 +266,19 @@ document en faveur d'une vérification qui exécute le produit.
 | B16 | Les phrases de déclenchement en réunion sont en français uniquement | 🟡 Basse | `_CUE_PHRASES` est une liste française. À traduire en même temps que l'interface (E11) ; en attendant, une réunion en anglais retombe sur le seuil de mots, qui fonctionne mais réagit plus tard |
 | B17 | Aucune réunion réelle n'a été transcrite | 🔴 Haute | Le service est testé contre un transcripteur et un modèle scriptés. Ce qu'un vrai fournisseur de parole rend sur une pièce à quatre personnes reste inconnu, et le recollement est réglé sur des chevauchements supposés |
 
+**Le premier démarrage de la pile a trouvé trois défauts en cinq minutes**
+(`Deployment.md` §0, `Changelog.md`). Le worker ne démarrait pas du tout
+(`@staticmethod` là où `arq` lit `__dict__`), s'enregistrait sous un nom que
+l'API n'emploie pas, et écoutait la mauvaise file. Chacun laissait une capture
+immobile en `uploaded` sans lever la moindre erreur. Les 892 tests appelaient
+les tâches directement : ils ne pouvaient pas voir le point de départ.
+
+C'est le pendant serveur exact des quatre défauts trouvés en ouvrant la page
+web. **Le motif est le même à chaque fois** : le seul défaut qu'une suite de
+tests ne trouve jamais est celui du chemin qu'elle ne prend pas. `docker
+compose up` reste le prochain chemin de ce genre, et il n'a toujours pas été
+pris (B11).
+
 **B8 reste le risque le plus sous-estimé.** `sync_job` déclenche maintenant sept
 connecteurs qui n'ont jamais parlé à un vrai serveur. Le job est testé contre un
 connecteur bouchon ; ce qu'il déclenchera en production reste inconnu, et
