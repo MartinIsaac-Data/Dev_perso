@@ -1,6 +1,11 @@
 # Secrets and local configuration
 .env
 
+# Runtime state of `mindflow/tool/dev_up.sh`: pids, journaux, objets téléversés
+# et le dump Redis. Tout est reconstruit au démarrage suivant.
+.dev/
+dump.rdb
+
 # Local database — the schema is versioned, the data is not.
 data/
 *.db

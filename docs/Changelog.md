@@ -49,8 +49,26 @@ qu'aucun test ne parcourait : la suite appelle les tâches directement.
 `tests/unit/test_worker_settings.py` passe désormais par `arq.worker.get_kwargs`
 — le chargeur d'`arq` lui-même — au lieu de contourner le point de départ.
 
+### Ajouté — `mindflow/tool/dev_up.sh`
+
+Démarrer le produit sur une machine de développement, en une commande. Crée le
+rôle et la base, pose `pgvector`, applique les neuf migrations, démarre le
+worker **puis** l'API, et ne rend la main qu'après avoir vu `/health` répondre
+et le worker annoncer ses tâches.
+
+Les deux vérifications sont le point du script : un worker mort laisse une API
+qui accepte chaque capture et n'en traite aucune, sans lever la moindre erreur.
+C'est exactement ce qui a été vécu ci-dessus, et un script de démarrage qui
+rend la main sans avoir rien démarré est pire que pas de script du tout.
+
+Idempotent, et explicite sur ce qui manque : PostgreSQL absent, superutilisateur
+injoignable, `pgvector` non installé et Redis absent donnent chacun un message
+qui dit quoi faire, pour Debian, Homebrew et Docker.
+
 ### Documentation
 
+- `mindflow/README.md` : comment faire tourner le produit, ce que les moteurs
+  `fake` valent, et ce qui n'a jamais tourné.
 - `Deployment.md` §0 : la marche à suivre pour faire tourner le produit en
   local, exécutée le 2026-08-05 et non rédigée d'avance. Capture déclarée,
   téléversée, transcrite, transformée en entrée, retrouvée dans le tableau de

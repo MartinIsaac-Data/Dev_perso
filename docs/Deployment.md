@@ -22,6 +22,22 @@ téléversée, transcrite par le worker, transformée en entrée, retrouvée dan
 tableau de bord. Sans clé d'API, sans Docker, sans compte Supabase.
 
 ```bash
+cd mindflow && ./tool/dev_up.sh
+```
+
+Le script fait tout ce qui suit, dans cet ordre, et n'affiche « MindFlow
+tourne » qu'après avoir vu `/health` répondre **et** le worker annoncer ses
+tâches. Les deux vérifications comptent : un worker mort laisse une API qui
+accepte tout et ne traite rien, ce qui est précisément le défaut décrit plus
+bas. Il est idempotent — le relancer ne recrée ni le rôle, ni la base, ni le
+`.env`, et ne redémarre pas ce qui tourne déjà.
+
+`--stop` arrête l'API et le worker en laissant PostgreSQL et Redis, qui servent
+probablement à autre chose. `--token` imprime un jeton de développement.
+
+### Ce qu'il fait, si vous préférez le faire à la main
+
+```bash
 # 1. Les deux services d'infrastructure
 pg_ctlcluster 16 main start        # ou: docker run -p 5432:5432 pgvector/pgvector:pg16
 redis-server --daemonize yes
