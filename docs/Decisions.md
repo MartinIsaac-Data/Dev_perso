@@ -81,6 +81,7 @@
 | [060](#adr-060) | Les dossiers de plateforme que l'on modifie sont du source | ✅ | 4 |
 | [061](#adr-061) | Le stockage local est un port, pas `dart:io` | ✅ | 4 |
 | [062](#adr-062) | L'analyse en réunion se déclenche sur un signal, pas sur une horloge | ✅ | 4 |
+| [063](#adr-063) | Le CORS est ouvert en développement, fermé par défaut ailleurs | ✅ | 4 |
 
 ---
 
@@ -2229,3 +2230,64 @@ signal à surveiller est simple : ce compteur doit croître avec le nombre
 d'**engagements**, pas avec les minutes de réunion. S'il suit les minutes, la
 logique de déclenchement a cessé de fonctionner et chaque réunion paie une
 horloge.
+
+---
+
+<a id="adr-063"></a>
+## ADR-063 — Le CORS est ouvert en développement, fermé par défaut ailleurs
+
+**Statut** ✅ Acceptée · Phase 4 · **Applique** [ADR-029](#adr-029)
+
+**Contexte.** L'API n'a émis aucun en-tête CORS pendant quatre phases. Un client
+web servi sur une autre origine — c'est-à-dire tout client web pendant le
+développement, où l'application est sur 8080 et l'API sur 8000 — ne pouvait donc
+appeler aucune route. Le navigateur bloque la requête avant qu'elle parte : le
+serveur ne voit rien, ne journalise rien, et l'application paraît cassée sans
+cause visible.
+
+Rien ne pouvait le signaler. Les 896 tests serveur parlent à l'application en
+ASGI, sans origine. `flutter test` ne fait aucune requête réseau. Le test de
+fumée web démarre la page et n'appelle jamais l'API. Le défaut n'est visible que
+depuis un navigateur servi ailleurs que l'API — exactement la position d'un
+utilisateur qui découvre le produit.
+
+**Décision.** Trois règles.
+
+| Environnement | Origines acceptées |
+| --- | --- |
+| `local`, `test` | `http://localhost:*` et `http://127.0.0.1:*`, par expression régulière |
+| `staging`, `prod` | Uniquement `MINDFLOW_CORS_ALLOW_ORIGINS`, vide par défaut |
+| Partout | `*` refusé au démarrage ; `allow_credentials` toujours faux |
+
+**Pourquoi une expression régulière en développement.** Le port du client n'est
+pas prévisible : `flutter run` en choisit un au hasard, `tool/serve_web.mjs` sert
+sur 8080. Épingler une liste de ports ferait échouer un démarrage sur deux avec,
+côté navigateur, une erreur que le serveur ne voit pas. Le motif est ancré aux
+deux bouts : `localhost.attaquant.test` n'est pas `localhost`.
+
+**Pourquoi vide par défaut en production.** Le déploiement de référence sert le
+client web depuis le même hôte que l'API : il n'y a pas de requête
+inter-origines, donc pas d'en-tête à émettre. N'ouvrir que ce qui est demandé
+est la bonne posture, et elle est ici gratuite.
+
+**Pourquoi `allow_credentials` est faux partout.** L'authentification passe par
+un en-tête `Authorization`, jamais par un cookie (ADR-029). Rien n'est joint
+automatiquement à une requête inter-origines : la question du CSRF ne se pose
+pas, et l'activer n'apporterait qu'une surface.
+
+**Pourquoi `X-Request-Id` est exposé.** Sans `expose_headers`, le JavaScript ne
+peut pas le lire, et un incident signalé par un utilisateur devient impossible à
+relier à un journal serveur. C'est le seul en-tête exposé.
+
+**Alternative écartée.** `allow_origins=["*"]`. Une ligne de moins, et elle
+autorise n'importe quel site à appeler l'API avec le jeton que sa page détient.
+Le contrôle de configuration refuse désormais de démarrer avec.
+
+**Coût accepté.** Un déploiement où le client web est sur un autre domaine que
+l'API ne fonctionnera pas tant que `MINDFLOW_CORS_ALLOW_ORIGINS` n'est pas
+renseigné. C'est un échec bruyant au premier essai, préférable à une ouverture
+tacite.
+
+**Réexamen.** Si un jour l'authentification passe par cookie — par exemple pour
+un mode hors ligne prolongé —, `allow_credentials` et le CSRF redeviennent une
+vraie question, et cette décision est à reprendre entièrement.

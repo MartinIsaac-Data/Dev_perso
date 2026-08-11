@@ -15,73 +15,34 @@
 //
 //   node tool/smoke_web.mjs
 //
-// Requires a Chromium and `playwright-core`. Skips with a clear message rather
-// than failing when neither is present, because a developer without them should
-// not be blocked — CI has both.
+// Requires a Chromium and Playwright, located by `browser.mjs`. Skips with a
+// clear message rather than failing when either is missing, because a developer
+// without them should not be blocked — CI has both.
+//
+// It stops where the network begins: nothing here calls the API. What the
+// application does once it is talking to a server is `e2e_capture.mjs`.
 
-import { createServer } from 'node:http';
-import { readFile, access } from 'node:fs/promises';
-import { extname, join, dirname } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { loadChromium } from './browser.mjs';
+import { startStaticServer } from './static_server.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'build', 'web');
 const PORT = 8901;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
-const TYPES = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.mjs': 'text/javascript',
-  '.json': 'application/json',
-  '.wasm': 'application/wasm',
-  '.png': 'image/png',
-  '.otf': 'font/otf',
-  '.ttf': 'font/ttf',
-  '.symbols': 'text/plain',
-};
+const runtime = await loadChromium();
+if (!runtime) process.exit(0);
+const { chromium, executablePath } = runtime;
 
-let chromium;
+let server;
 try {
-  ({ chromium } = await import('playwright-core'));
-} catch {
-  console.log('skip: playwright-core is not installed.');
-  process.exit(0);
-}
-
-const executablePath =
-  process.env.CHROME_EXECUTABLE ??
-  '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-try {
-  await access(executablePath);
-} catch {
-  console.log(`skip: no Chromium at ${executablePath}.`);
-  process.exit(0);
-}
-
-try {
-  await access(join(root, 'index.html'));
-} catch {
-  console.error('error: build/web is missing — run ./tool/build.sh web first.');
+  server = await startStaticServer({ root, port: PORT });
+} catch (error) {
+  console.error(`error: ${error.message}`);
   process.exit(1);
 }
-
-const server = createServer(async (request, response) => {
-  let path = decodeURIComponent(request.url.split('?')[0]);
-  if (path === '/') path = '/index.html';
-  try {
-    const body = await readFile(join(root, path));
-    response.writeHead(200, {
-      'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
-    });
-    response.end(body);
-  } catch {
-    // Single-page app: any unknown route serves index.html, which is what a
-    // real deployment must do for a shared link to survive a hard refresh.
-    response.writeHead(200, { 'content-type': 'text/html' });
-    response.end(await readFile(join(root, 'index.html')));
-  }
-});
-await new Promise((resolve) => server.listen(PORT, resolve));
 
 const failures = [];
 const check = (name, ok, detail = '') => {
@@ -245,7 +206,7 @@ const survived = offlineLabels === ''
 check('queued audio survives the network going away', survived === 4);
 
 await browser.close();
-server.close();
+await server.close();
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} check(s) failed.`);

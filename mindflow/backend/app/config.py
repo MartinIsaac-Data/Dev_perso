@@ -7,7 +7,7 @@ startup rather than on the first request (Architecture.md §7.4).
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -174,9 +174,37 @@ class Settings(BaseSettings):
     pipeline_max_retries: int = 5
     queue_backend: Literal["arq", "inline"] = "arq"
 
+    # -- Navigateur (Phase 4) ----------------------------------------------
+    # Origines autorisées à appeler l'API depuis un navigateur, séparées par des
+    # virgules. Vide, aucun en-tête CORS n'est émis : c'est le bon réglage quand
+    # le client web est servi par le même hôte que l'API, et c'est pour cela que
+    # c'est le défaut hors développement.
+    #
+    # En `local` et `test`, les origines locales sont acceptées quel que soit le
+    # port (regex ci-dessous) : le client web tourne sur 8080 ou sur ce que
+    # `flutter run` a choisi, et l'API sur 8000. Sans cela, le navigateur bloque
+    # chaque requête et l'application paraît cassée sans qu'aucune erreur ne
+    # remonte côté serveur.
+    #
+    # `allow_credentials` reste faux partout, délibérément : l'authentification
+    # passe par un en-tête `Authorization`, jamais par un cookie (ADR-029). Rien
+    # n'est donc joint automatiquement à une requête inter-origines, et la
+    # question du CSRF ne se pose pas.
+    cors_allow_origins: str = ""
+    LOCAL_ORIGIN_PATTERN: ClassVar[str] = r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+
     # -- Observability -----------------------------------------------------
     log_level: Literal["debug", "info", "warning", "error"] = "info"
     log_format: Literal["json", "console"] = "json"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
+
+    @property
+    def cors_origin_regex(self) -> str | None:
+        """Les origines locales, en développement uniquement."""
+        return None if self.is_production_like else self.LOCAL_ORIGIN_PATTERN
 
     @field_validator("database_url")
     @classmethod
@@ -239,6 +267,12 @@ class Settings(BaseSettings):
             missing.append("token_encryption_keys")
         if self.public_base_url.startswith("http://localhost"):
             missing.append("public_base_url (les liens de partage pointeraient sur localhost)")
+
+        # `*` autorise n'importe quel site à appeler l'API avec le jeton que sa
+        # page a en main. Sans cookie il n'y a pas de CSRF, mais il reste
+        # inutile de le permettre : une origine explicite coûte une ligne.
+        if "*" in self.cors_origins:
+            missing.append("cors_allow_origins (une origine explicite, jamais '*')")
 
         # Phase 3. `fake` here is not inert like a fake push: the fake embedder
         # produces hash-derived vectors that index and retrieve *successfully*

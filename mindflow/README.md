@@ -24,8 +24,15 @@ relancer ne recrée rien.
 | Commande | Effet |
 | --- | --- |
 | `./tool/dev_up.sh` | Démarre tout et vérifie |
-| `./tool/dev_up.sh --stop` | Arrête l'API et le worker (PostgreSQL et Redis restent) |
+| `./tool/dev_up.sh --web` | Construit le client web et le sert sur `127.0.0.1:8080` |
+| `./tool/dev_up.sh --stop` | Arrête l'API, le worker et le client web |
 | `./tool/dev_up.sh --token` | Imprime un jeton de développement |
+
+`--web` est le chemin le plus court pour utiliser le produit : ouvrez
+`http://127.0.0.1:8080`, connectez-vous avec n'importe quelle adresse, et
+enregistrez. Le service est servi sur `localhost` parce que le micro n'est
+accordé qu'en contexte sécurisé — HTTPS ou `localhost` ; sur une IP de LAN en
+clair, l'application s'ouvre et ne peut rien enregistrer.
 
 Il faut au préalable **PostgreSQL 16 avec `pgvector`**, **Redis 7** et
 [`uv`](https://astral.sh/uv). Le script vérifie les trois et dit quoi faire
@@ -65,6 +72,9 @@ cd ../frontend
 flutter test && flutter analyze
 node tool/smoke_web.mjs          # démarre le build web dans un Chromium,
                                  # coupe le réseau, vérifie qu'il survit
+node tool/e2e_capture.mjs        # enregistre réellement au micro dans un
+                                 # navigateur et suit la capture jusqu'à
+                                 # l'entrée créée (pile locale requise)
 ```
 
 ## Ce qui n'a jamais tourné

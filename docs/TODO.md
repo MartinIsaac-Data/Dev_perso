@@ -279,6 +279,21 @@ tests ne trouve jamais est celui du chemin qu'elle ne prend pas. `docker
 compose up` reste le prochain chemin de ce genre, et il n'a toujours pas été
 pris (B11).
 
+**Puis un cinquième, en ouvrant l'application dans un navigateur** : l'API
+n'émettait aucun en-tête CORS, donc le client web ne pouvait appeler aucune
+route. Rien ne pouvait le voir — les tests serveur parlent en ASGI sans origine,
+`flutter test` ne fait pas de réseau, le test de fumée web n'appelle pas l'API.
+Corrigé (ADR-063) et couvert par `frontend/tool/e2e_capture.mjs`, qui enregistre
+réellement au micro dans un Chromium, suit la capture jusqu'à l'entrée créée,
+puis refait le parcours dans l'interface. **B17 reste ouvert** : le micro est
+synthétique et les moteurs sont simulés — ce qui est vérifié est le chemin, pas
+le modèle.
+
+| # | Manque | Gravité | Pourquoi |
+| --- | --- | --- | --- |
+| B18 | Le bureau Linux n'enregistre pas | 🟠 Moyenne | `record_linux` lance `fmedia`, absent des dépôts Debian et abandonné en amont. Le navigateur est le chemin utilisable ; un enregistreur Linux natif reste à écrire ou à remplacer |
+| B19 | Aucune cible mobile n'est échafaudée | 🔴 Haute | `android/` et `ios/` n'existent pas. Or « capturer en moins de trois secondes » est un geste de téléphone : c'est le chantier qui sépare un produit utilisable d'un produit démontrable |
+
 **B8 reste le risque le plus sous-estimé.** `sync_job` déclenche maintenant sept
 connecteurs qui n'ont jamais parlé à un vrai serveur. Le job est testé contre un
 connecteur bouchon ; ce qu'il déclenchera en production reste inconnu, et

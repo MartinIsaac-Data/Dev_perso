@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.middleware.correlation import CorrelationMiddleware
@@ -54,6 +55,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
 
     app.add_middleware(CorrelationMiddleware)
+
+    # Sans cela, le client web ne peut appeler aucune route : le navigateur
+    # bloque la requête avant qu'elle parte, l'API ne voit rien, et
+    # l'application paraît cassée sans qu'aucun journal ne le dise. Le défaut se
+    # voit uniquement depuis un navigateur servi sur une autre origine — ni les
+    # tests HTTP, ni `flutter test`, ni le test de fumée web ne le rencontrent.
+    origins = settings.cors_origins
+    origin_regex = settings.cors_origin_regex
+    if origins or origin_regex:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_origin_regex=origin_regex,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            # L'en-tête que le client lit pour corréler un incident avec un
+            # journal serveur. Non exposé, il est invisible au JavaScript.
+            expose_headers=["X-Request-Id"],
+            # Faux, partout : l'authentification passe par `Authorization`,
+            # jamais par un cookie (ADR-029).
+            allow_credentials=False,
+        )
+
     register_error_handlers(app)
 
     from app.api.v1 import (

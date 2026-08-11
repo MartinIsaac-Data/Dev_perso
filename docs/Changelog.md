@@ -26,6 +26,37 @@ back-end, client, infrastructure et modèles IA. Les versions de documentation
 
 ## [Non publié]
 
+### Corrigé — L'API était injoignable depuis un navigateur
+
+Aucun en-tête CORS n'était émis. Un client web servi sur une autre origine — le
+cas de tout client web en développement, application sur 8080 et API sur 8000 —
+ne pouvait appeler **aucune** route : le navigateur bloque la requête avant
+qu'elle parte, le serveur ne voit rien, et l'application paraît cassée sans
+qu'aucun journal ne le dise.
+
+Ouvert aux origines locales en `local` et `test`, quel que soit le port ; fermé
+par défaut ailleurs, où seule `MINDFLOW_CORS_ALLOW_ORIGINS` compte. `*` est
+refusé au démarrage et `allow_credentials` reste faux partout —
+l'authentification passe par un en-tête, jamais par un cookie (ADR-063).
+
+### Ajouté — `tool/e2e_capture.mjs`, une capture réelle de bout en bout
+
+Chromium, son micro synthétique, l'application servie comme un utilisateur la
+servirait. Onze vérifications : contexte sécurisé, codec accepté, API joignable
+depuis une autre origine, octets produits par `MediaRecorder`, téléversés,
+transcrits, transformés en entrée — puis le parcours complet dans l'interface,
+de la connexion à l'écran « Capture enregistrée ».
+
+C'est la première capture micro du projet. Ce qui existait s'arrêtait juste
+avant : le test de fumée web fait transiter quatre octets par IndexedDB et
+n'appelle jamais l'API. Vérifié aussi en sens inverse — CORS retiré, le test
+échoue sur les quatre bonnes lignes.
+
+`serve_web.mjs` sert le build sur `127.0.0.1` : `getUserMedia` n'est accordé
+qu'en contexte sécurisé, donc HTTPS ou `localhost`. Un `file://` ou une IP de
+LAN en clair donnent une application qui s'ouvre et ne peut pas enregistrer un
+mot.
+
 ### Corrigé — Le worker ne démarrait pas
 
 Trouvés en démarrant la pile complète pour la première fois hors de la suite de
@@ -67,6 +98,7 @@ qui dit quoi faire, pour Debian, Homebrew et Docker.
 
 ### Documentation
 
+- ADR-063 : le CORS, ouvert en développement et fermé par défaut ailleurs.
 - `mindflow/README.md` : comment faire tourner le produit, ce que les moteurs
   `fake` valent, et ce qui n'a jamais tourné.
 - `Deployment.md` §0 : la marche à suivre pour faire tourner le produit en

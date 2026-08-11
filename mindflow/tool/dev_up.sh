@@ -3,7 +3,8 @@
 # Démarrer MindFlow sur une machine de développement, en une commande.
 #
 #   ./tool/dev_up.sh          # démarre tout, et attend d'avoir vu /health répondre
-#   ./tool/dev_up.sh --stop   # arrête l'API et le worker
+#   ./tool/dev_up.sh --web    # et sert l'application dans le navigateur
+#   ./tool/dev_up.sh --stop   # arrête l'API, le worker et le client web
 #   ./tool/dev_up.sh --token  # imprime un jeton de développement
 #
 # Ce script existe parce que la marche à suivre de `docs/Deployment.md` §0 tient
@@ -33,6 +34,7 @@ readonly DB_USER="${MINDFLOW_DEV_DB_USER:-mindflow}"
 readonly DB_PASSWORD="${MINDFLOW_DEV_DB_PASSWORD:-mindflow}"
 readonly PGPORT_="${PGPORT:-5432}"
 readonly API_PORT="${MINDFLOW_DEV_PORT:-8000}"
+readonly WEB_PORT="${MINDFLOW_DEV_WEB_PORT:-8080}"
 
 readonly RED=$'\033[31m' GREEN=$'\033[32m' DIM=$'\033[2m' BOLD=$'\033[1m' OFF=$'\033[0m'
 
@@ -202,12 +204,12 @@ is_running() {
 }
 
 spawn() {
-  local name="$1"; shift
+  local name="$1" workdir="$2"; shift 2
   if is_running "$name"; then
     ok "$name déjà en cours (pid $(cat "$(pid_file "$name")"))"
     return
   fi
-  ( cd "$BACKEND" && exec "$@" ) >"$RUNTIME/$name.log" 2>&1 &
+  ( cd "$workdir" && exec "$@" ) >"$RUNTIME/$name.log" 2>&1 &
   echo $! > "$(pid_file "$name")"
   ok "$name démarré (pid $!) — journal : .dev/$name.log"
 }
@@ -215,7 +217,7 @@ spawn() {
 stop_all() {
   step "Arrêt"
   local name file
-  for name in api worker; do
+  for name in api worker web; do
     file="$(pid_file "$name")"
     if is_running "$name"; then
       kill "$(cat "$file")" 2>/dev/null || true
@@ -228,6 +230,48 @@ stop_all() {
   note "PostgreSQL et Redis sont laissés en place : ils servent probablement à autre chose."
 }
 
+# --------------------------------------------------------------------------
+# Le client web
+#
+# Servi par un petit serveur Node plutôt qu'ouvert depuis le disque, et sur
+# `127.0.0.1` plutôt que sur l'adresse de la machine : `getUserMedia` n'est
+# accordé qu'en contexte sécurisé — HTTPS ou `localhost`. Un `file://` ou une IP
+# de LAN en clair donnent une application qui s'ouvre, s'authentifie, et ne peut
+# pas enregistrer un mot.
+# --------------------------------------------------------------------------
+ensure_web() {
+  step "Client web"
+  local index="$ROOT/frontend/build/web/index.html"
+
+  if [ ! -f "$index" ] || [ "${REBUILD_WEB:-0}" = "1" ]; then
+    command -v flutter >/dev/null 2>&1 || die "flutter est introuvable et le build web est absent.
+    Installez Flutter (≥ 3.27), ou construisez ailleurs et copiez frontend/build/web."
+    note "construction (quelques minutes la première fois)…"
+    ( cd "$ROOT/frontend" \
+      && MINDFLOW_API_BASE_URL="http://127.0.0.1:$API_PORT" ./tool/build.sh web ) \
+      >"$RUNTIME/build_web.log" 2>&1 \
+      || die "le build web a échoué : tail -30 $RUNTIME/build_web.log"
+    ok "construit contre http://127.0.0.1:$API_PORT"
+  else
+    # L'URL de l'API est figée à la construction. Le dire évite la demi-heure
+    # passée à chercher pourquoi l'application parle à un autre serveur.
+    ok "build existant réutilisé (--rebuild-web pour le refaire)"
+  fi
+
+  need node "Il sert le client web. Installez Node ≥ 18."
+  spawn web "$ROOT/frontend" node tool/serve_web.mjs "$WEB_PORT"
+
+  local reachable=""
+  for _ in $(seq 1 20); do
+    reachable="$(curl -fsS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$WEB_PORT/" 2>/dev/null || true)"
+    [ "$reachable" = "200" ] && break
+    sleep 0.25
+  done
+  [ "$reachable" = "200" ] || die "le client web ne répond pas sur $WEB_PORT.
+    tail -20 $RUNTIME/web.log"
+  ok "servi sur http://127.0.0.1:$WEB_PORT"
+}
+
 mint_token() {
   ( cd "$BACKEND" && uv run python -c "
 from app.infra.auth.supabase import make_local_token
@@ -237,13 +281,19 @@ print(make_local_token('11111111-1111-4111-8111-111111111111', 'dev@example.com'
 
 # --------------------------------------------------------------------------
 main() {
-  case "${1:-}" in
-    --stop) stop_all; exit 0 ;;
-    --token) mint_token; exit 0 ;;
-    -h|--help) sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    "") ;;
-    *) die "option inconnue : $1" ;;
-  esac
+  WITH_WEB=0
+  REBUILD_WEB=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --stop) stop_all; exit 0 ;;
+      --token) mint_token; exit 0 ;;
+      -h|--help) sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      --web) WITH_WEB=1 ;;
+      --rebuild-web) WITH_WEB=1; REBUILD_WEB=1 ;;
+      *) die "option inconnue : $1" ;;
+    esac
+    shift
+  done
 
   need uv "Installez-le : curl -LsSf https://astral.sh/uv/install.sh | sh"
   need pg_isready "Il est fourni avec le client PostgreSQL."
@@ -256,8 +306,8 @@ main() {
 
   step "Services"
   # Le worker d'abord : voir l'en-tête.
-  spawn worker uv run arq app.workers.settings.WorkerSettings
-  spawn api uv run uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT"
+  spawn worker "$BACKEND" uv run arq app.workers.settings.WorkerSettings
+  spawn api "$BACKEND" uv run uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT"
 
   step "Vérification"
   local health=""
@@ -279,16 +329,20 @@ main() {
   fi
   ok "worker à l'écoute de la file capture.realtime"
 
+  [ "$WITH_WEB" = "1" ] && ensure_web
+
   cat <<EOF
 
 ${BOLD}MindFlow tourne.${OFF}
 
-  API          http://127.0.0.1:$API_PORT        ${DIM}(documentation : /docs)${OFF}
+  API          http://127.0.0.1:$API_PORT        ${DIM}(documentation : /docs)${OFF}$(
+  [ "$WITH_WEB" = "1" ] && printf '\n  Application  http://127.0.0.1:%s' "$WEB_PORT")
   Journaux     .dev/api.log, .dev/worker.log
   Arrêt        ./tool/dev_up.sh --stop
 
 Le client :
 
+  ./tool/dev_up.sh --web    ${DIM}construit et sert l'application dans le navigateur${OFF}
   cd frontend && MINDFLOW_API_BASE_URL=http://127.0.0.1:$API_PORT ./tool/build.sh linux
 
 Ou directement en ligne de commande :

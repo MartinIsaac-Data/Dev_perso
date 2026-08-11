@@ -64,12 +64,27 @@ uv run uvicorn app.main:app --port 8000 &
 curl -s localhost:8000/health     # {"status":"ok","version":"0.1.0","env":"local"}
 ```
 
-Puis le client, au choix :
+Puis le client. Le plus court est le navigateur :
+
+```bash
+./tool/dev_up.sh --web          # construit, sert, et ouvre sur 127.0.0.1:8080
+```
+
+**Servi sur `localhost`, et c'est un choix.** `getUserMedia` n'est accordé qu'en
+contexte sécurisé — HTTPS ou `localhost`. Depuis un `file://` ou une IP de LAN
+en clair, l'application s'ouvre, s'authentifie, et ne peut pas enregistrer un
+mot : le seul geste pour lequel elle existe.
+
+Le bureau, sinon :
 
 ```bash
 cd ../frontend
-MINDFLOW_API_BASE_URL=http://localhost:8000 ./tool/build.sh linux   # ou: web
+MINDFLOW_API_BASE_URL=http://localhost:8000 ./tool/build.sh linux
 ```
+
+> **Sous Linux, le bureau compile mais n'enregistre pas.** `record_linux` lance
+> un binaire externe, `fmedia`, absent des dépôts Debian et abandonné en amont.
+> Le navigateur est le chemin utilisable aujourd'hui.
 
 **Pourquoi aucune clé n'est nécessaire.** Deux mécanismes existent exactement
 pour ça, et aucun des deux ne survit à la production :
@@ -112,10 +127,17 @@ les tâches directement et ne démarre jamais le processus :
 Les trois sont corrigés et couverts par `tests/unit/test_worker_settings.py`,
 qui passe désormais par le chargeur d'`arq` lui-même plutôt qu'à côté.
 
+**Un quatrième défaut, trouvé en ouvrant l'application dans un navigateur** :
+l'API n'émettait aucun en-tête CORS. Servi sur 8080 et parlant à une API sur
+8000, le client ne pouvait appeler **aucune** route — le navigateur bloque la
+requête avant qu'elle parte, donc le serveur ne journalise rien. Corrigé
+(ADR-063) et vérifié par `frontend/tool/e2e_capture.mjs`, qui enregistre
+réellement au micro dans un Chromium et suit la capture jusqu'à l'entrée créée.
+
 **Ce que le §0 ne prouve pas** : ni la transcription réelle (le moteur est
 `fake`), ni un fournisseur d'intégration réel, ni la tenue en charge, ni quoi
-que ce soit de la §4. Il prouve que le produit démarre, encaisse une capture et
-la rend.
+que ce soit de la §4. Il prouve que le produit démarre, encaisse une capture
+enregistrée au micro depuis un navigateur, et la rend.
 
 ---
 

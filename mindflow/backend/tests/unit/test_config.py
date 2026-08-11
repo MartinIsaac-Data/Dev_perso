@@ -195,3 +195,58 @@ def test_production_refuses_a_localhost_share_url() -> None:
             chat_backend="openai",
             token_encryption_keys="k1:c2VjcmV0LWtleS0zMi1ieXRlcy1sb25nLXh4eHg=",
         )
+
+
+def test_local_accepts_any_local_origin_whatever_the_port() -> None:
+    """Le client web ne choisit pas toujours son port.
+
+    `flutter run` en prend un au hasard, `tool/serve_web.mjs` sert sur 8080, et
+    l'API écoute sur 8000. Épingler un port ferait échouer la moitié des
+    démarrages avec, côté navigateur, une erreur que le serveur ne voit pas.
+    """
+    import re
+
+    pattern = Settings(env="local").cors_origin_regex
+    assert pattern is not None
+    assert re.match(pattern, "http://localhost:8080")
+    assert re.match(pattern, "http://127.0.0.1:54321")
+    assert not re.match(pattern, "http://exemple.test")
+    # Un sous-domaine qui *contient* localhost n'est pas localhost.
+    assert not re.match(pattern, "http://localhost.attaquant.test")
+
+
+def test_production_does_not_open_local_origins() -> None:
+    settings = Settings(
+        env="prod",
+        supabase_jwks_url="https://x.supabase.co/auth/v1/.well-known/jwks.json",
+        stt_backend="faster_whisper",
+        llm_backend="openai",
+        openai_api_key="sk-test",
+        push_backend="real",
+        fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+        token_encryption_keys="k1:c2VjcmV0LWtleS0zMi1ieXRlcy1sb25nLXh4eHg=",
+        public_base_url="https://app.mindflow.ai",
+        embedding_backend="openai",
+        chat_backend="openai",
+        cors_allow_origins="https://app.mindflow.ai, https://beta.mindflow.ai",
+    )
+    assert settings.cors_origin_regex is None
+    assert settings.cors_origins == ["https://app.mindflow.ai", "https://beta.mindflow.ai"]
+
+
+def test_production_refuses_a_wildcard_origin() -> None:
+    with pytest.raises(ValidationError, match="cors_allow_origins"):
+        Settings(
+            env="prod",
+            supabase_jwt_secret="secret",
+            stt_backend="faster_whisper",
+            llm_backend="openai",
+            openai_api_key="sk-test",
+            push_backend="real",
+            fcm_service_account_json='{"private_key": "x", "client_email": "a@b.c"}',
+            embedding_backend="openai",
+            chat_backend="openai",
+            token_encryption_keys="k1:c2VjcmV0LWtleS0zMi1ieXRlcy1sb25nLXh4eHg=",
+            public_base_url="https://app.mindflow.ai",
+            cors_allow_origins="*",
+        )
