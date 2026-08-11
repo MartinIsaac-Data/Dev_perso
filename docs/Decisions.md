@@ -2099,6 +2099,23 @@ véritablement régénéré à chaque build et ne contient rien qu'on écrive.
 permission, un `Info.plist`, un lien profond — il rejoint la liste, pour la même
 raison.
 
+**Amendement (échafaudage Android).** `android/` rejoint la liste des dossiers
+de plateforme versionnés. Son manifeste porte les autorisations micro,
+notification et redémarrage ; son fichier Gradle, le désugarage sans lequel
+`flutter_local_notifications` ne compile pas. Régénérer le dossier effacerait
+tout cela et laisserait une application qui se lance et refuse d'enregistrer —
+précisément le mode d'échec que cette décision refuse. `ios/` reste ignoré :
+rien ne l'a personnalisé, et rien ici ne peut le construire ni le vérifier.
+
+**Le contrôle qui remplace la compilation.** Aucun APK n'a jamais été produit —
+il n'y a pas de SDK Android ici et Flutter ne compile pas en croisé. À défaut,
+`frontend/tool/check_android.mjs` épingle ce que le manifeste et le Gradle
+doivent contenir, et échoue sur les six bonnes lignes quand on lui donne un
+manifeste fraîchement régénéré. C'est une garde contre l'oubli, pas une preuve
+que cela compile.
+
+---
+
 ---
 
 <a id="adr-061"></a>

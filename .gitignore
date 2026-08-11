@@ -34,8 +34,14 @@ dist/
 
 # Flutter.
 #
-# `android/` and `ios/` stay ignored: nothing in this project has customised
-# them, so they are still tool output that `flutter create` reproduces exactly.
+# `android/` is committed as of the browser/mobile pass: its manifest carries the
+# microphone, notification and boot permissions, and its Gradle file the
+# desugaring `flutter_local_notifications` needs. Regenerating it would silently
+# drop all of that and leave an application that launches and cannot record —
+# the same rule as below, and `tool/check_android.mjs` guards it.
+#
+# `ios/` stays ignored: nothing has customised it, and nothing here can build or
+# check it.
 #
 # `web/`, `linux/`, `macos/` and `windows/` are committed as of phase 4
 # (ADR-060). They stopped being tool output the moment they carried the window
@@ -47,7 +53,6 @@ mindflow/frontend/build/
 mindflow/frontend/.flutter-plugins
 mindflow/frontend/.flutter-plugins-dependencies
 mindflow/frontend/.packages
-mindflow/frontend/android/
 mindflow/frontend/ios/
 mindflow/frontend/coverage/
 mindflow/frontend/node_modules/

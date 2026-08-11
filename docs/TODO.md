@@ -292,7 +292,7 @@ le modèle.
 | # | Manque | Gravité | Pourquoi |
 | --- | --- | --- | --- |
 | B18 | Le bureau Linux n'enregistre pas | 🟠 Moyenne | `record_linux` lance `fmedia`, absent des dépôts Debian et abandonné en amont. Le navigateur est le chemin utilisable ; un enregistreur Linux natif reste à écrire ou à remplacer |
-| B19 | Aucune cible mobile n'est échafaudée | 🔴 Haute | `android/` et `ios/` n'existent pas. Or « capturer en moins de trois secondes » est un geste de téléphone : c'est le chantier qui sépare un produit utilisable d'un produit démontrable |
+| B19 | ~~Aucune cible mobile n'est échafaudée~~ | ⚠️ **Partiel** | `android/` existe, versionné, avec ses autorisations et son désugarage, et `./tool/build.sh android` produit un APK. **Aucun APK n'a été compilé** : pas de SDK Android ici, pas de compilation croisée. `tool/check_android.mjs` garde la configuration à défaut de la construire. `ios/` reste absent : il demande un hôte macOS |
 
 **B8 reste le risque le plus sous-estimé.** `sync_job` déclenche maintenant sept
 connecteurs qui n'ont jamais parlé à un vrai serveur. Le job est testé contre un

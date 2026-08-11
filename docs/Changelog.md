@@ -26,6 +26,33 @@ back-end, client, infrastructure et modèles IA. Les versions de documentation
 
 ## [Non publié]
 
+### Ajouté — La cible Android, échafaudée
+
+`android/` existe enfin, et il est versionné (amendement d'ADR-060) : son
+manifeste porte les autorisations, son Gradle le désugarage. Régénérer le
+dossier effacerait les deux et laisserait une application qui se lance et
+refuse d'enregistrer.
+
+- **`RECORD_AUDIO`**, sans quoi il ne reste qu'un carnet de notes.
+- **`POST_NOTIFICATIONS`** et **`RECEIVE_BOOT_COMPLETED`**, plus le récepteur de
+  `flutter_local_notifications` : sans lui, éteindre son téléphone efface
+  silencieusement tous les rappels programmés.
+- **`SCHEDULE_EXACT_ALARM`** plutôt que `USE_EXACT_ALARM` : la première se
+  demande à l'utilisateur, la seconde s'obtient sans le prévenir mais expose
+  l'application à un audit de boutique.
+- **Désugarage** et `multiDexEnabled` : `flutter_local_notifications` 18 ne
+  compile pas sans, et c'est la première chose qui casse.
+- **`minSdk = 23`**, imposé par `record_android`.
+- `./tool/build.sh android` produit un APK et prévient quand
+  `MINDFLOW_API_BASE_URL` vaut `localhost` — sur un téléphone, cette adresse
+  désigne le téléphone.
+
+**Aucun APK n'a été produit** : il n'y a pas de SDK Android ici et Flutter ne
+compile pas en croisé. `tool/check_android.mjs` remplace ce qu'il peut —
+autorisations, récepteur, désugarage, `minSdk` — et échoue sur les six bonnes
+lignes face à un manifeste régénéré. C'est une garde contre l'oubli, pas une
+preuve que cela compile.
+
 ### Corrigé — L'API était injoignable depuis un navigateur
 
 Aucun en-tête CORS n'était émis. Un client web servi sur une autre origine — le

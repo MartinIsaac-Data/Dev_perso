@@ -354,12 +354,14 @@ l'extérieur, d'une recherche correcte.
 
 ## 9. Le client
 
-| Cible | Commande | Hôte requis |
-| --- | --- | --- |
-| Web | `./tool/build.sh web` | N'importe lequel |
-| Linux | `./tool/build.sh linux` | Linux + `libgtk-3-dev` |
-| Windows | `./tool/build.sh windows` | **Windows** |
-| macOS | `./tool/build.sh macos` | **macOS + Xcode** |
+| Cible | Commande | Hôte requis | État |
+| --- | --- | --- | --- |
+| Web | `./tool/build.sh web` | N'importe lequel | Construit et vérifié, micro compris |
+| Linux | `./tool/build.sh linux` | Linux + `libgtk-3-dev` | Construit ; **n'enregistre pas** sans `fmedia` |
+| Android | `./tool/build.sh android` | Linux/macOS + SDK Android | Configuré, **jamais compilé** |
+| Windows | `./tool/build.sh windows` | **Windows** | Jamais compilé |
+| macOS | `./tool/build.sh macos` | **macOS + Xcode** | Jamais compilé |
+| iOS | — | **macOS + Xcode** | Pas échafaudé |
 
 ```bash
 MINDFLOW_API_BASE_URL=https://api.mindflow.ai \
@@ -374,10 +376,15 @@ visible immédiatement, ce qui est la seule bonne nouvelle de ce réglage.
 **Le web doit être servi en application monopage** : toute route inconnue rend
 `index.html`, sinon un lien de partage rechargé donne un 404 du serveur.
 
-**Web et Linux ont été produits et vérifiés ici. Windows et macOS non**, et pas
+**Web et Linux ont été produits ici ; Android, Windows et macOS non**, et pas
 par manque de temps : Flutter édite les liens contre le SDK de la plateforme, et
 il n'y a pas de compilation croisée. La matrice CI les couvre ; aucun binaire
-Windows ou macOS n'existe à ce jour.
+Android, Windows ou macOS n'existe à ce jour.
+
+**Sur un téléphone, `localhost` désigne le téléphone.** `MINDFLOW_API_BASE_URL`
+doit valoir l'adresse de la machine sur le réseau local, ou `10.0.2.2` depuis
+l'émulateur Android. Le script de build prévient plutôt que de laisser produire
+un APK qui ne joindra jamais rien.
 
 ---
 

@@ -38,11 +38,18 @@ Il faut au préalable **PostgreSQL 16 avec `pgvector`**, **Redis 7** et
 [`uv`](https://astral.sh/uv). Le script vérifie les trois et dit quoi faire
 s'il en manque un.
 
-Ensuite le client :
+Les autres cibles, depuis `frontend/` :
 
-```bash
-cd frontend && MINDFLOW_API_BASE_URL=http://127.0.0.1:8000 ./tool/build.sh linux   # ou: web
-```
+| Cible | Commande | État |
+| --- | --- | --- |
+| Web | `./tool/build.sh web` | Construit et vérifié, micro compris |
+| Linux | `./tool/build.sh linux` | Construit ; **n'enregistre pas** sans `fmedia`, absent des dépôts Debian et abandonné en amont |
+| Android | `./tool/build.sh android` | Configuré — autorisations, désugarage, `minSdk 23` — et **jamais compilé** ici, faute de SDK |
+| Windows, macOS | `./tool/build.sh windows` / `macos` | Demandent l'hôte correspondant ; Flutter ne compile pas en croisé |
+
+`MINDFLOW_API_BASE_URL` est figée à la construction. Sur un téléphone,
+`localhost` désigne le téléphone : passez l'adresse de cette machine sur le
+réseau local, ou `10.0.2.2` depuis l'émulateur Android.
 
 ## Aucune clé n'est nécessaire, et c'est temporaire
 
@@ -75,6 +82,8 @@ node tool/smoke_web.mjs          # démarre le build web dans un Chromium,
 node tool/e2e_capture.mjs        # enregistre réellement au micro dans un
                                  # navigateur et suit la capture jusqu'à
                                  # l'entrée créée (pile locale requise)
+node tool/check_android.mjs      # ce que le manifeste et le Gradle doivent
+                                 # contenir, à défaut de pouvoir compiler
 ```
 
 ## Ce qui n'a jamais tourné

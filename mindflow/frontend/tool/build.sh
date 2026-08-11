@@ -11,6 +11,7 @@
 #
 #   ./tool/build.sh web
 #   ./tool/build.sh linux --debug
+#   ./tool/build.sh android
 #   MINDFLOW_API_BASE_URL=https://api.mindflow.ai ./tool/build.sh macos
 #
 # Windows and macOS builds only run on Windows and macOS respectively: Flutter
@@ -31,7 +32,7 @@ SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
 WEB_BASE_HREF="${WEB_BASE_HREF:-/}"
 
 usage() {
-  echo "usage: $0 {web|linux|windows|macos} [--release|--debug|--profile]" >&2
+  echo "usage: $0 {web|linux|android|windows|macos} [--release|--debug|--profile]" >&2
   exit 64
 }
 
@@ -51,6 +52,18 @@ case "$TARGET" in
       echo "error: a macOS build requires a macOS host with Xcode." >&2
       exit 1
     }
+    ;;
+  android)
+    # Un téléphone ne joint pas le `localhost` de la machine de développement.
+    # Le dire ici épargne la demi-heure passée à chercher pourquoi
+    # l'application « ne fait rien » : elle appelle une adresse qui, pour elle,
+    # n'existe pas.
+    if [[ "$API_BASE_URL" == *localhost* || "$API_BASE_URL" == *127.0.0.1* ]]; then
+      echo "warning: MINDFLOW_API_BASE_URL vaut $API_BASE_URL." >&2
+      echo "         Sur un téléphone, cette adresse désigne le téléphone." >&2
+      echo "         Utilisez l'IP de cette machine sur le réseau local," >&2
+      echo "         ou 10.0.2.2 depuis l'émulateur Android." >&2
+    fi
     ;;
   linux|web) ;;
   *) usage ;;
@@ -105,6 +118,13 @@ case "$TARGET" in
   linux)
     flutter build linux "$MODE" "${DEFINES[@]}"
     echo "→ build/linux/x64/${MODE#--}/bundle"
+    ;;
+  android)
+    # `apk` et non `appbundle` : ce qui s'installe sur son propre téléphone.
+    # Un `.aab` ne s'installe pas, il se dépose sur une boutique.
+    flutter build apk "$MODE" "${DEFINES[@]}"
+    echo "→ build/app/outputs/flutter-apk/app-${MODE#--}.apk"
+    echo "  Installation : adb install -r build/app/outputs/flutter-apk/app-${MODE#--}.apk"
     ;;
   windows)
     flutter build windows "$MODE" "${DEFINES[@]}"

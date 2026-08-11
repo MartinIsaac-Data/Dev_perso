@@ -1,0 +1,61 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "ai.mindflow.mindflow"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        // Désucrage. `flutter_local_notifications` 18 s'appuie dessus pour
+        // programmer une notification sur les versions anciennes d'Android :
+        // sans lui la compilation échoue, et c'est la première chose qui casse
+        // sur un projet Flutter qui programme des rappels.
+        coreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        // Définitif une fois publié : l'identifiant d'une application ne se
+        // change pas sur une boutique, il s'y republie sous une autre identité,
+        // en perdant les installations et les avis.
+        applicationId = "ai.mindflow.mindflow"
+
+        // 23, imposé par `record_android` (AudioRecord). En dessous, la
+        // dépendance ne résout pas — et c'est le seul geste du produit.
+        minSdk = 23
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+
+        // Exigé par le désugarage sur les anciennes versions.
+        multiDexEnabled = true
+    }
+
+    buildTypes {
+        release {
+            // Signé avec la clé de débogage, ce qui suffit pour installer sur
+            // son propre téléphone et ne suffit pour rien d'autre : une
+            // boutique refuse cet APK. La vraie signature demande un magasin de
+            // clés, donc une décision qui n'est pas technique (`TODO.md` B13).
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
+}
+
+flutter {
+    source = "../.."
+}
