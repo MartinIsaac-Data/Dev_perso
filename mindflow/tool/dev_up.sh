@@ -4,6 +4,7 @@
 #
 #   ./tool/dev_up.sh          # démarre tout, et attend d'avoir vu /health répondre
 #   ./tool/dev_up.sh --web    # et sert l'application dans le navigateur
+#   ./tool/dev_up.sh --lan    # écoute sur le réseau local, pour un téléphone
 #   ./tool/dev_up.sh --stop   # arrête l'API, le worker et le client web
 #   ./tool/dev_up.sh --token  # imprime un jeton de développement
 #
@@ -36,12 +37,29 @@ readonly PGPORT_="${PGPORT:-5432}"
 readonly API_PORT="${MINDFLOW_DEV_PORT:-8000}"
 readonly WEB_PORT="${MINDFLOW_DEV_WEB_PORT:-8080}"
 
-readonly RED=$'\033[31m' GREEN=$'\033[32m' DIM=$'\033[2m' BOLD=$'\033[1m' OFF=$'\033[0m'
+readonly RED=$'\033[31m' GREEN=$'\033[32m' YELLOW=$'\033[33m' DIM=$'\033[2m' BOLD=$'\033[1m' OFF=$'\033[0m'
 
 step()  { printf '%s==>%s %s\n' "$BOLD" "$OFF" "$1"; }
 ok()    { printf '    %s✓%s %s\n' "$GREEN" "$OFF" "$1"; }
 note()  { printf '    %s%s%s\n' "$DIM" "$1" "$OFF"; }
+warn()  { printf '    %s!%s %s\n' "$YELLOW" "$OFF" "$1"; }
 die()   { printf '%s✗ %s%s\n' "$RED" "$1" "$OFF" >&2; exit 1; }
+
+# --------------------------------------------------------------------------
+# L'adresse sur laquelle on écoute
+#
+# Par défaut `127.0.0.1` : rien ne sort de la machine. `--lan` ouvre l'API au
+# réseau local pour qu'un téléphone puisse la joindre — et ce n'est pas anodin,
+# voir l'avertissement affiché au démarrage.
+# --------------------------------------------------------------------------
+lan_address() {
+  # Trois façons, parce qu'aucune n'existe partout.
+  local address=""
+  address="$(ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -1)"
+  [ -n "$address" ] || address="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  [ -n "$address" ] || address="$(ipconfig getifaddr en0 2>/dev/null)"
+  printf '%s' "$address"
+}
 
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 est introuvable. $2"; }
 
@@ -242,24 +260,32 @@ stop_all() {
 ensure_web() {
   step "Client web"
   local index="$ROOT/frontend/build/web/index.html"
+  local stamp="$RUNTIME/web_api_base"
+  local built_against=""
+  [ -f "$stamp" ] && built_against="$(cat "$stamp")"
 
-  if [ ! -f "$index" ] || [ "${REBUILD_WEB:-0}" = "1" ]; then
+  # L'URL de l'API est figée à la construction. Un build fait contre
+  # `127.0.0.1` puis servi en mode `--lan` donne une application qui s'ouvre sur
+  # le téléphone et parle au téléphone : elle ne dit rien, elle échoue.
+  # D'où l'empreinte : on reconstruit quand la cible a changé.
+  if [ ! -f "$index" ] || [ "${REBUILD_WEB:-0}" = "1" ] || [ "$built_against" != "$API_ORIGIN" ]; then
     command -v flutter >/dev/null 2>&1 || die "flutter est introuvable et le build web est absent.
     Installez Flutter (≥ 3.27), ou construisez ailleurs et copiez frontend/build/web."
+    [ -n "$built_against" ] && [ "$built_against" != "$API_ORIGIN" ] \
+      && note "l'API a changé d'adresse ($built_against → $API_ORIGIN), reconstruction"
     note "construction (quelques minutes la première fois)…"
     ( cd "$ROOT/frontend" \
-      && MINDFLOW_API_BASE_URL="http://127.0.0.1:$API_PORT" ./tool/build.sh web ) \
+      && MINDFLOW_API_BASE_URL="$API_ORIGIN" ./tool/build.sh web ) \
       >"$RUNTIME/build_web.log" 2>&1 \
       || die "le build web a échoué : tail -30 $RUNTIME/build_web.log"
-    ok "construit contre http://127.0.0.1:$API_PORT"
+    printf '%s' "$API_ORIGIN" > "$stamp"
+    ok "construit contre $API_ORIGIN"
   else
-    # L'URL de l'API est figée à la construction. Le dire évite la demi-heure
-    # passée à chercher pourquoi l'application parle à un autre serveur.
-    ok "build existant réutilisé (--rebuild-web pour le refaire)"
+    ok "build existant réutilisé, contre $built_against"
   fi
 
   need node "Il sert le client web. Installez Node ≥ 18."
-  spawn web "$ROOT/frontend" node tool/serve_web.mjs "$WEB_PORT"
+  spawn web "$ROOT/frontend" env HOST="$BIND_HOST" node tool/serve_web.mjs "$WEB_PORT"
 
   local reachable=""
   for _ in $(seq 1 20); do
@@ -269,7 +295,14 @@ ensure_web() {
   done
   [ "$reachable" = "200" ] || die "le client web ne répond pas sur $WEB_PORT.
     tail -20 $RUNTIME/web.log"
-  ok "servi sur http://127.0.0.1:$WEB_PORT"
+  ok "servi sur $WEB_ORIGIN"
+
+  if [ "$WITH_LAN" = "1" ]; then
+    warn "Le navigateur d'un téléphone refusera le micro sur cette adresse."
+    note "\`getUserMedia\` exige un contexte sécurisé : HTTPS, ou \`localhost\`."
+    note "Une IP de LAN en clair n'en est pas un. Pour capturer depuis un"
+    note "téléphone, c'est l'application Android qu'il faut installer."
+  fi
 }
 
 mint_token() {
@@ -283,17 +316,31 @@ print(make_local_token('11111111-1111-4111-8111-111111111111', 'dev@example.com'
 main() {
   WITH_WEB=0
   REBUILD_WEB=0
+  WITH_LAN=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --stop) stop_all; exit 0 ;;
       --token) mint_token; exit 0 ;;
-      -h|--help) sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
       --web) WITH_WEB=1 ;;
       --rebuild-web) WITH_WEB=1; REBUILD_WEB=1 ;;
+      --lan) WITH_LAN=1 ;;
       *) die "option inconnue : $1" ;;
     esac
     shift
   done
+
+  BIND_HOST=127.0.0.1
+  HOST_ADDRESS=127.0.0.1
+  if [ "$WITH_LAN" = "1" ]; then
+    HOST_ADDRESS="$(lan_address)"
+    [ -n "$HOST_ADDRESS" ] || die "adresse réseau introuvable.
+    Donnez-la explicitement : MINDFLOW_DEV_HOST=192.168.1.24 ./tool/dev_up.sh --lan"
+    BIND_HOST=0.0.0.0
+  fi
+  HOST_ADDRESS="${MINDFLOW_DEV_HOST:-$HOST_ADDRESS}"
+  API_ORIGIN="http://$HOST_ADDRESS:$API_PORT"
+  WEB_ORIGIN="http://$HOST_ADDRESS:$WEB_PORT"
 
   need uv "Installez-le : curl -LsSf https://astral.sh/uv/install.sh | sh"
   need pg_isready "Il est fourni avec le client PostgreSQL."
@@ -307,7 +354,13 @@ main() {
   step "Services"
   # Le worker d'abord : voir l'en-tête.
   spawn worker "$BACKEND" uv run arq app.workers.settings.WorkerSettings
-  spawn api "$BACKEND" uv run uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT"
+  # L'origine du client web est passée en variable d'environnement plutôt
+  # qu'écrite dans le `.env` : elle dépend de l'adresse du moment, et une
+  # autorisation d'origine qui survit à la session où elle avait un sens est une
+  # autorisation qu'on a oublié d'avoir donnée. Sans `--lan`, elle est vide et
+  # seules les origines locales passent (ADR-063).
+  spawn api "$BACKEND" env MINDFLOW_CORS_ALLOW_ORIGINS="$([ "$WITH_LAN" = "1" ] && printf '%s' "$WEB_ORIGIN")" \
+    uv run uvicorn app.main:app --host "$BIND_HOST" --port "$API_PORT"
 
   step "Vérification"
   local health=""
@@ -329,21 +382,37 @@ main() {
   fi
   ok "worker à l'écoute de la file capture.realtime"
 
+  if [ "$WITH_LAN" = "1" ]; then
+    # Dit fort, parce que la conséquence n'est pas devinable depuis l'option.
+    #
+    # En `local`, l'API accepte des jetons **non signés** : c'est ce qui permet
+    # de tout essayer sans compte Supabase (ADR-030). Sur `127.0.0.1` cela
+    # n'engage que la machine. Ouverte au réseau, la même permissivité signifie
+    # que quiconque atteint ce port peut se fabriquer une identité et lire, ou
+    # écrire, toutes les notes.
+    printf '\n%s%s  ⚠  L'"'"'API est ouverte au réseau local  %s\n' "$BOLD" "$YELLOW" "$OFF"
+    warn "Les jetons ne sont pas vérifiés en environnement \`local\`."
+    warn "Quiconque atteint $API_ORIGIN peut lire et écrire toutes les notes."
+    note "À n'utiliser que sur un réseau de confiance, et à couper après :"
+    note "  ./tool/dev_up.sh --stop"
+  fi
+
   [ "$WITH_WEB" = "1" ] && ensure_web
 
   cat <<EOF
 
 ${BOLD}MindFlow tourne.${OFF}
 
-  API          http://127.0.0.1:$API_PORT        ${DIM}(documentation : /docs)${OFF}$(
-  [ "$WITH_WEB" = "1" ] && printf '\n  Application  http://127.0.0.1:%s' "$WEB_PORT")
+  API          $API_ORIGIN        ${DIM}(documentation : /docs)${OFF}$(
+  [ "$WITH_WEB" = "1" ] && printf '\n  Application  %s' "$WEB_ORIGIN")
   Journaux     .dev/api.log, .dev/worker.log
   Arrêt        ./tool/dev_up.sh --stop
 
 Le client :
 
   ./tool/dev_up.sh --web    ${DIM}construit et sert l'application dans le navigateur${OFF}
-  cd frontend && MINDFLOW_API_BASE_URL=http://127.0.0.1:$API_PORT ./tool/build.sh linux
+  ./tool/dev_up.sh --lan    ${DIM}ouvre l'API au réseau local, pour un téléphone${OFF}
+  cd frontend && MINDFLOW_API_BASE_URL=$API_ORIGIN ./tool/build.sh android
 
 Ou directement en ligne de commande :
 

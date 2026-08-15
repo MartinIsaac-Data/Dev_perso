@@ -26,6 +26,34 @@ back-end, client, infrastructure et modèles IA. Les versions de documentation
 
 ## [Non publié]
 
+### Ajouté — `dev_up.sh --lan`, pour qu'un téléphone puisse joindre l'API
+
+Opt-in, jamais le défaut : sans l'option, l'API n'écoute que sur `127.0.0.1` et
+rien ne sort de la machine — vérifié dans les deux sens.
+
+Avec `--lan`, l'API écoute sur toutes les interfaces et l'origine du client web
+sur le réseau est ajoutée aux origines CORS autorisées, **pour la durée de la
+session seulement** : elle est passée en variable d'environnement au processus,
+jamais écrite dans le `.env`. Une autorisation d'origine qui survit à la session
+où elle avait un sens est une autorisation qu'on a oublié d'avoir donnée.
+
+**Le script le dit fort, parce que l'option ne le laisse pas deviner** : en
+environnement `local`, les jetons ne sont pas vérifiés. Sur `127.0.0.1` cela
+n'engage que la machine ; ouverte au réseau, la même permissivité signifie que
+quiconque atteint le port peut se fabriquer une identité et lire ou écrire
+toutes les notes.
+
+**Et il dit ce que `--lan` ne résout pas** : le navigateur d'un téléphone
+refusera le micro sur une IP en clair — `getUserMedia` exige un contexte
+sécurisé, HTTPS ou `localhost`. Pour capturer depuis un téléphone, c'est
+l'application Android qu'il faut installer ; `--lan` sert à ce que cette
+application trouve le serveur.
+
+**L'URL de l'API est figée à la construction du client web**, alors le script
+retient contre quelle adresse le build a été fait et reconstruit quand elle
+change. Sans cela, un build fait pour `127.0.0.1` servi en mode `--lan` donne
+une application qui s'ouvre sur le téléphone et parle au téléphone.
+
 ### Ajouté — La cible Android, échafaudée
 
 `android/` existe enfin, et il est versionné (amendement d'ADR-060) : son

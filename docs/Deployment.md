@@ -35,6 +35,19 @@ bas. Il est idempotent — le relancer ne recrée ni le rôle, ni la base, ni le
 `--stop` arrête l'API et le worker en laissant PostgreSQL et Redis, qui servent
 probablement à autre chose. `--token` imprime un jeton de développement.
 
+**`--lan` ouvre l'API au réseau local**, pour qu'un téléphone puisse la joindre.
+C'est explicite et jamais le défaut, parce que la conséquence ne se devine pas
+depuis l'option : en environnement `local` les jetons ne sont pas vérifiés
+(ADR-030), donc quiconque atteint ce port peut se fabriquer une identité et lire
+ou écrire toutes les notes. L'origine web autorisée est passée au processus pour
+la durée de la session, jamais écrite dans le `.env` — une autorisation qui
+survit à la session où elle avait un sens est une autorisation qu'on a oublié
+d'avoir donnée.
+
+`--lan` ne rend pas le navigateur d'un téléphone capable d'enregistrer : une IP
+en clair n'est pas un contexte sécurisé. Il sert à ce que l'application Android
+trouve le serveur.
+
 ### Ce qu'il fait, si vous préférez le faire à la main
 
 ```bash

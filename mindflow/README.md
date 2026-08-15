@@ -25,8 +25,19 @@ relancer ne recrée rien.
 | --- | --- |
 | `./tool/dev_up.sh` | Démarre tout et vérifie |
 | `./tool/dev_up.sh --web` | Construit le client web et le sert sur `127.0.0.1:8080` |
+| `./tool/dev_up.sh --lan` | Écoute sur le réseau local, pour qu'un téléphone joigne l'API |
 | `./tool/dev_up.sh --stop` | Arrête l'API, le worker et le client web |
 | `./tool/dev_up.sh --token` | Imprime un jeton de développement |
+
+**`--lan` ouvre l'API au réseau, et cela se paie.** En environnement `local` les
+jetons ne sont pas vérifiés : sur `127.0.0.1` cela n'engage que votre machine,
+sur le réseau cela signifie que quiconque atteint le port peut lire et écrire
+toutes vos notes. À réserver à un réseau de confiance, et à couper ensuite. Le
+script vous le rappelle à chaque démarrage.
+
+`--lan` sert à ce que l'application Android trouve le serveur, pas à capturer
+depuis le navigateur d'un téléphone : celui-ci refusera le micro sur une IP en
+clair, faute de contexte sécurisé.
 
 `--web` est le chemin le plus court pour utiliser le produit : ouvrez
 `http://127.0.0.1:8080`, connectez-vous avec n'importe quelle adresse, et

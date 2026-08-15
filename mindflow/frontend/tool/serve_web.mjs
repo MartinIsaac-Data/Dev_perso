@@ -17,10 +17,14 @@ import { startStaticServer } from './static_server.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'build', 'web');
 const port = Number(process.argv[2] ?? process.env.PORT ?? 8080);
+// `HOST=0.0.0.0` sert au reste du réseau local — utile pour joindre l'API depuis
+// un téléphone, inutile pour y enregistrer : le micro restera refusé faute de
+// contexte sécurisé. C'est donc un choix explicite, jamais le défaut.
+const host = process.env.HOST ?? '127.0.0.1';
 
 let server;
 try {
-  server = await startStaticServer({ root, port });
+  server = await startStaticServer({ root, port, host });
 } catch (error) {
   console.error(`error: ${error.message}`);
   process.exit(1);
