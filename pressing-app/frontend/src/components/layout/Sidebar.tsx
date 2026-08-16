@@ -1,0 +1,80 @@
+import { NavLink } from "react-router-dom";
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  Users,
+  Shirt,
+  Truck,
+  Wallet,
+  Receipt,
+  Boxes,
+  UserCog,
+  BarChart3,
+  Settings,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/cn";
+import { useAuth } from "@/contexts/AuthContext";
+
+const NAV = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard:read" },
+  { to: "/orders", label: "Commandes", icon: ShoppingBag, permission: "orders:read" },
+  { to: "/customers", label: "Clients", icon: Users, permission: "customers:read" },
+  { to: "/services", label: "Services", icon: Shirt, permission: "services:read" },
+  { to: "/deliveries", label: "Livraisons", icon: Truck, permission: "deliveries:read" },
+  { to: "/cash-register", label: "Caisse", icon: Wallet, permission: "cash:read" },
+  { to: "/expenses", label: "Dépenses", icon: Receipt, permission: "expenses:read" },
+  { to: "/inventory", label: "Stock", icon: Boxes, permission: "inventory:read" },
+  { to: "/employees", label: "Employés", icon: UserCog, permission: "employees:read" },
+  { to: "/reports", label: "Rapports", icon: BarChart3, permission: "reports:read" },
+  { to: "/settings", label: "Paramètres", icon: Settings, permission: "settings:read" },
+];
+
+export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
+  const { hasPermission } = useAuth();
+
+  const content = (
+    <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3">
+      <div className="mb-3 flex items-center justify-between px-2">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Shirt className="h-4 w-4" />
+          </div>
+          <span className="font-semibold">Pressing Étoile</span>
+        </div>
+        <button onClick={onClose} className="rounded p-1 hover:bg-accent lg:hidden" aria-label="Fermer le menu">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      {NAV.filter((item) => hasPermission(item.permission)).map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.to === "/"}
+          onClick={onClose}
+          className={({ isActive }) =>
+            cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              isActive ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-accent"
+            )
+          }
+        >
+          <item.icon className="h-4 w-4 shrink-0" />
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+
+  return (
+    <>
+      <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:block">{content}</aside>
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+          <aside className="absolute left-0 top-0 h-full w-64 bg-card shadow-lg">{content}</aside>
+        </div>
+      )}
+    </>
+  );
+}

@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pressing
+      POSTGRES_PASSWORD: pressing
+      POSTGRES_DB: pressing_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pressing_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pressing -d pressing_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://pressing:pressing@postgres:5432/pressing_db
+      JWT_SECRET: change-me-in-production
+      JWT_EXPIRES_IN: 8h
+      PORT: 4000
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  pressing_pg_data:
