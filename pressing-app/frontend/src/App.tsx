@@ -18,12 +18,33 @@ import EmployeesPage from "@/pages/EmployeesPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import NotFoundPage from "@/pages/NotFoundPage";
+import { PortalProtectedRoute } from "@/components/PortalProtectedRoute";
+import { PortalLayout } from "@/components/layout/PortalLayout";
+import PortalLoginPage from "@/pages/portal/PortalLoginPage";
+import PortalRegisterPage from "@/pages/portal/PortalRegisterPage";
+import PortalOrdersPage from "@/pages/portal/PortalOrdersPage";
+import PortalNewOrderPage from "@/pages/portal/PortalNewOrderPage";
+import PortalOrderDetailPage from "@/pages/portal/PortalOrderDetailPage";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/track" element={<TrackOrderPage />} />
+      <Route path="/portal/login" element={<PortalLoginPage />} />
+      <Route path="/portal/register" element={<PortalRegisterPage />} />
+
+      <Route
+        element={
+          <PortalProtectedRoute>
+            <PortalLayout />
+          </PortalProtectedRoute>
+        }
+      >
+        <Route path="/portal/orders" element={<PortalOrdersPage />} />
+        <Route path="/portal/orders/new" element={<PortalNewOrderPage />} />
+        <Route path="/portal/orders/:id" element={<PortalOrderDetailPage />} />
+      </Route>
 
       <Route
         element={

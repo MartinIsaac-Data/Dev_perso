@@ -132,6 +132,16 @@ voir [`DEPLOYMENT.md`](./DEPLOYMENT.md).
   (aucune donnée mockée), filtres par période, export CSV.
 - **Employés, multi-agences, audit log, paramètres, recherche globale
   (Ctrl+K), suivi de commande public** (`/track`, sans authentification).
+- **Portail client** (`/portal`) : les clients créent un compte (numéro de
+  téléphone + mot de passe), réservent en ligne en choisissant eux-mêmes
+  articles/services/quantités avec calcul de prix en direct, choisissent
+  retrait en boutique ou livraison, et suivent leurs commandes. La commande
+  est créée immédiatement (statut `RECEIVED`) sans validation d'un employé
+  au préalable — le paiement se fait en boutique ou à la livraison, aucun
+  paiement en ligne réel n'est intégré. Un compte client existant (créé en
+  boutique par le personnel) peut être "réclamé" en s'inscrivant avec le
+  même numéro de téléphone : l'historique de commandes existant devient
+  visible dans le portail.
 
 ## Ce qui nécessite une configuration externe pour la production
 

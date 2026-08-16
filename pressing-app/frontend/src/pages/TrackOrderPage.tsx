@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { Link } from "react-router-dom";
 import { Search, Shirt, CheckCircle2, Circle } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,13 @@ export default function TrackOrderPage() {
             <Search className="h-4 w-4" /> {loading ? "Recherche..." : "Rechercher"}
           </Button>
         </form>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Nouveau client ?{" "}
+          <Link to="/portal/register" className="font-medium text-primary hover:underline">
+            Réservez en ligne
+          </Link>
+        </p>
 
         {error && <p className="text-center text-sm text-destructive">{error}</p>}
 

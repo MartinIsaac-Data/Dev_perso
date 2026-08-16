@@ -20,6 +20,8 @@ import { auditRoutes } from "./routes/auditRoutes";
 import { branchRoutes } from "./routes/branchRoutes";
 import { reportRoutes } from "./routes/reportRoutes";
 import { searchRoutes } from "./routes/searchRoutes";
+import { portalAuthRoutes } from "./routes/portalAuthRoutes";
+import { portalRoutes } from "./routes/portalRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 export function createApp() {
@@ -51,10 +53,14 @@ export function createApp() {
   });
   app.use("/api", apiLimiter);
   app.use("/api/auth/login", authLimiter);
+  app.use("/api/portal-auth/login", authLimiter);
+  app.use("/api/portal-auth/register", authLimiter);
 
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
   app.use("/api/auth", authRoutes);
+  app.use("/api/portal-auth", portalAuthRoutes);
+  app.use("/api/portal", portalRoutes);
   app.use("/api/customers", customerRoutes);
   app.use("/api/services", serviceRoutes);
   app.use("/api/orders", orderRoutes);

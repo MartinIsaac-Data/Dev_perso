@@ -1,27 +1,21 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Shirt } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 
-const DEMO_ACCOUNTS = [
-  { role: "SUPER_ADMIN", email: "superadmin@pressing.demo" },
-  { role: "MANAGER", email: "manager@pressing.demo" },
-  { role: "CASHIER", email: "cashier1@pressing.demo" },
-];
-
-export default function LoginPage() {
-  const { user, login } = useAuth();
+export default function PortalLoginPage() {
+  const { customer, login } = usePortalAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("manager@pressing.demo");
-  const [password, setPassword] = useState("Demo1234!");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  if (user) {
-    const from = (location.state as { from?: string })?.from || "/";
+  if (customer) {
+    const from = (location.state as { from?: string })?.from || "/portal/orders";
     return <Navigate to={from} replace />;
   }
 
@@ -30,8 +24,8 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
-      navigate("/");
+      await login(phone, password);
+      navigate("/portal/orders");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de connexion");
     } finally {
@@ -47,13 +41,13 @@ export default function LoginPage() {
             <Shirt className="h-6 w-6" />
           </div>
           <h1 className="text-xl font-semibold">Pressing Étoile</h1>
-          <p className="text-sm text-muted-foreground">Connectez-vous pour gérer votre pressing</p>
+          <p className="text-sm text-muted-foreground">Connectez-vous pour réserver et suivre vos commandes</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Label htmlFor="phone">Téléphone</Label>
+            <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} required autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="password">Mot de passe</Label>
@@ -71,24 +65,16 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-          <p className="mb-1 font-medium">Comptes de démonstration (mot de passe : Demo1234!)</p>
-          {DEMO_ACCOUNTS.map((a) => (
-            <button
-              key={a.email}
-              type="button"
-              onClick={() => setEmail(a.email)}
-              className="block w-full rounded px-1 py-0.5 text-left hover:bg-accent"
-            >
-              {a.role} — {a.email}
-            </button>
-          ))}
-        </div>
-
+        <p className="text-center text-sm text-muted-foreground">
+          Pas encore de compte ?{" "}
+          <Link to="/portal/register" className="font-medium text-primary hover:underline">
+            Créer un compte
+          </Link>
+        </p>
         <p className="text-center text-xs text-muted-foreground">
-          Vous êtes un client ?{" "}
-          <Link to="/portal/login" className="hover:underline">
-            Réservez en ligne
+          Vous êtes un employé ?{" "}
+          <Link to="/login" className="hover:underline">
+            Connexion personnel
           </Link>
         </p>
       </div>

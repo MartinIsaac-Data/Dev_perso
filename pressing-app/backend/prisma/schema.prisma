@@ -210,6 +210,9 @@ model Customer {
   branchId     String?
   branch       Branch?      @relation(fields: [branchId], references: [id])
   active       Boolean      @default(true)
+  // Nullable: only customers who registered through the online portal have
+  // an account. Customers created in-store by staff have no login.
+  passwordHash String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
