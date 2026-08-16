@@ -1,0 +1,481 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  CASHIER
+  OPERATOR
+  DELIVERY
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  COMPANY
+  VIP
+}
+
+enum OrderStatus {
+  RECEIVED
+  INSPECTION
+  PROCESSING
+  QUALITY_CHECK
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderPriority {
+  NORMAL
+  EXPRESS
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  MOBILE_MONEY
+  CARD
+  BANK_TRANSFER
+  OTHER
+}
+
+enum ArticleCategory {
+  SHIRT
+  TSHIRT
+  PANTS
+  JEANS
+  SUIT
+  JACKET
+  DRESS
+  SKIRT
+  COAT
+  BEDSHEET
+  BLANKET
+  CURTAIN
+  SHOES
+  BAG
+  OTHER
+}
+
+enum FulfillmentType {
+  PICKUP
+  DELIVERY
+}
+
+enum DeliveryStatus {
+  PENDING
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+enum ExpenseCategory {
+  CHEMICALS
+  WATER
+  ELECTRICITY
+  TRANSPORT
+  MAINTENANCE
+  SALARIES
+  DELIVERY
+  RENT
+  OTHER
+}
+
+enum CashRegisterStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashTransactionType {
+  SALE
+  EXPENSE
+  REFUND
+  ADJUSTMENT
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum ProductCategory {
+  DETERGENT
+  SOFTENER
+  STAIN_REMOVER
+  BLEACH
+  PACKAGING
+  BAGS
+  HANGERS
+  LABELS
+  OTHER
+}
+
+enum InventoryTransactionType {
+  ENTRY
+  EXIT
+  ADJUSTMENT
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Core entities
+// ---------------------------------------------------------------------------
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  managerId String?
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  customers    Customer[]
+  orders       Order[]
+  expenses     Expense[]
+  products     Product[]
+  cashRegisters CashRegister[]
+
+  @@map("branches")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  role         Role      @default(OPERATOR)
+  position     String?
+  hireDate     DateTime?
+  active       Boolean   @default(true)
+  branchId     String?
+  branch       Branch?   @relation(fields: [branchId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  ordersHandled      Order[]            @relation("OrderEmployee")
+  paymentsReceived   Payment[]          @relation("PaymentReceivedBy")
+  expensesRecorded   Expense[]          @relation("ExpenseEmployee")
+  deliveriesAssigned Delivery[]         @relation("DeliveryDeliverer")
+  cashRegistersOpened  CashRegister[]   @relation("CashRegisterOpenedBy")
+  cashRegistersClosed  CashRegister[]   @relation("CashRegisterClosedBy")
+  cashTransactions   CashTransaction[]  @relation("CashTransactionCreatedBy")
+  inventoryTransactions InventoryTransaction[] @relation("InventoryTransactionCreatedBy")
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model Customer {
+  id           String       @id @default(uuid())
+  fullName     String
+  phone        String       @unique
+  email        String?
+  address      String?
+  birthDate    DateTime?
+  type         CustomerType @default(INDIVIDUAL)
+  notes        String?
+  branchId     String?
+  branch       Branch?      @relation(fields: [branchId], references: [id])
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  orders   Order[]
+  payments Payment[]
+
+  @@index([fullName])
+  @@map("customers")
+}
+
+model Service {
+  id                    String   @id @default(uuid())
+  name                  String
+  description           String?
+  category              String
+  price                 Decimal  @db.Decimal(12, 2)
+  expressPrice          Decimal? @db.Decimal(12, 2)
+  standardDurationHours Int      @default(48)
+  expressDurationHours  Int?     @default(24)
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@map("services")
+}
+
+model Order {
+  id                  String        @id @default(uuid())
+  orderNumber         String        @unique
+  customerId          String
+  customer            Customer      @relation(fields: [customerId], references: [id])
+  branchId            String?
+  branch              Branch?       @relation(fields: [branchId], references: [id])
+  employeeId          String?
+  employee            User?         @relation("OrderEmployee", fields: [employeeId], references: [id])
+  depositDate          DateTime     @default(now())
+  estimatedReadyDate   DateTime?
+  completedDate        DateTime?
+  status               OrderStatus  @default(RECEIVED)
+  priority             OrderPriority @default(NORMAL)
+  subtotal             Decimal      @default(0) @db.Decimal(12, 2)
+  discount             Decimal      @default(0) @db.Decimal(12, 2)
+  deliveryFee          Decimal      @default(0) @db.Decimal(12, 2)
+  total                Decimal      @default(0) @db.Decimal(12, 2)
+  paidAmount           Decimal      @default(0) @db.Decimal(12, 2)
+  balance              Decimal      @default(0) @db.Decimal(12, 2)
+  paymentStatus        PaymentStatus @default(UNPAID)
+  notes                String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  items      OrderItem[]
+  payments   Payment[]
+  delivery   Delivery?
+  statusHistory OrderStatusHistory[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([orderNumber])
+  @@map("orders")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  changedById String?
+  createdAt DateTime    @default(now())
+
+  @@map("order_status_history")
+}
+
+model OrderItem {
+  id                    String          @id @default(uuid())
+  orderId               String
+  order                 Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  category              ArticleCategory
+  articleType            String
+  quantity              Int             @default(1)
+  color                 String?
+  brand                 String?
+  size                  String?
+  conditionAtReceipt     String?
+  existingStains         String?
+  existingDamages        String?
+  specialInstructions    String?
+  photoUrl               String?
+  serviceId             String
+  service                Service        @relation(fields: [serviceId], references: [id])
+  isExpress              Boolean        @default(false)
+  unitPrice              Decimal        @db.Decimal(12, 2)
+  totalPrice              Decimal       @db.Decimal(12, 2)
+  createdAt               DateTime      @default(now())
+
+  @@map("order_items")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  amount        Decimal       @db.Decimal(12, 2)
+  method        PaymentMethod
+  reference     String?
+  receivedById  String?
+  receivedBy    User?         @relation("PaymentReceivedBy", fields: [receivedById], references: [id])
+  notes         String?
+  paidAt        DateTime      @default(now())
+
+  @@map("payments")
+}
+
+model Delivery {
+  id             String          @id @default(uuid())
+  orderId        String          @unique
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type           FulfillmentType @default(PICKUP)
+  address        String?
+  neighborhood   String?
+  city           String?
+  phone          String?
+  delivererId    String?
+  deliverer      User?           @relation("DeliveryDeliverer", fields: [delivererId], references: [id])
+  fee            Decimal         @default(0) @db.Decimal(12, 2)
+  scheduledDate  DateTime?
+  deliveredDate  DateTime?
+  status         DeliveryStatus  @default(PENDING)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("deliveries")
+}
+
+model Expense {
+  id            String          @id @default(uuid())
+  branchId      String?
+  branch        Branch?         @relation(fields: [branchId], references: [id])
+  date          DateTime        @default(now())
+  amount        Decimal         @db.Decimal(12, 2)
+  category      ExpenseCategory
+  description   String?
+  employeeId    String?
+  employee      User?           @relation("ExpenseEmployee", fields: [employeeId], references: [id])
+  paymentMethod PaymentMethod   @default(CASH)
+  receiptUrl    String?
+  createdAt     DateTime        @default(now())
+
+  cashTransactions CashTransaction[]
+
+  @@map("expenses")
+}
+
+model CashRegister {
+  id                       String              @id @default(uuid())
+  branchId                 String?
+  branch                   Branch?             @relation(fields: [branchId], references: [id])
+  openedById               String
+  openedBy                 User                @relation("CashRegisterOpenedBy", fields: [openedById], references: [id])
+  openedAt                 DateTime            @default(now())
+  closedById               String?
+  closedBy                 User?               @relation("CashRegisterClosedBy", fields: [closedById], references: [id])
+  closedAt                 DateTime?
+  openingBalance           Decimal             @default(0) @db.Decimal(12, 2)
+  closingBalanceTheoretical Decimal?           @db.Decimal(12, 2)
+  closingBalanceActual     Decimal?            @db.Decimal(12, 2)
+  variance                 Decimal?            @db.Decimal(12, 2)
+  status                   CashRegisterStatus  @default(OPEN)
+
+  transactions CashTransaction[]
+
+  @@map("cash_registers")
+}
+
+model CashTransaction {
+  id             String              @id @default(uuid())
+  cashRegisterId String
+  cashRegister   CashRegister        @relation(fields: [cashRegisterId], references: [id], onDelete: Cascade)
+  type           CashTransactionType
+  amount         Decimal             @db.Decimal(12, 2)
+  method         PaymentMethod       @default(CASH)
+  description    String?
+  orderId        String?
+  expenseId      String?
+  expense        Expense?            @relation(fields: [expenseId], references: [id])
+  createdById    String
+  createdBy      User                @relation("CashTransactionCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime            @default(now())
+
+  @@map("cash_transactions")
+}
+
+model Product {
+  id            String          @id @default(uuid())
+  name          String
+  category      ProductCategory
+  currentStock  Decimal         @default(0) @db.Decimal(12, 2)
+  minStock      Decimal         @default(0) @db.Decimal(12, 2)
+  unit          String
+  purchasePrice Decimal?        @db.Decimal(12, 2)
+  supplier      String?
+  branchId      String?
+  branch        Branch?         @relation(fields: [branchId], references: [id])
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  transactions InventoryTransaction[]
+
+  @@map("products")
+}
+
+model InventoryTransaction {
+  id          String                    @id @default(uuid())
+  productId   String
+  product     Product                   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type        InventoryTransactionType
+  quantity    Decimal                   @db.Decimal(12, 2)
+  reason      String?
+  createdById String
+  createdBy   User                      @relation("InventoryTransactionCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime                  @default(now())
+
+  @@map("inventory_transactions")
+}
+
+model Notification {
+  id          String              @id @default(uuid())
+  channel     NotificationChannel
+  recipient   String
+  subject     String?
+  message     String
+  status      NotificationStatus  @default(PENDING)
+  relatedOrderId String?
+  createdAt   DateTime            @default(now())
+  sentAt      DateTime?
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
