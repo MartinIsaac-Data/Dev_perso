@@ -6,7 +6,9 @@ dépenses, stock, livraisons, employés, multi-agences, dashboard, rapports,
 audit log et suivi de commande public.
 
 Voir [`PLAN.md`](../PLAN.md) (à la racine du dépôt) pour l'état des lieux,
-les décisions d'architecture et les phases de développement.
+les décisions d'architecture et les phases de développement, et
+[`DEPLOYMENT.md`](./DEPLOYMENT.md) pour déployer en production (Netlify +
+Render + Neon).
 
 ## Stack
 
@@ -101,6 +103,14 @@ téléphone).
 cd backend && npm run build && npm start
 cd frontend && npm run build && npm run preview
 ```
+
+## Déploiement (Netlify + Render + Neon)
+
+`frontend/netlify.toml` est prêt pour un déploiement Netlify (build command,
+publish directory, réécriture SPA). Netlify n'héberge que le frontend
+statique — le backend et PostgreSQL doivent être hébergés séparément.
+Étapes détaillées, variables d'environnement et ordre de déploiement :
+voir [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 
 ## Fonctionnalités couvertes
 
