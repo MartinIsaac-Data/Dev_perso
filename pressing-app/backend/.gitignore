@@ -2,3 +2,5 @@ node_modules
 dist
 .env
 *.log
+prisma/seed-statements.sql
+prisma/seed-statements.json
