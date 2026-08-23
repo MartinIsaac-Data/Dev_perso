@@ -24,6 +24,7 @@ import { portalAuthRoutes } from "./routes/portalAuthRoutes";
 import { portalRoutes } from "./routes/portalRoutes";
 import { paymentIntentRoutes } from "./routes/paymentIntentRoutes";
 import { webhookRoutes } from "./routes/webhookRoutes";
+import { orderItemPhotoRoutes } from "./routes/orderItemPhotoRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 export function createApp() {
@@ -80,6 +81,7 @@ export function createApp() {
   app.use("/api/search", searchRoutes);
   app.use("/api/payment-intents", paymentIntentRoutes);
   app.use("/api/webhooks", webhookRoutes);
+  app.use("/api/order-items", orderItemPhotoRoutes);
 
   app.use(errorHandler);
 

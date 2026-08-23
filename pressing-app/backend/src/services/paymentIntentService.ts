@@ -5,8 +5,7 @@ import { resolveMobileMoneyProvider } from "./mobileMoneyProviders";
 import { isSimulationMode } from "./settingsService";
 import { computeBalance, computePaymentStatus } from "./pricingService";
 import { notifyOrderStatusChange } from "./notificationService";
-import { branchScope } from "../middleware/auth";
-import type { AuthUser } from "../middleware/auth";
+import { assertBranchAccess } from "../middleware/auth";
 
 export interface InitiateResult {
   intent: PaymentIntent;
@@ -194,14 +193,4 @@ async function finalizeSuccess(intentId: string): Promise<PaymentIntent> {
 }
 
 /** Branch-scoped visibility check used by staff endpoints before they read/poll an intent. */
-export function assertIntentVisible(user: AuthUser, orderBranchId: string | null) {
-  const scope = branchScope(user);
-  if (!scope.branchId) return; // unscoped (SUPER_ADMIN with no active branch)
-  if (!orderBranchId) throw new ApiError(403, "Not allowed to access this order");
-  if (typeof scope.branchId === "string" && scope.branchId !== orderBranchId) {
-    throw new ApiError(403, "Not allowed to access this order");
-  }
-  if (typeof scope.branchId === "object" && !scope.branchId.in.includes(orderBranchId)) {
-    throw new ApiError(403, "Not allowed to access this order");
-  }
-}
+export const assertIntentVisible = assertBranchAccess;

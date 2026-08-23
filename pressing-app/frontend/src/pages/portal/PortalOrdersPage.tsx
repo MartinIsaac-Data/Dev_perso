@@ -8,7 +8,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, TableSkeleton } from "@/components/ui/states";
 import { formatDate, formatMoney } from "@/lib/format";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from "@/lib/statusMeta";
+import {
+  ORDER_SOURCE_LABELS,
+  ORDER_STATUS_LABELS,
+  ORDER_STATUS_TONE,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_TONE,
+} from "@/lib/statusMeta";
 import type { Order } from "@/types";
 
 export default function PortalOrdersPage() {
@@ -41,6 +47,7 @@ export default function PortalOrdersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>N° commande</TableHead>
+                <TableHead>Origine</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Paiement</TableHead>
@@ -55,6 +62,7 @@ export default function PortalOrdersPage() {
                       {o.orderNumber}
                     </Link>
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{ORDER_SOURCE_LABELS[o.source]}</TableCell>
                   <TableCell>{formatDate(o.depositDate)}</TableCell>
                   <TableCell>
                     <Badge tone={ORDER_STATUS_TONE[o.status]}>{ORDER_STATUS_LABELS[o.status]}</Badge>

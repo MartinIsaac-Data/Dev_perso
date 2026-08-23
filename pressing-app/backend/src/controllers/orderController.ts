@@ -115,6 +115,7 @@ export async function createOrder(req: Request, res: Response) {
         customerId: data.customerId,
         branchId: data.branchId ?? req.user!.branchId,
         employeeId: req.user!.id,
+        source: "PHYSICAL",
         priority: data.priority,
         estimatedReadyDate: data.estimatedReadyDate,
         subtotal: totals.subtotal,

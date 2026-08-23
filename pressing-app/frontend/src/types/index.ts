@@ -107,11 +107,14 @@ export interface OrderStatusHistoryEntry {
   createdAt: string;
 }
 
+export type OrderSource = "PHYSICAL" | "ONLINE";
+
 export interface Order {
   id: string;
   orderNumber: string;
   customerId: string;
   customer?: Customer;
+  source: OrderSource;
   status: OrderStatus;
   priority: "NORMAL" | "EXPRESS";
   depositDate: string;

@@ -10,7 +10,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, TableSkeleton } from "@/components/ui/states";
 import { formatDate, formatMoney } from "@/lib/format";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from "@/lib/statusMeta";
+import {
+  ORDER_SOURCE_LABELS,
+  ORDER_STATUS_LABELS,
+  ORDER_STATUS_TONE,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_TONE,
+} from "@/lib/statusMeta";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Order, Paginated } from "@/types";
 
@@ -75,6 +81,7 @@ export default function OrdersPage() {
               <TableRow>
                 <TableHead>N° commande</TableHead>
                 <TableHead>Client</TableHead>
+                <TableHead>Origine</TableHead>
                 <TableHead>Articles</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Statut</TableHead>
@@ -87,6 +94,7 @@ export default function OrdersPage() {
                 <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/orders/${o.id}`)}>
                   <TableCell className="font-medium">{o.orderNumber}</TableCell>
                   <TableCell>{o.customer?.fullName}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{ORDER_SOURCE_LABELS[o.source]}</TableCell>
                   <TableCell>{o.items?.length ?? 0}</TableCell>
                   <TableCell>{formatDate(o.depositDate)}</TableCell>
                   <TableCell>

@@ -3,6 +3,7 @@ import { Role } from "@prisma/client";
 import { verifyToken } from "../lib/jwt";
 import { Permission, roleHasPermission } from "../lib/permissions";
 import { prisma } from "../lib/prisma";
+import { ApiError } from "./errorHandler";
 
 export interface AuthUser {
   id: string;
@@ -77,4 +78,22 @@ export function branchScope(user: AuthUser): { branchId?: string | { in: string[
 
 export async function loadFreshUser(userId: string) {
   return prisma.user.findUnique({ where: { id: userId } });
+}
+
+/**
+ * Throws 403 unless `user`'s branch scope covers `resourceBranchId` — the
+ * same rule branchScope() encodes for list queries, applied to a single
+ * already-fetched resource (an order, a payment intent, an order item's
+ * photo) before returning or mutating it.
+ */
+export function assertBranchAccess(user: AuthUser, resourceBranchId: string | null) {
+  const scope = branchScope(user);
+  if (!scope.branchId) return; // unscoped (SUPER_ADMIN with no active branch)
+  if (!resourceBranchId) throw new ApiError(403, "Accès non autorisé à cette ressource");
+  if (typeof scope.branchId === "string" && scope.branchId !== resourceBranchId) {
+    throw new ApiError(403, "Accès non autorisé à cette ressource");
+  }
+  if (typeof scope.branchId === "object" && !scope.branchId.in.includes(resourceBranchId)) {
+    throw new ApiError(403, "Accès non autorisé à cette ressource");
+  }
 }

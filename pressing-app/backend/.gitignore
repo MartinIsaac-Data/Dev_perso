@@ -4,3 +4,4 @@ dist
 *.log
 prisma/seed-statements.sql
 prisma/seed-statements.json
+uploads/

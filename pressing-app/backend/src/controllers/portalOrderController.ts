@@ -67,6 +67,7 @@ export async function createOwnOrder(req: Request, res: Response) {
         orderNumber: generateOrderNumber(),
         customerId: customer.id,
         branchId,
+        source: "ONLINE",
         priority: data.priority,
         subtotal: totals.subtotal,
         discount: totals.discount,

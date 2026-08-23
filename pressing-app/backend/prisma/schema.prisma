@@ -43,6 +43,16 @@ enum OrderPriority {
   EXPRESS
 }
 
+// How the order was created — a walk-in customer at the counter (PHYSICAL,
+// the default) vs. self-service through the customer portal (ONLINE).
+// Both go through the exact same Order model and status pipeline; this is
+// display/reporting metadata, not a second order system. Room to grow into
+// PHONE / DELIVERY_REQUEST later without a schema change.
+enum OrderSource {
+  PHYSICAL
+  ONLINE
+}
+
 enum PaymentStatus {
   UNPAID
   PARTIAL
@@ -226,6 +236,7 @@ model User {
   auditLogs          AuditLog[]
   branchAssignments  StaffBranch[]
   paymentIntentsInitiated PaymentIntent[] @relation("PaymentIntentInitiatedBy")
+  itemPhotosUploaded OrderItemPhoto[]
 
   @@map("users")
 }
@@ -296,6 +307,7 @@ model Order {
   balance              Decimal      @default(0) @db.Decimal(12, 2)
   paymentStatus        PaymentStatus @default(UNPAID)
   notes                String?
+  source               OrderSource  @default(PHYSICAL)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
@@ -345,7 +357,29 @@ model OrderItem {
   totalPrice              Decimal       @db.Decimal(12, 2)
   createdAt               DateTime      @default(now())
 
+  photos                 OrderItemPhoto[]
+
   @@map("order_items")
+}
+
+// Real, stored photos documenting an article's condition at intake (stains,
+// damage, missing buttons, etc.) — one item can carry several. Files live
+// on local disk under uploads/order-items/ for this MVP (see
+// services/storageService.ts for exactly what that means and how to swap
+// in an S3-compatible bucket later); only the filename and metadata are
+// kept here. Served through an authenticated endpoint, never a public URL.
+model OrderItemPhoto {
+  id           String    @id @default(uuid())
+  orderItemId  String
+  orderItem    OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  uploadedById String?
+  uploadedBy   User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+
+  @@map("order_item_photos")
 }
 
 model Payment {

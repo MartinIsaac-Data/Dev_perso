@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentStatus, DeliveryStatusValue } from "@/types";
+import type { OrderStatus, OrderSource, PaymentStatus, DeliveryStatusValue } from "@/types";
 
 type Tone = "default" | "success" | "warning" | "destructive" | "muted";
 
@@ -58,6 +58,11 @@ export const DELIVERY_STATUS_LABELS: Record<DeliveryStatusValue, string> = {
   IN_TRANSIT: "En route",
   DELIVERED: "Livrée",
   FAILED: "Échec",
+};
+
+export const ORDER_SOURCE_LABELS: Record<OrderSource, string> = {
+  PHYSICAL: "🏪 Boutique",
+  ONLINE: "🌐 En ligne",
 };
 
 export const ARTICLE_CATEGORY_LABELS: Record<string, string> = {

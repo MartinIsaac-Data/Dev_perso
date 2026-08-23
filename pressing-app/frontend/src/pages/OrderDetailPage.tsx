@@ -23,6 +23,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useMobileMoneyIntent } from "@/hooks/useMobileMoneyIntent";
 import { MobileMoneyStatus } from "@/components/MobileMoneyStatus";
+import { ItemPhotos } from "@/components/ItemPhotos";
 import type { Order } from "@/types";
 
 export default function OrderDetailPage() {
@@ -164,6 +165,7 @@ export default function OrderDetailPage() {
               <TableHead>Service</TableHead>
               <TableHead>Prix unitaire</TableHead>
               <TableHead>Total</TableHead>
+              <TableHead>Photos</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -175,6 +177,9 @@ export default function OrderDetailPage() {
                 <TableCell>{item.service?.name}</TableCell>
                 <TableCell>{formatMoney(item.unitPrice)}</TableCell>
                 <TableCell className="font-medium">{formatMoney(item.totalPrice)}</TableCell>
+                <TableCell>
+                  <ItemPhotos itemId={item.id} canEdit={hasPermission("orders:write")} />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
