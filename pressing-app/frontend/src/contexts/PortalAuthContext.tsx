@@ -14,7 +14,7 @@ export interface PortalCustomer {
 interface PortalAuthContextValue {
   customer: PortalCustomer | null;
   loading: boolean;
-  login: (phone: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
   register: (data: {
     fullName: string;
     phone: string;
@@ -60,9 +60,9 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     setCustomer(customer);
   }
 
-  async function login(phone: string, password: string) {
+  async function login(identifier: string, password: string) {
     try {
-      const res = await portalApi.post("/portal-auth/login", { phone, password });
+      const res = await portalApi.post("/portal-auth/login", { identifier, password });
       persist(res.data.token, res.data.customer);
     } catch (error) {
       throw new Error(apiErrorMessage(error, "Identifiants invalides"));

@@ -47,13 +47,13 @@ describe("customer portal: registration, login, self-service order", () => {
   });
 
   it("logs in with the registered credentials", async () => {
-    const res = await request(app).post("/api/portal-auth/login").send({ phone, password: "Portail123!" });
+    const res = await request(app).post("/api/portal-auth/login").send({ identifier: phone, password: "Portail123!" });
     expect(res.status).toBe(200);
     expect(res.body.token).toBeTruthy();
   });
 
   it("rejects a wrong password", async () => {
-    const res = await request(app).post("/api/portal-auth/login").send({ phone, password: "wrong" });
+    const res = await request(app).post("/api/portal-auth/login").send({ identifier: phone, password: "wrong" });
     expect(res.status).toBe(401);
   });
 

@@ -8,7 +8,7 @@ import { Input, Label } from "@/components/ui/input";
 export default function PortalForgotPasswordPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<"request" | "reset">("request");
-  const [phone, setPhone] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [info, setInfo] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export default function PortalForgotPasswordPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await api.post("/portal-auth/forgot-password", { phone });
+      const res = await api.post("/portal-auth/forgot-password", { identifier });
       setInfo(res.data.message);
       setStep("reset");
     } catch (err) {
@@ -35,7 +35,7 @@ export default function PortalForgotPasswordPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await api.post("/portal-auth/reset-password", { phone, code, newPassword });
+      await api.post("/portal-auth/reset-password", { identifier, code, newPassword });
       navigate("/portal/login", { state: { resetSuccess: true } });
     } catch (err) {
       setError(apiErrorMessage(err, "Code invalide ou expiré"));
@@ -54,7 +54,7 @@ export default function PortalForgotPasswordPage() {
           <h1 className="text-xl font-semibold">Mot de passe oublié</h1>
           <p className="text-sm text-muted-foreground">
             {step === "request"
-              ? "Recevez un code par SMS/WhatsApp pour réinitialiser votre mot de passe"
+              ? "Recevez un code par SMS, WhatsApp et/ou email pour réinitialiser votre mot de passe"
               : "Entrez le code reçu et votre nouveau mot de passe"}
           </p>
         </div>
@@ -62,8 +62,14 @@ export default function PortalForgotPasswordPage() {
         {step === "request" ? (
           <form onSubmit={handleRequestCode} className="space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="space-y-1.5">
-              <Label htmlFor="phone">Téléphone</Label>
-              <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} required autoFocus />
+              <Label htmlFor="identifier">Téléphone ou email</Label>
+              <Input
+                id="identifier"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                required
+                autoFocus
+              />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={submitting}>

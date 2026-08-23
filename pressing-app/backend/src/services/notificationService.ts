@@ -84,34 +84,46 @@ class WhatsAppCloudProvider implements NotificationProvider {
   }
 }
 
-// Placeholder for channels without a real implementation yet (email). Not
-// implemented because no SMTP credentials are configured in this
-// environment — see backend/.env.example.
-class UnconfiguredProvider implements NotificationProvider {
-  constructor(public readonly name: string) {}
-  readonly configured = false;
+/**
+ * Resend (resend.com) transactional email API. Needs RESEND_API_KEY and
+ * RESEND_FROM_EMAIL (a sender address on a domain verified in the Resend
+ * dashboard).
+ */
+class ResendEmailProvider implements NotificationProvider {
+  readonly name = "email";
+  private readonly apiKey = process.env.RESEND_API_KEY;
+  private readonly from = process.env.RESEND_FROM_EMAIL;
 
-  async send(): Promise<void> {
-    throw new Error(`${this.name} provider is not configured. Set the matching env vars.`);
+  get configured(): boolean {
+    return Boolean(this.apiKey && this.from);
+  }
+
+  async send(recipient: string, message: string, subject?: string): Promise<void> {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: this.from,
+        to: recipient,
+        subject: subject || "Pressing Étoile",
+        text: message,
+      }),
+    });
+    if (!res.ok) throw new Error(`Resend send failed: ${res.status} ${await res.text()}`);
   }
 }
 
 const realProviders: Partial<Record<NotificationChannel, NotificationProvider>> = {
   SMS: new TwilioSmsProvider(),
   WHATSAPP: new WhatsAppCloudProvider(),
+  EMAIL: new ResendEmailProvider(),
 };
 
 async function resolveProvider(channel: NotificationChannel): Promise<NotificationProvider> {
   const real = realProviders[channel];
-  if (real) {
-    const simulate = await isSimulationMode("notifications");
-    if (!simulate && real.configured) return real;
-    return new LogProvider(real.name);
-  }
-  // EMAIL (or any future channel without a real implementation): keep the
-  // original honest behavior — log by default, fail loudly only if someone
-  // explicitly opts into a provider that isn't actually implemented.
-  return process.env.EMAIL_PROVIDER ? new UnconfiguredProvider("email") : new LogProvider("email");
+  const simulate = await isSimulationMode("notifications");
+  if (!simulate && real?.configured) return real;
+  return new LogProvider(real?.name ?? channel.toLowerCase());
 }
 
 export async function notify(

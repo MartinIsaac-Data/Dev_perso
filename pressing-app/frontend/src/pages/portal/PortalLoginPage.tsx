@@ -9,7 +9,7 @@ export default function PortalLoginPage() {
   const { customer, login } = usePortalAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [phone, setPhone] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -25,7 +25,7 @@ export default function PortalLoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(phone, password);
+      await login(identifier, password);
       navigate("/portal/orders");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de connexion");
@@ -47,8 +47,14 @@ export default function PortalLoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="space-y-1.5">
-            <Label htmlFor="phone">Téléphone</Label>
-            <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} required autoFocus />
+            <Label htmlFor="identifier">Téléphone ou email</Label>
+            <Input
+              id="identifier"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              required
+              autoFocus
+            />
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">

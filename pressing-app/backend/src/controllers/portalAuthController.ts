@@ -16,7 +16,7 @@ import { notify } from "../services/notificationService";
 
 const RESET_CODE_TTL_MS = 15 * 60 * 1000;
 const GENERIC_RESET_MESSAGE =
-  "Si ce numéro est associé à un compte, un code de réinitialisation vient d'être envoyé par SMS.";
+  "Si ce compte existe, un code de réinitialisation vient d'être envoyé par SMS, WhatsApp et/ou email.";
 
 const PUBLIC_SELECT = {
   id: true,
@@ -27,11 +27,40 @@ const PUBLIC_SELECT = {
   type: true,
 } as const;
 
+/**
+ * Portal accounts log in with either their phone or their email. Phone is
+ * enforced unique at the DB level; email isn't (walk-in customers created
+ * in-store may share or leave it blank), so an email match is only
+ * accepted when it resolves to exactly one account with a password —
+ * anything ambiguous is treated the same as "not found" rather than
+ * guessing which account was meant.
+ */
+async function findAccountByIdentifier(identifier: string) {
+  if (identifier.includes("@")) {
+    const matches = await prisma.customer.findMany({
+      where: { email: identifier, passwordHash: { not: null } },
+    });
+    return matches.length === 1 ? matches[0] : null;
+  }
+  return prisma.customer.findUnique({ where: { phone: identifier } });
+}
+
 export async function register(req: Request, res: Response) {
   const data = portalRegisterSchema.parse(req.body);
   const passwordHash = await bcrypt.hash(data.password, 10);
 
   const existing = await prisma.customer.findUnique({ where: { phone: data.phone } });
+
+  if (data.email) {
+    const emailTaken = await prisma.customer.findFirst({
+      where: {
+        email: data.email,
+        passwordHash: { not: null },
+        ...(existing ? { id: { not: existing.id } } : {}),
+      },
+    });
+    if (emailTaken) throw new ApiError(409, "Un compte existe déjà avec cet email");
+  }
 
   // A customer walk-in record for this phone may already exist (created
   // in-store by staff, no login). Registering "claims" it instead of
@@ -73,15 +102,15 @@ export async function register(req: Request, res: Response) {
 }
 
 export async function login(req: Request, res: Response) {
-  const { phone, password } = portalLoginSchema.parse(req.body);
+  const { identifier, password } = portalLoginSchema.parse(req.body);
 
-  const customer = await prisma.customer.findUnique({ where: { phone } });
+  const customer = await findAccountByIdentifier(identifier);
   if (!customer || !customer.active || !customer.passwordHash) {
-    throw new ApiError(401, "Numéro de téléphone ou mot de passe incorrect");
+    throw new ApiError(401, "Identifiants incorrects");
   }
   const valid = await bcrypt.compare(password, customer.passwordHash);
   if (!valid) {
-    throw new ApiError(401, "Numéro de téléphone ou mot de passe incorrect");
+    throw new ApiError(401, "Identifiants incorrects");
   }
 
   const token = signCustomerToken(customer.id);
@@ -99,11 +128,12 @@ export async function login(req: Request, res: Response) {
 }
 
 export async function forgotPassword(req: Request, res: Response) {
-  const { phone } = portalForgotPasswordSchema.parse(req.body);
+  const { identifier } = portalForgotPasswordSchema.parse(req.body);
 
-  const customer = await prisma.customer.findUnique({ where: { phone } });
-  // Same generic response whether or not the phone matches an account, so
-  // this endpoint can't be used to enumerate registered customers.
+  const customer = await findAccountByIdentifier(identifier);
+  // Same generic response whether or not the identifier matches an
+  // account, so this endpoint can't be used to enumerate registered
+  // customers.
   if (customer && customer.passwordHash) {
     const code = randomInt(100000, 1000000).toString();
     const resetCodeHash = await bcrypt.hash(code, 10);
@@ -112,16 +142,20 @@ export async function forgotPassword(req: Request, res: Response) {
       data: { resetCodeHash, resetCodeExpiresAt: new Date(Date.now() + RESET_CODE_TTL_MS) },
     });
     const message = `Votre code de réinitialisation Pressing Étoile : ${code}. Valable 15 minutes.`;
-    await Promise.all([notify("SMS", phone, message), notify("WHATSAPP", phone, message)]);
+    const sends = [notify("SMS", customer.phone, message), notify("WHATSAPP", customer.phone, message)];
+    if (customer.email) {
+      sends.push(notify("EMAIL", customer.email, message, { subject: "Réinitialisation de votre mot de passe" }));
+    }
+    await Promise.all(sends);
   }
 
   res.json({ message: GENERIC_RESET_MESSAGE });
 }
 
 export async function resetPassword(req: Request, res: Response) {
-  const { phone, code, newPassword } = portalResetPasswordSchema.parse(req.body);
+  const { identifier, code, newPassword } = portalResetPasswordSchema.parse(req.body);
 
-  const customer = await prisma.customer.findUnique({ where: { phone } });
+  const customer = await findAccountByIdentifier(identifier);
   if (!customer?.resetCodeHash || !customer.resetCodeExpiresAt || customer.resetCodeExpiresAt < new Date()) {
     throw new ApiError(400, "Code invalide ou expiré");
   }
