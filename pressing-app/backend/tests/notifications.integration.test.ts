@@ -118,4 +118,55 @@ describe("automatic status notifications", () => {
     });
     expect(notifications.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("tells a pickup customer they can come collect the order when it's READY", async () => {
+    const create = await request(app)
+      .post("/api/orders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ customerId, items: [{ category: "SHIRT", articleType: "Chemise", quantity: 1, serviceId }] });
+    const orderId = create.body.id;
+
+    for (const status of ["INSPECTION", "PROCESSING", "QUALITY_CHECK", "READY"]) {
+      await request(app)
+        .post(`/api/orders/${orderId}/status`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ status });
+    }
+
+    const notifications = await prisma.notification.findMany({
+      where: { relatedOrderId: orderId, message: { contains: "venir la récupérer" } },
+    });
+    expect(notifications.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not tell a delivery customer to come pick up when the order becomes READY", async () => {
+    const create = await request(app)
+      .post("/api/orders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ customerId, items: [{ category: "SHIRT", articleType: "Chemise", quantity: 1, serviceId }] });
+    const orderId = create.body.id;
+
+    const delivery = await request(app)
+      .post("/api/deliveries")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ orderId, type: "DELIVERY", address: "Quartier Test" });
+    expect(delivery.status).toBe(201);
+
+    for (const status of ["INSPECTION", "PROCESSING", "QUALITY_CHECK", "READY"]) {
+      await request(app)
+        .post(`/api/orders/${orderId}/status`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ status });
+    }
+
+    const pickupNotifications = await prisma.notification.findMany({
+      where: { relatedOrderId: orderId, message: { contains: "venir la récupérer" } },
+    });
+    expect(pickupNotifications).toHaveLength(0);
+
+    const deliveryReadyNotifications = await prisma.notification.findMany({
+      where: { relatedOrderId: orderId, message: { contains: "sera bientôt livrée" } },
+    });
+    expect(deliveryReadyNotifications.length).toBeGreaterThanOrEqual(2);
+  });
 });

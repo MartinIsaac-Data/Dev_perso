@@ -243,7 +243,7 @@ export async function updateOrderStatus(req: Request, res: Response) {
   const { status, note } = orderStatusSchema.parse(req.body);
   const existing = await prisma.order.findUnique({
     where: { id: req.params.id },
-    include: { customer: true },
+    include: { customer: true, delivery: true },
   });
   if (!existing) throw new ApiError(404, "Order not found");
 
@@ -275,7 +275,15 @@ export async function updateOrderStatus(req: Request, res: Response) {
     newValue: { status },
   });
 
-  await notifyOrderStatusChange(existing.customer.phone, existing.id, STATUS_MESSAGES[status](existing.orderNumber));
+  // "Vous pouvez venir la récupérer" only makes sense when nobody is going
+  // to bring the order to the customer — a READY order with a DELIVERY
+  // fulfillment gets its own "en cours de livraison" message once it
+  // actually goes out (see updateDelivery in deliveryController.ts).
+  const isReadyForDelivery = status === "READY" && existing.delivery?.type === "DELIVERY";
+  const message = isReadyForDelivery
+    ? `Votre commande ${existing.orderNumber} est prête et sera bientôt livrée.`
+    : STATUS_MESSAGES[status](existing.orderNumber);
+  await notifyOrderStatusChange(existing.customer.phone, existing.id, message);
 
   res.json(order);
 }
