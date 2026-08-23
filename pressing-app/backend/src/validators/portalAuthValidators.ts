@@ -12,3 +12,13 @@ export const portalLoginSchema = z.object({
   phone: z.string().min(6),
   password: z.string().min(1),
 });
+
+export const portalForgotPasswordSchema = z.object({
+  phone: z.string().min(6),
+});
+
+export const portalResetPasswordSchema = z.object({
+  phone: z.string().min(6),
+  code: z.string().length(6),
+  newPassword: z.string().min(6),
+});

@@ -13,6 +13,7 @@ export default function PortalLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const resetSuccess = Boolean((location.state as { resetSuccess?: boolean } | null)?.resetSuccess);
 
   if (customer) {
     const from = (location.state as { from?: string })?.from || "/portal/orders";
@@ -50,7 +51,12 @@ export default function PortalLoginPage() {
             <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} required autoFocus />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Mot de passe</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Mot de passe</Label>
+              <Link to="/portal/forgot-password" className="text-xs text-primary hover:underline">
+                Mot de passe oublié ?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"
@@ -59,6 +65,7 @@ export default function PortalLoginPage() {
               required
             />
           </div>
+          {resetSuccess && <p className="text-sm text-emerald-600">Mot de passe mis à jour, connectez-vous.</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? "Connexion..." : "Se connecter"}

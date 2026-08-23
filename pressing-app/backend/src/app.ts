@@ -58,6 +58,8 @@ export function createApp() {
   app.use("/api/auth/login", authLimiter);
   app.use("/api/portal-auth/login", authLimiter);
   app.use("/api/portal-auth/register", authLimiter);
+  app.use("/api/portal-auth/forgot-password", authLimiter);
+  app.use("/api/portal-auth/reset-password", authLimiter);
 
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

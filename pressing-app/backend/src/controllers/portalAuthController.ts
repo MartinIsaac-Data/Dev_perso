@@ -1,11 +1,22 @@
 import { Request, Response } from "express";
+import { randomInt } from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import { signCustomerToken } from "../lib/jwt";
-import { portalLoginSchema, portalRegisterSchema } from "../validators/portalAuthValidators";
+import {
+  portalForgotPasswordSchema,
+  portalLoginSchema,
+  portalRegisterSchema,
+  portalResetPasswordSchema,
+} from "../validators/portalAuthValidators";
 import { ApiError } from "../middleware/errorHandler";
 import { recordAudit } from "../services/auditService";
 import { getDefaultBranchId } from "../services/branchService";
+import { notify } from "../services/notificationService";
+
+const RESET_CODE_TTL_MS = 15 * 60 * 1000;
+const GENERIC_RESET_MESSAGE =
+  "Si ce numéro est associé à un compte, un code de réinitialisation vient d'être envoyé par SMS.";
 
 const PUBLIC_SELECT = {
   id: true,
@@ -85,6 +96,48 @@ export async function login(req: Request, res: Response) {
       type: customer.type,
     },
   });
+}
+
+export async function forgotPassword(req: Request, res: Response) {
+  const { phone } = portalForgotPasswordSchema.parse(req.body);
+
+  const customer = await prisma.customer.findUnique({ where: { phone } });
+  // Same generic response whether or not the phone matches an account, so
+  // this endpoint can't be used to enumerate registered customers.
+  if (customer && customer.passwordHash) {
+    const code = randomInt(100000, 1000000).toString();
+    const resetCodeHash = await bcrypt.hash(code, 10);
+    await prisma.customer.update({
+      where: { id: customer.id },
+      data: { resetCodeHash, resetCodeExpiresAt: new Date(Date.now() + RESET_CODE_TTL_MS) },
+    });
+    const message = `Votre code de réinitialisation Pressing Étoile : ${code}. Valable 15 minutes.`;
+    await Promise.all([notify("SMS", phone, message), notify("WHATSAPP", phone, message)]);
+  }
+
+  res.json({ message: GENERIC_RESET_MESSAGE });
+}
+
+export async function resetPassword(req: Request, res: Response) {
+  const { phone, code, newPassword } = portalResetPasswordSchema.parse(req.body);
+
+  const customer = await prisma.customer.findUnique({ where: { phone } });
+  if (!customer?.resetCodeHash || !customer.resetCodeExpiresAt || customer.resetCodeExpiresAt < new Date()) {
+    throw new ApiError(400, "Code invalide ou expiré");
+  }
+  const valid = await bcrypt.compare(code, customer.resetCodeHash);
+  if (!valid) {
+    throw new ApiError(400, "Code invalide ou expiré");
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: { passwordHash, resetCodeHash: null, resetCodeExpiresAt: null },
+  });
+  await recordAudit({ action: "PORTAL_RESET_PASSWORD", entityType: "Customer", entityId: customer.id });
+
+  res.json({ message: "Mot de passe mis à jour, vous pouvez vous connecter." });
 }
 
 export async function me(req: Request, res: Response) {

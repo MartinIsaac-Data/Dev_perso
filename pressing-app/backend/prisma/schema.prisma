@@ -256,6 +256,10 @@ model Customer {
   // Nullable: only customers who registered through the online portal have
   // an account. Customers created in-store by staff have no login.
   passwordHash String?
+  // Forgot-password flow: a hashed 6-digit code sent by SMS/WhatsApp, valid
+  // for 15 minutes. Both null outside of an active reset request.
+  resetCodeHash      String?
+  resetCodeExpiresAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 

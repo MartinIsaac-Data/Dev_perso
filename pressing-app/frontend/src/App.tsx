@@ -28,6 +28,7 @@ import NotFoundPage from "@/pages/NotFoundPage";
 import { PortalProtectedRoute } from "@/components/PortalProtectedRoute";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import PortalLoginPage from "@/pages/portal/PortalLoginPage";
+import PortalForgotPasswordPage from "@/pages/portal/PortalForgotPasswordPage";
 import PortalRegisterPage from "@/pages/portal/PortalRegisterPage";
 import PortalOrdersPage from "@/pages/portal/PortalOrdersPage";
 import PortalNewOrderPage from "@/pages/portal/PortalNewOrderPage";
@@ -53,6 +54,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/track" element={<TrackOrderPage />} />
       <Route path="/portal/login" element={<PortalLoginPage />} />
+      <Route path="/portal/forgot-password" element={<PortalForgotPasswordPage />} />
       <Route path="/portal/register" element={<PortalRegisterPage />} />
 
       <Route
