@@ -157,22 +157,35 @@ export default function NewOrderPage() {
                   className="pl-8"
                 />
               </div>
-              <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border">
                 {filteredCustomers.map((c) => (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => setCustomerId(c.id)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent"
+                    className="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent"
                   >
-                    <span>{c.fullName}</span>
-                    <span className="text-muted-foreground">{c.phone}</span>
+                    <div>
+                      <p className="font-medium">{c.fullName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.phone}
+                        {c.email ? ` • ${c.email}` : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {c._count?.orders ?? 0} commande{(c._count?.orders ?? 0) === 1 ? "" : "s"}
+                    </span>
                   </button>
                 ))}
                 {filteredCustomers.length === 0 && (
                   <p className="p-3 text-sm text-muted-foreground">Aucun client trouvé.</p>
                 )}
               </div>
+              {customerSearch && filteredCustomers.length > 1 && (
+                <p className="text-xs text-muted-foreground">
+                  {filteredCustomers.length} clients correspondent — vérifiez le téléphone avant de choisir.
+                </p>
+              )}
             </div>
           )}
         </CardContent>
