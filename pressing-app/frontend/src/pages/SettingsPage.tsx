@@ -17,6 +17,8 @@ interface Settings {
   taxRate: number;
   openingHours: string;
   termsAndConditions: string;
+  paymentsSimulationMode: boolean;
+  notificationsSimulationMode: boolean;
 }
 
 export default function SettingsPage() {
@@ -114,6 +116,51 @@ export default function SettingsPage() {
                 onChange={(e) => setForm({ ...form, termsAndConditions: e.target.value })}
               />
             </div>
+            {!readOnly && (
+              <div className="flex justify-end pt-2">
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "Enregistrement..." : "Enregistrer"}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Mode démonstration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Quand ces options sont activées, les paiements Orange Money / MTN MoMo et les notifications
+              SMS/WhatsApp sont simulés (aucun vrai débit, aucun vrai message envoyé) — utile pour une présentation
+              en direct sans compte marchand ni crédit SMS réel. Les intégrations réelles sont utilisées dès qu'un
+              opérateur ou Twilio/WhatsApp sont configurés côté serveur et que ces options sont désactivées.
+            </p>
+            <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Simulation des paiements mobile money</p>
+                <p className="text-xs text-muted-foreground">Orange Money et MTN MoMo répondent instantanément avec un succès simulé.</p>
+              </div>
+              <input
+                type="checkbox"
+                disabled={readOnly}
+                checked={form.paymentsSimulationMode}
+                onChange={(e) => setForm({ ...form, paymentsSimulationMode: e.target.checked })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Simulation des notifications SMS/WhatsApp</p>
+                <p className="text-xs text-muted-foreground">Les messages sont enregistrés et affichés en console au lieu d'être réellement envoyés.</p>
+              </div>
+              <input
+                type="checkbox"
+                disabled={readOnly}
+                checked={form.notificationsSimulationMode}
+                onChange={(e) => setForm({ ...form, notificationsSimulationMode: e.target.checked })}
+              />
+            </label>
             {!readOnly && (
               <div className="flex justify-end pt-2">
                 <Button type="submit" disabled={submitting}>

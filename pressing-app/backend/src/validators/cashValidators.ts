@@ -12,6 +12,6 @@ export const cashCloseSchema = z.object({
 export const cashTransactionSchema = z.object({
   type: z.enum(["SALE", "EXPENSE", "REFUND", "ADJUSTMENT", "DEPOSIT", "WITHDRAWAL"]),
   amount: z.coerce.number(),
-  method: z.enum(["CASH", "MOBILE_MONEY", "CARD", "BANK_TRANSFER", "OTHER"]).default("CASH"),
+  method: z.enum(["CASH", "ORANGE_MONEY", "MTN_MOMO", "CARD", "BANK_TRANSFER", "OTHER"]).default("CASH"),
   description: z.string().optional().nullable(),
 });

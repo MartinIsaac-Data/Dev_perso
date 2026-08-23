@@ -15,6 +15,10 @@ function daysAgo(n: number): Date {
   d.setHours(randomInt(8, 18), randomInt(0, 59), 0, 0);
   return d;
 }
+function cmPhone(seed: number): string {
+  const digits = String(600000000 + Math.abs(seed * 137) % 99999999).padStart(9, "0");
+  return `+237 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}`;
+}
 
 let orderCounter = 0;
 function nextOrderNumber(date: Date): string {
@@ -26,15 +30,16 @@ function nextOrderNumber(date: Date): string {
 }
 
 const FIRST_NAMES = [
-  "Awa", "Kossi", "Fatou", "Moussa", "Aminata", "Ibrahim", "Adjoa", "Kwame", "Nadia", "Yao",
-  "Salimata", "Kofi", "Aicha", "Bakary", "Grace", "Emmanuel", "Rokia", "Didier", "Chantal", "Serge",
-  "Mariam", "Paul", "Estelle", "Jean", "Fanta", "Alassane", "Sonia", "Herve", "Rachelle", "Aristide",
-  "Nafissatou", "Olivier", "Prisca", "Boubacar", "Larissa", "Cedric", "Assetou", "Landry", "Odile", "Fabrice",
-  "Hawa", "Regis", "Bintou", "Armand", "Clarisse", "Souleymane", "Vanessa", "Thierry", "Mah", "Patrick",
+  "Achille", "Solange", "Yannick", "Carine", "Brice", "Reine", "Arnaud", "Prudence", "Steve", "Ornella",
+  "Junior", "Merveille", "Christelle", "Boris", "Flore", "Cabrel", "Divine", "Armelle", "Ghislain", "Pélagie",
+  "Ferdinand", "Clotilde", "Rodrigue", "Bertille", "Aurélien", "Nadège", "Franck", "Huguette", "Loïc", "Sandra",
+  "Emmanuel", "Chantal", "Blaise", "Delphine", "Anicet", "Judith", "Serge", "Vanessa", "Patrick", "Grace",
+  "Aicha", "Moussa", "Fadimatou", "Aboubakar", "Oumarou", "Hadja", "Landry", "Estelle", "Cedric", "Larissa",
 ];
 const LAST_NAMES = [
-  "Diallo", "Traore", "Kone", "Ouattara", "Sanogo", "Coulibaly", "Bamba", "Toure", "Konate", "Diarra",
-  "Kouassi", "N'Guessan", "Yao", "Kouame", "Assi", "Adjei", "Mensah", "Owusu", "Boateng", "Agbo",
+  "Mballa", "Fotso", "Etoundi", "Mvondo", "Nkeng", "Talla", "Kamga", "Ndzana", "Abena", "Onana",
+  "Tchamba", "Wandji", "Eyenga", "Biyiha", "Ngo Bidjeck", "Essomba", "Belinga", "Mfomo", "Njoya", "Tabi",
+  "Ateba", "Bikoro", "Ndam", "Sende", "Zambo", "Mengue", "Owona", "Ekani", "Tchoua", "Ngo Nlend",
 ];
 
 async function main() {
@@ -49,6 +54,7 @@ async function main() {
     prisma.product.deleteMany(),
     prisma.expense.deleteMany(),
     prisma.delivery.deleteMany(),
+    prisma.paymentIntent.deleteMany(),
     prisma.payment.deleteMany(),
     prisma.orderStatusHistory.deleteMany(),
     prisma.orderItem.deleteMany(),
@@ -56,42 +62,59 @@ async function main() {
     prisma.service.deleteMany(),
     prisma.customer.deleteMany(),
     prisma.setting.deleteMany(),
+    prisma.staffBranch.deleteMany(),
     prisma.user.deleteMany(),
     prisma.branch.deleteMany(),
   ]);
 
-  // --- Branches -------------------------------------------------------
-  const branchMain = await prisma.branch.create({
-    data: { name: "Pressing Étoile — Plateau", address: "Avenue Chardy, Plateau, Abidjan", phone: "+225 27 20 30 40 50" },
+  // --- Branches (Cameroon: Douala + Yaoundé) --------------------------
+  const branchDouala = await prisma.branch.create({
+    data: { name: "Pressing Étoile — Akwa, Douala", address: "Avenue de Gaulle, Akwa, Douala", phone: "+237 233 42 10 20" },
   });
-  const branchAnnex = await prisma.branch.create({
-    data: { name: "Pressing Étoile — Cocody", address: "Rue des Jardins, Cocody, Abidjan", phone: "+225 27 22 44 66 88" },
+  const branchYaounde = await prisma.branch.create({
+    data: { name: "Pressing Étoile — Bastos, Yaoundé", address: "Rue 1750, Bastos, Yaoundé", phone: "+237 222 20 30 40" },
   });
+  const branchCity: Record<string, string> = { [branchDouala.id]: "Douala", [branchYaounde.id]: "Yaoundé" };
+  const neighborhoods: Record<string, string[]> = {
+    [branchDouala.id]: ["Akwa", "Bonanjo", "Bonapriso", "Deido", "New-Bell", "Bépanda", "Makepe", "Ndokoti", "Bali"],
+    [branchYaounde.id]: ["Bastos", "Nlongkak", "Mvog-Mbi", "Essos", "Mfandena", "Nkolbisson", "Emana", "Etoa-Meki", "Mvan"],
+  };
 
   // --- Users ------------------------------------------------------------
   const passwordHash = await bcrypt.hash("Demo1234!", 10);
   type SeedUser = { email: string; fullName: string; role: Role; branchId: string; position: string };
   const userDefs: SeedUser[] = [
-    { email: "superadmin@pressing.demo", fullName: "Aïcha Bamba", role: "SUPER_ADMIN", branchId: branchMain.id, position: "Direction générale" },
-    { email: "admin@pressing.demo", fullName: "Moussa Diallo", role: "ADMIN", branchId: branchMain.id, position: "Administrateur" },
-    { email: "manager@pressing.demo", fullName: "Fatou Traoré", role: "MANAGER", branchId: branchMain.id, position: "Responsable de boutique" },
-    { email: "cashier1@pressing.demo", fullName: "Kossi Yao", role: "CASHIER", branchId: branchMain.id, position: "Caissier" },
-    { email: "cashier2@pressing.demo", fullName: "Adjoa Kouassi", role: "CASHIER", branchId: branchAnnex.id, position: "Caissière" },
-    { email: "operator1@pressing.demo", fullName: "Bakary Koné", role: "OPERATOR", branchId: branchMain.id, position: "Agent de traitement" },
-    { email: "operator2@pressing.demo", fullName: "Grace Mensah", role: "OPERATOR", branchId: branchMain.id, position: "Agent de traitement" },
-    { email: "operator3@pressing.demo", fullName: "Ibrahim Ouattara", role: "OPERATOR", branchId: branchAnnex.id, position: "Agent de traitement" },
-    { email: "delivery1@pressing.demo", fullName: "Serge N'Guessan", role: "DELIVERY", branchId: branchMain.id, position: "Livreur" },
-    { email: "delivery2@pressing.demo", fullName: "Chantal Assi", role: "DELIVERY", branchId: branchAnnex.id, position: "Livreuse" },
+    { email: "superadmin@pressing.demo", fullName: "Aïcha Bello", role: "SUPER_ADMIN", branchId: branchDouala.id, position: "Direction générale" },
+    { email: "admin@pressing.demo", fullName: "Ferdinand Mballa", role: "ADMIN", branchId: branchDouala.id, position: "Administrateur" },
+    { email: "manager@pressing.demo", fullName: "Solange Etoundi", role: "MANAGER", branchId: branchDouala.id, position: "Gérante multi-agences (Douala & Yaoundé)" },
+    { email: "cashier1@pressing.demo", fullName: "Achille Fotso", role: "CASHIER", branchId: branchDouala.id, position: "Caissier" },
+    { email: "cashier2@pressing.demo", fullName: "Christelle Nkeng", role: "CASHIER", branchId: branchYaounde.id, position: "Caissière" },
+    { email: "operator1@pressing.demo", fullName: "Brice Talla", role: "OPERATOR", branchId: branchDouala.id, position: "Agent de traitement" },
+    { email: "operator2@pressing.demo", fullName: "Merveille Onana", role: "OPERATOR", branchId: branchDouala.id, position: "Agent de traitement" },
+    { email: "operator3@pressing.demo", fullName: "Steve Kamga", role: "OPERATOR", branchId: branchYaounde.id, position: "Agent de traitement" },
+    { email: "delivery1@pressing.demo", fullName: "Arnaud Mvondo", role: "DELIVERY", branchId: branchDouala.id, position: "Livreur" },
+    { email: "delivery2@pressing.demo", fullName: "Ornella Abena", role: "DELIVERY", branchId: branchYaounde.id, position: "Livreuse" },
   ];
 
   const users = await Promise.all(
-    userDefs.map((u) =>
+    userDefs.map((u, i) =>
       prisma.user.create({
-        data: { ...u, passwordHash, hireDate: daysAgo(randomInt(60, 400)), phone: `+225 07 ${randomInt(10, 99)} ${randomInt(10, 99)} ${randomInt(10, 99)} ${randomInt(10, 99)}` },
+        data: { ...u, passwordHash, hireDate: daysAgo(randomInt(60, 400)), phone: cmPhone(i + 1) },
       })
     )
   );
-  await prisma.branch.update({ where: { id: branchMain.id }, data: { managerId: users[2].id } });
+  await prisma.branch.update({ where: { id: branchDouala.id }, data: { managerId: users[2].id } });
+  await prisma.branch.update({ where: { id: branchYaounde.id }, data: { managerId: users[2].id } });
+
+  // Solange Etoundi (manager, index 2) manages both agencies — the
+  // concrete multi-agency demo: her JWT carries both branchIds and the
+  // frontend agency switcher lets her flip between Douala and Yaoundé.
+  await prisma.staffBranch.createMany({
+    data: [
+      { userId: users[2].id, branchId: branchDouala.id },
+      { userId: users[2].id, branchId: branchYaounde.id },
+    ],
+  });
 
   const cashiers = users.filter((u) => u.role === "CASHIER" || u.role === "MANAGER" || u.role === "ADMIN");
   const deliverers = users.filter((u) => u.role === "DELIVERY");
@@ -115,17 +138,19 @@ async function main() {
 
   // --- Customers ------------------------------------------------------
   const customerTypes = ["INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "COMPANY", "VIP"] as const;
+  const branchIds = [branchDouala.id, branchYaounde.id];
   const customers = await Promise.all(
     Array.from({ length: 50 }).map((_, i) => {
       const fullName = `${randomItem(FIRST_NAMES)} ${randomItem(LAST_NAMES)}`;
+      const branchId = randomItem(branchIds);
       return prisma.customer.create({
         data: {
           fullName,
-          phone: `+225 07${String(10000000 + i * 137).slice(0, 8)}`,
+          phone: cmPhone(1000 + i),
           email: Math.random() > 0.4 ? `${fullName.toLowerCase().replace(/[^a-z]/g, ".")}@example.com` : null,
-          address: Math.random() > 0.3 ? `Rue ${randomInt(1, 40)}, ${randomItem(["Plateau", "Cocody", "Marcory", "Yopougon", "Treichville"])}` : null,
+          address: Math.random() > 0.3 ? `Rue ${randomInt(1, 40)}, ${randomItem(neighborhoods[branchId])}, ${branchCity[branchId]}` : null,
           type: randomItem(customerTypes),
-          branchId: randomItem([branchMain.id, branchAnnex.id]),
+          branchId,
           createdAt: daysAgo(randomInt(0, 300)),
         },
       });
@@ -152,7 +177,7 @@ async function main() {
   };
   const categories = Object.keys(ARTICLES) as ArticleCategory[];
   const colors = ["Blanc", "Noir", "Bleu", "Gris", "Beige", "Rouge", "Vert"];
-  const paymentMethods: PaymentMethod[] = ["CASH", "MOBILE_MONEY", "CARD", "BANK_TRANSFER"];
+  const paymentMethods: PaymentMethod[] = ["CASH", "ORANGE_MONEY", "MTN_MOMO", "CARD", "BANK_TRANSFER"];
 
   // --- Orders, items, payments, deliveries, status history -----------
   for (let day = 59; day >= 0; day--) {
@@ -161,7 +186,7 @@ async function main() {
       const depositDate = daysAgo(day);
       const customer = randomItem(customers);
       const employee = randomItem(cashiers);
-      const branchId = customer.branchId ?? branchMain.id;
+      const branchId = customer.branchId ?? branchDouala.id;
       const priority = Math.random() > 0.75 ? "EXPRESS" : "NORMAL";
       const itemCount = randomInt(1, 4);
 
@@ -262,7 +287,7 @@ async function main() {
             orderId: order.id,
             type: "DELIVERY",
             address: customer.address ?? "Adresse non précisée",
-            city: "Abidjan",
+            city: branchCity[branchId] ?? "Douala",
             phone: customer.phone,
             delivererId: Math.random() > 0.3 ? randomItem(deliverers).id : null,
             fee: deliveryFee,
@@ -286,7 +311,7 @@ async function main() {
     const date = daysAgo(randomInt(0, 59));
     await prisma.expense.create({
       data: {
-        branchId: randomItem([branchMain.id, branchAnnex.id]),
+        branchId: randomItem(branchIds),
         date,
         amount: randomInt(2000, 80000),
         category: randomItem(expenseCategories),
@@ -310,7 +335,7 @@ async function main() {
   ] as const;
   for (const p of productDefs) {
     const product = await prisma.product.create({
-      data: { ...p, branchId: branchMain.id, purchasePrice: randomInt(1500, 15000), supplier: "Fournisseur Ivoire Chimie" },
+      data: { ...p, branchId: branchDouala.id, purchasePrice: randomInt(1500, 15000), supplier: "Fournisseur Cameroun Chimie" },
     });
     await prisma.inventoryTransaction.create({
       data: {
@@ -327,7 +352,7 @@ async function main() {
   for (let day = 5; day >= 1; day--) {
     const opened = daysAgo(day);
     const register = await prisma.cashRegister.create({
-      data: { branchId: branchMain.id, openedById: users[3].id, openedAt: opened, openingBalance: 20000, status: "OPEN" },
+      data: { branchId: branchDouala.id, openedById: users[3].id, openedAt: opened, openingBalance: 20000, status: "OPEN" },
     });
     const salesCount = randomInt(3, 8);
     let total = 0;
@@ -360,26 +385,29 @@ async function main() {
     });
   }
   await prisma.cashRegister.create({
-    data: { branchId: branchMain.id, openedById: users[3].id, openingBalance: 25000, status: "OPEN" },
+    data: { branchId: branchDouala.id, openedById: users[3].id, openingBalance: 25000, status: "OPEN" },
   });
 
   // --- Settings -----------------------------------------------------
   await prisma.setting.createMany({
     data: [
-      { key: "businessName", value: "Pressing Étoile" },
-      { key: "phone", value: "+225 27 20 30 40 50" },
-      { key: "email", value: "contact@pressingetoile.demo" },
-      { key: "address", value: "Avenue Chardy, Plateau, Abidjan" },
+      { key: "businessName", value: "Pressing Étoile Cameroun" },
+      { key: "phone", value: "+237 233 42 10 20" },
+      { key: "email", value: "contact@pressingetoile.cm" },
+      { key: "address", value: "Avenue de Gaulle, Akwa, Douala" },
       { key: "currency", value: "FCFA" },
       { key: "taxRate", value: 0 },
       { key: "openingHours", value: "Lun-Sam 8h-19h" },
       { key: "termsAndConditions", value: "Les articles non retirés après 60 jours ne sont plus garantis." },
+      { key: "paymentsSimulationMode", value: true },
+      { key: "notificationsSimulationMode", value: true },
     ],
   });
 
   console.log("Seed complete.");
   console.log("Demo accounts (password: Demo1234!):");
   userDefs.forEach((u) => console.log(`  ${u.role.padEnd(12)} ${u.email}`));
+  console.log("Multi-agency demo: manager@pressing.demo manages both Douala and Yaoundé.");
 }
 
 main()

@@ -3,6 +3,8 @@ import { prisma } from "../lib/prisma";
 import { deliveryCreateSchema, deliveryUpdateSchema } from "../validators/deliveryValidators";
 import { ApiError } from "../middleware/errorHandler";
 import { recordAudit } from "../services/auditService";
+import { STATUS_MESSAGES } from "../services/orderStatusService";
+import { notifyOrderStatusChange } from "../services/notificationService";
 
 const deliveryInclude = {
   order: { include: { customer: true } },
@@ -70,6 +72,27 @@ export async function updateDelivery(req: Request, res: Response) {
     await prisma.orderStatusHistory.create({
       data: { orderId: delivery.orderId, status: "DELIVERED", changedById: req.user!.id, note: "Livraison confirmée" },
     });
+    await notifyOrderStatusChange(
+      delivery.order.customer.phone,
+      delivery.orderId,
+      STATUS_MESSAGES.DELIVERED(delivery.order.orderNumber)
+    );
+  } else if (data.status === "IN_TRANSIT" && delivery.order.status !== "OUT_FOR_DELIVERY") {
+    await prisma.order.update({ where: { id: delivery.orderId }, data: { status: "OUT_FOR_DELIVERY" } });
+    await prisma.orderStatusHistory.create({
+      data: { orderId: delivery.orderId, status: "OUT_FOR_DELIVERY", changedById: req.user!.id, note: "Livreur en route" },
+    });
+    await notifyOrderStatusChange(
+      delivery.order.customer.phone,
+      delivery.orderId,
+      STATUS_MESSAGES.OUT_FOR_DELIVERY(delivery.order.orderNumber)
+    );
+  } else if (data.status === "FAILED") {
+    await notifyOrderStatusChange(
+      delivery.order.customer.phone,
+      delivery.orderId,
+      `La livraison de votre commande ${delivery.order.orderNumber} a échoué. Nous vous recontacterons pour la reprogrammer.`
+    );
   }
 
   await recordAudit({

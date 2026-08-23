@@ -11,9 +11,9 @@ import { ApiError } from "../middleware/errorHandler";
 import { recordAudit } from "../services/auditService";
 import { generateOrderNumber } from "../utils/orderNumber";
 import { computeBalance, computeItemTotal, computeOrderTotals, computePaymentStatus } from "../services/pricingService";
-import { canTransition } from "../services/orderStatusService";
+import { canTransition, STATUS_MESSAGES } from "../services/orderStatusService";
 import { branchScope } from "../middleware/auth";
-import { notify } from "../services/notificationService";
+import { notifyOrderStatusChange } from "../services/notificationService";
 
 const orderInclude = {
   customer: true,
@@ -192,9 +192,7 @@ export async function createOrder(req: Request, res: Response) {
     newValue: order,
   });
 
-  await notify("SMS", customer.phone, `Votre commande ${order.orderNumber} a bien été reçue.`, {
-    relatedOrderId: order.id,
-  });
+  await notifyOrderStatusChange(customer.phone, order.id, STATUS_MESSAGES.RECEIVED(order.orderNumber));
 
   res.status(201).json(order);
 }
@@ -277,22 +275,7 @@ export async function updateOrderStatus(req: Request, res: Response) {
     newValue: { status },
   });
 
-  if (status === "READY") {
-    await notify(
-      "SMS",
-      existing.customer.phone,
-      `Votre commande ${existing.orderNumber} est prête. Vous pouvez venir la récupérer.`,
-      { relatedOrderId: existing.id }
-    );
-  }
-  if (status === "DELIVERED") {
-    await notify(
-      "SMS",
-      existing.customer.phone,
-      `Votre commande ${existing.orderNumber} a été livrée. Merci de votre confiance.`,
-      { relatedOrderId: existing.id }
-    );
-  }
+  await notifyOrderStatusChange(existing.customer.phone, existing.id, STATUS_MESSAGES[status](existing.orderNumber));
 
   res.json(order);
 }
@@ -369,5 +352,16 @@ export async function getTicket(req: Request, res: Response) {
   const trackingUrl = `${process.env.CORS_ORIGIN?.split(",")[0] ?? ""}/track?order=${order.orderNumber}`;
   const qrCodeDataUrl = await QRCode.toDataURL(trackingUrl);
 
-  res.json({ order, qrCodeDataUrl, trackingUrl });
+  // Printed on every ticket regardless of the cashier's own permissions, so
+  // this reads Settings directly rather than requiring settings:read on the
+  // caller's role (CASHIER prints tickets constantly but can't read Settings).
+  const settingRows = await prisma.setting.findMany({ where: { key: { in: ["businessName", "phone", "address"] } } });
+  const settingsMap = Object.fromEntries(settingRows.map((r) => [r.key, r.value]));
+  const business = {
+    name: (settingsMap.businessName as string) ?? "Mon Pressing",
+    address: (settingsMap.address as string) ?? "",
+    phone: (settingsMap.phone as string) ?? "",
+  };
+
+  res.json({ order, qrCodeDataUrl, trackingUrl, business });
 }

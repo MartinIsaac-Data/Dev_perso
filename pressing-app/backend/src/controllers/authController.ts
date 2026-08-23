@@ -6,6 +6,7 @@ import { loginSchema } from "../validators/authValidators";
 import { ApiError } from "../middleware/errorHandler";
 import { recordAudit } from "../services/auditService";
 import { permissionsForRole } from "../lib/permissions";
+import { getAccessibleBranchIds } from "../services/branchService";
 
 export async function login(req: Request, res: Response) {
   const { email, password } = loginSchema.parse(req.body);
@@ -20,7 +21,8 @@ export async function login(req: Request, res: Response) {
     throw new ApiError(401, "Invalid email or password");
   }
 
-  const token = signToken({ sub: user.id, role: user.role, branchId: user.branchId });
+  const branchIds = await getAccessibleBranchIds(user.id);
+  const token = signToken({ sub: user.id, role: user.role, branchId: user.branchId, branchIds });
 
   await recordAudit({
     userId: user.id,
@@ -38,6 +40,7 @@ export async function login(req: Request, res: Response) {
       fullName: user.fullName,
       role: user.role,
       branchId: user.branchId,
+      branchIds,
       permissions: permissionsForRole(user.role),
     },
   });
@@ -45,12 +48,14 @@ export async function login(req: Request, res: Response) {
 
 export async function me(req: Request, res: Response) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
+  const branchIds = await getAccessibleBranchIds(user.id);
   res.json({
     id: user.id,
     email: user.email,
     fullName: user.fullName,
     role: user.role,
     branchId: user.branchId,
+    branchIds,
     permissions: permissionsForRole(user.role),
   });
 }

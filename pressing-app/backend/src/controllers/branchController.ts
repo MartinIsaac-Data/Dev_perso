@@ -5,7 +5,7 @@ import { ApiError } from "../middleware/errorHandler";
 import { recordAudit } from "../services/auditService";
 
 export async function listBranches(req: Request, res: Response) {
-  const where = req.user!.role === "SUPER_ADMIN" ? {} : { id: req.user!.branchId ?? "" };
+  const where = req.user!.role === "SUPER_ADMIN" ? {} : { id: { in: req.user!.branchIds } };
   const branches = await prisma.branch.findMany({ where, orderBy: { name: "asc" } });
   res.json(branches);
 }

@@ -134,7 +134,8 @@ function summarizeTransactions(
   return {
     openingBalance,
     totalCash: totalByMethod("CASH"),
-    totalMobileMoney: totalByMethod("MOBILE_MONEY"),
+    totalOrangeMoney: totalByMethod("ORANGE_MONEY"),
+    totalMtnMomo: totalByMethod("MTN_MOMO"),
     totalCard: totalByMethod("CARD"),
     totalExpenses,
     theoreticalBalance:

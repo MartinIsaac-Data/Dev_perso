@@ -44,7 +44,7 @@ export const orderCreateSchema = z.object({
   initialPayment: z
     .object({
       amount: z.coerce.number().positive(),
-      method: z.enum(["CASH", "MOBILE_MONEY", "CARD", "BANK_TRANSFER", "OTHER"]),
+      method: z.enum(["CASH", "ORANGE_MONEY", "MTN_MOMO", "CARD", "BANK_TRANSFER", "OTHER"]),
       reference: z.string().optional().nullable(),
     })
     .optional()
@@ -76,7 +76,7 @@ export const orderStatusSchema = z.object({
 
 export const paymentCreateSchema = z.object({
   amount: z.coerce.number().positive(),
-  method: z.enum(["CASH", "MOBILE_MONEY", "CARD", "BANK_TRANSFER", "OTHER"]),
+  method: z.enum(["CASH", "ORANGE_MONEY", "MTN_MOMO", "CARD", "BANK_TRANSFER", "OTHER"]),
   reference: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });

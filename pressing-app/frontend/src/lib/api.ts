@@ -7,6 +7,8 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("pressing_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const activeBranch = localStorage.getItem("pressing_active_branch");
+  if (activeBranch) config.headers["X-Active-Branch"] = activeBranch;
   return config;
 });
 

@@ -16,6 +16,6 @@ export const expenseCreateSchema = z.object({
     "OTHER",
   ]),
   description: z.string().optional().nullable(),
-  paymentMethod: z.enum(["CASH", "MOBILE_MONEY", "CARD", "BANK_TRANSFER", "OTHER"]).default("CASH"),
+  paymentMethod: z.enum(["CASH", "ORANGE_MONEY", "MTN_MOMO", "CARD", "BANK_TRANSFER", "OTHER"]).default("CASH"),
   receiptUrl: z.string().optional().nullable(),
 });

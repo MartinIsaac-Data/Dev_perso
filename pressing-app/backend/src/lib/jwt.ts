@@ -8,6 +8,7 @@ export interface AuthTokenPayload {
   sub: string;
   role: Role;
   branchId: string | null;
+  branchIds: string[];
 }
 
 export function signToken(payload: AuthTokenPayload): string {

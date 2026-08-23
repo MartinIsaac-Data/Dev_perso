@@ -14,7 +14,8 @@ import { formatDateTime, formatMoney } from "@/lib/format";
 interface RegisterTotals {
   openingBalance: number;
   totalCash: number;
-  totalMobileMoney: number;
+  totalOrangeMoney: number;
+  totalMtnMomo: number;
   totalCard: number;
   totalExpenses: number;
   theoreticalBalance: number;
@@ -83,7 +84,8 @@ export default function CashRegisterPage() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <Kpi label="Solde initial" value={formatMoney(register.totals.openingBalance)} />
             <Kpi label="Total cash" value={formatMoney(register.totals.totalCash)} />
-            <Kpi label="Total Mobile Money" value={formatMoney(register.totals.totalMobileMoney)} />
+            <Kpi label="Total Orange Money" value={formatMoney(register.totals.totalOrangeMoney)} />
+            <Kpi label="Total MTN MoMo" value={formatMoney(register.totals.totalMtnMomo)} />
             <Kpi label="Total carte" value={formatMoney(register.totals.totalCard)} />
             <Kpi label="Total dépenses" value={formatMoney(register.totals.totalExpenses)} />
             <Kpi label="Solde théorique" value={formatMoney(register.totals.theoreticalBalance)} highlight />

@@ -4,6 +4,7 @@ import { Menu, Moon, Sun, Search, LogOut, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Button } from "@/components/ui/button";
+import { BranchSwitcher } from "./BranchSwitcher";
 
 const LABELS: Record<string, string> = {
   "": "Dashboard",
@@ -15,6 +16,7 @@ const LABELS: Record<string, string> = {
   expenses: "Dépenses",
   inventory: "Stock",
   employees: "Employés",
+  branches: "Agences",
   reports: "Rapports",
   settings: "Paramètres",
 };
@@ -54,6 +56,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex items-center gap-2">
+        <BranchSwitcher />
+
         <button
           className="hidden items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground sm:flex"
           onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}

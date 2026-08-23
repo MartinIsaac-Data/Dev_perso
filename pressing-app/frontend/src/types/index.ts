@@ -6,7 +6,16 @@ export interface AuthUser {
   fullName: string;
   role: Role;
   branchId: string | null;
+  branchIds: string[];
   permissions: string[];
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  managerId?: string | null;
 }
 
 export type CustomerType = "INDIVIDUAL" | "COMPANY" | "VIP";
@@ -48,7 +57,7 @@ export type OrderStatus =
   | "CANCELLED";
 
 export type PaymentStatus = "UNPAID" | "PARTIAL" | "PAID" | "REFUNDED";
-export type PaymentMethod = "CASH" | "MOBILE_MONEY" | "CARD" | "BANK_TRANSFER" | "OTHER";
+export type PaymentMethod = "CASH" | "ORANGE_MONEY" | "MTN_MOMO" | "CARD" | "BANK_TRANSFER" | "OTHER";
 export type DeliveryStatusValue = "PENDING" | "ASSIGNED" | "PICKED_UP" | "IN_TRANSIT" | "DELIVERED" | "FAILED";
 
 export interface Delivery {

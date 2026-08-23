@@ -9,6 +9,7 @@ export const userCreateSchema = z.object({
   position: z.string().optional().nullable(),
   hireDate: z.coerce.date().optional().nullable(),
   branchId: z.string().uuid().optional().nullable(),
+  branchIds: z.array(z.string().uuid()).optional(),
 });
 
 export const userUpdateSchema = z.object({
@@ -18,5 +19,6 @@ export const userUpdateSchema = z.object({
   position: z.string().optional().nullable(),
   active: z.boolean().optional(),
   branchId: z.string().uuid().optional().nullable(),
+  branchIds: z.array(z.string().uuid()).optional(),
   password: z.string().min(6).optional(),
 });

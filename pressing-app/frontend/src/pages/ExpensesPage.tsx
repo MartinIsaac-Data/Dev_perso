@@ -150,7 +150,8 @@ function ExpenseDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
           <Label htmlFor="paymentMethod">Moyen de paiement</Label>
           <Select id="paymentMethod" name="paymentMethod" defaultValue="CASH">
             <option value="CASH">Cash</option>
-            <option value="MOBILE_MONEY">Mobile Money</option>
+            <option value="ORANGE_MONEY">Orange Money</option>
+            <option value="MTN_MOMO">MTN Mobile Money</option>
             <option value="CARD">Carte</option>
             <option value="BANK_TRANSFER">Virement</option>
             <option value="OTHER">Autre</option>

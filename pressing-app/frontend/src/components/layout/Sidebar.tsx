@@ -11,6 +11,7 @@ import {
   UserCog,
   BarChart3,
   Settings,
+  Building2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -26,6 +27,7 @@ const NAV = [
   { to: "/expenses", label: "Dépenses", icon: Receipt, permission: "expenses:read" },
   { to: "/inventory", label: "Stock", icon: Boxes, permission: "inventory:read" },
   { to: "/employees", label: "Employés", icon: UserCog, permission: "employees:read" },
+  { to: "/branches", label: "Agences", icon: Building2, permission: "branches:manage" },
   { to: "/reports", label: "Rapports", icon: BarChart3, permission: "reports:read" },
   { to: "/settings", label: "Paramètres", icon: Settings, permission: "settings:read" },
 ];

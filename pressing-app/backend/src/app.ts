@@ -22,6 +22,8 @@ import { reportRoutes } from "./routes/reportRoutes";
 import { searchRoutes } from "./routes/searchRoutes";
 import { portalAuthRoutes } from "./routes/portalAuthRoutes";
 import { portalRoutes } from "./routes/portalRoutes";
+import { paymentIntentRoutes } from "./routes/paymentIntentRoutes";
+import { webhookRoutes } from "./routes/webhookRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 export function createApp() {
@@ -76,6 +78,8 @@ export function createApp() {
   app.use("/api/branches", branchRoutes);
   app.use("/api/reports", reportRoutes);
   app.use("/api/search", searchRoutes);
+  app.use("/api/payment-intents", paymentIntentRoutes);
+  app.use("/api/webhooks", webhookRoutes);
 
   app.use(errorHandler);
 

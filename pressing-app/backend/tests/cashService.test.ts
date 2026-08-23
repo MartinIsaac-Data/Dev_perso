@@ -23,7 +23,7 @@ describe("computeTheoreticalBalance", () => {
   it("only counts cash-method transactions", () => {
     const balance = computeTheoreticalBalance(10000, [
       { type: "SALE", amount: 5000, method: "CASH" },
-      { type: "SALE", amount: 8000, method: "MOBILE_MONEY" },
+      { type: "SALE", amount: 8000, method: "ORANGE_MONEY" },
       { type: "EXPENSE", amount: 2000, method: "CASH" },
     ]);
     expect(balance.toNumber()).toBe(13000);

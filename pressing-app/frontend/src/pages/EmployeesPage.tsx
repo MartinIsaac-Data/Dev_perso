@@ -12,7 +12,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { EmptyState, TableSkeleton } from "@/components/ui/states";
 import { formatMoney } from "@/lib/format";
 import { useAuth } from "@/contexts/AuthContext";
-import type { Role } from "@/types";
+import type { Branch, Role } from "@/types";
 
 interface EmployeeRow {
   id: string;
@@ -21,6 +21,8 @@ interface EmployeeRow {
   role: Role;
   position?: string | null;
   active: boolean;
+  branchId: string | null;
+  branchIds: string[];
   performance: { ordersHandled: number; revenueGenerated: number; itemsProcessed: number; lateOrders: number };
 }
 
@@ -29,12 +31,22 @@ const ROLES: Role[] = ["SUPER_ADMIN", "ADMIN", "MANAGER", "CASHIER", "OPERATOR",
 export default function EmployeesPage() {
   const { hasPermission } = useAuth();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<EmployeeRow | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["employees"],
     queryFn: async () => (await api.get<EmployeeRow[]>("/employees")).data,
   });
+  const { data: branches } = useQuery({
+    queryKey: ["branches"],
+    queryFn: async () => (await api.get<Branch[]>("/branches")).data,
+    enabled: hasPermission("employees:write"),
+  });
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["employees"] });
+  }
 
   return (
     <div className="space-y-4">
@@ -44,7 +56,7 @@ export default function EmployeesPage() {
           <p className="text-sm text-muted-foreground">Équipe et performance</p>
         </div>
         {hasPermission("employees:write") && (
-          <Button onClick={() => setOpen(true)}>
+          <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" /> Nouvel employé
           </Button>
         )}
@@ -61,12 +73,14 @@ export default function EmployeesPage() {
               <TableRow>
                 <TableHead>Nom</TableHead>
                 <TableHead>Rôle</TableHead>
+                <TableHead>Agences</TableHead>
                 <TableHead>Poste</TableHead>
                 <TableHead>Commandes traitées</TableHead>
                 <TableHead>Articles traités</TableHead>
                 <TableHead>CA généré</TableHead>
                 <TableHead>Retards</TableHead>
                 <TableHead>Statut</TableHead>
+                {hasPermission("employees:write") && <TableHead />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -76,6 +90,13 @@ export default function EmployeesPage() {
                   <TableCell>
                     <Badge>{e.role}</Badge>
                   </TableCell>
+                  <TableCell>
+                    {e.branchIds.length > 1 ? (
+                      <Badge>{e.branchIds.length} agences</Badge>
+                    ) : (
+                      branches?.find((b) => b.id === e.branchIds[0])?.name ?? "—"
+                    )}
+                  </TableCell>
                   <TableCell>{e.position ?? "—"}</TableCell>
                   <TableCell>{e.performance.ordersHandled}</TableCell>
                   <TableCell>{e.performance.itemsProcessed}</TableCell>
@@ -84,6 +105,13 @@ export default function EmployeesPage() {
                   <TableCell>
                     <Badge tone={e.active ? "success" : "muted"}>{e.active ? "Actif" : "Inactif"}</Badge>
                   </TableCell>
+                  {hasPermission("employees:write") && (
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => setEditing(e)}>
+                        Modifier
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -91,43 +119,78 @@ export default function EmployeesPage() {
         )}
       </Card>
 
-      <CreateEmployeeDialog
-        open={open}
-        onClose={() => setOpen(false)}
-        onCreated={() => queryClient.invalidateQueries({ queryKey: ["employees"] })}
+      <EmployeeDialog
+        key="create"
+        open={createOpen}
+        branches={branches}
+        onClose={() => setCreateOpen(false)}
+        onSaved={invalidate}
+      />
+      <EmployeeDialog
+        key={editing?.id ?? "edit-none"}
+        open={Boolean(editing)}
+        employee={editing}
+        branches={branches}
+        onClose={() => setEditing(null)}
+        onSaved={invalidate}
       />
     </div>
   );
 }
 
-function CreateEmployeeDialog({
+function EmployeeDialog({
   open,
+  employee,
+  branches,
   onClose,
-  onCreated,
+  onSaved,
 }: {
   open: boolean;
+  employee?: EmployeeRow | null;
+  branches?: Branch[];
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const isEdit = Boolean(employee);
+  const [selectedBranches, setSelectedBranches] = useState<string[]>(employee?.branchIds ?? []);
+
+  function toggleBranch(id: string) {
+    setSelectedBranches((prev) => (prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]));
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
     const form = new FormData(e.currentTarget);
     try {
-      await api.post("/employees", {
-        fullName: form.get("fullName"),
-        email: form.get("email"),
-        password: form.get("password"),
-        role: form.get("role"),
-        position: form.get("position") || undefined,
-        phone: form.get("phone") || undefined,
-      });
-      toast.success("Employé créé");
-      onCreated();
+      if (isEdit && employee) {
+        await api.put(`/employees/${employee.id}`, {
+          fullName: form.get("fullName"),
+          role: form.get("role"),
+          position: form.get("position") || undefined,
+          phone: form.get("phone") || undefined,
+          active: form.get("active") === "on",
+          branchIds: selectedBranches,
+          ...(form.get("password") ? { password: form.get("password") } : {}),
+        });
+        toast.success("Employé mis à jour");
+      } else {
+        await api.post("/employees", {
+          fullName: form.get("fullName"),
+          email: form.get("email"),
+          password: form.get("password"),
+          role: form.get("role"),
+          position: form.get("position") || undefined,
+          phone: form.get("phone") || undefined,
+          branchIds: selectedBranches,
+        });
+        toast.success("Employé créé");
+      }
+      onSaved();
       onClose();
       e.currentTarget.reset();
+      setSelectedBranches([]);
     } catch (err) {
       toast.error(apiErrorMessage(err));
     } finally {
@@ -136,26 +199,26 @@ function CreateEmployeeDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Nouvel employé">
+    <Dialog open={open} onClose={onClose} title={isEdit ? "Modifier l'employé" : "Nouvel employé"}>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="space-y-1.5">
           <Label htmlFor="fullName">Nom complet *</Label>
-          <Input id="fullName" name="fullName" required />
+          <Input id="fullName" name="fullName" required defaultValue={employee?.fullName} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="email">Email *</Label>
-            <Input id="email" name="email" type="email" required />
+            <Label htmlFor="email">Email {!isEdit && "*"}</Label>
+            <Input id="email" name="email" type="email" required={!isEdit} disabled={isEdit} defaultValue={employee?.email} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Mot de passe *</Label>
-            <Input id="password" name="password" type="password" minLength={6} required />
+            <Label htmlFor="password">Mot de passe {isEdit ? "(laisser vide pour ne pas changer)" : "*"}</Label>
+            <Input id="password" name="password" type="password" minLength={6} required={!isEdit} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="role">Rôle *</Label>
-            <Select id="role" name="role" required>
+            <Select id="role" name="role" required defaultValue={employee?.role}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
                   {r}
@@ -165,19 +228,45 @@ function CreateEmployeeDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="position">Poste</Label>
-            <Input id="position" name="position" />
+            <Input id="position" name="position" defaultValue={employee?.position ?? ""} />
           </div>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="phone">Téléphone</Label>
           <Input id="phone" name="phone" />
         </div>
+        {isEdit && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="active" defaultChecked={employee?.active ?? true} />
+            Compte actif
+          </label>
+        )}
+        {branches && branches.length > 0 && (
+          <div className="space-y-1.5">
+            <Label>Agences assignées</Label>
+            <p className="text-xs text-muted-foreground">
+              Cocher plusieurs agences permet à cet employé de gérer plusieurs boutiques (sélecteur d'agence en haut de l'écran).
+            </p>
+            <div className="flex flex-col gap-1.5 rounded-md border border-border p-2">
+              {branches.map((b) => (
+                <label key={b.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedBranches.includes(b.id)}
+                    onChange={() => toggleBranch(b.id)}
+                  />
+                  {b.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onClose}>
             Annuler
           </Button>
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Création..." : "Créer"}
+            {submitting ? "Enregistrement..." : isEdit ? "Enregistrer" : "Créer"}
           </Button>
         </div>
       </form>

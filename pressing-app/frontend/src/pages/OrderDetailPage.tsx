@@ -21,6 +21,8 @@ import {
   PAYMENT_STATUS_TONE,
 } from "@/lib/statusMeta";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMobileMoneyIntent } from "@/hooks/useMobileMoneyIntent";
+import { MobileMoneyStatus } from "@/components/MobileMoneyStatus";
 import type { Order } from "@/types";
 
 export default function OrderDetailPage() {
@@ -235,20 +237,43 @@ function PaymentDialog({
   onPaid: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const [method, setMethod] = useState("CASH");
+  const isMobileMoney = method === "ORANGE_MONEY" || method === "MTN_MOMO";
+  const { intent, initiate, reset } = useMobileMoneyIntent(() => {
+    onPaid();
+    onClose();
+  });
+
+  function handleClose() {
+    reset();
+    setMethod("CASH");
+    onClose();
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSubmitting(true);
     const form = new FormData(e.currentTarget);
+    const amount = Number(form.get("amount"));
+
+    if (isMobileMoney) {
+      await initiate(`/orders/${orderId}/mobile-money`, "/payment-intents", {
+        provider: method,
+        phone: form.get("phone"),
+        amount,
+      });
+      return;
+    }
+
+    setSubmitting(true);
     try {
       await api.post(`/orders/${orderId}/payments`, {
-        amount: Number(form.get("amount")),
-        method: form.get("method"),
+        amount,
+        method,
         reference: form.get("reference") || undefined,
       });
       toast.success("Paiement enregistré");
       onPaid();
-      onClose();
+      handleClose();
     } catch (err) {
       toast.error(apiErrorMessage(err));
     } finally {
@@ -257,36 +282,48 @@ function PaymentDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Encaisser un paiement">
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <p className="text-sm text-muted-foreground">Solde restant : {formatMoney(balance)}</p>
-        <div className="space-y-1.5">
-          <Label htmlFor="amount">Montant *</Label>
-          <Input id="amount" name="amount" type="number" min={1} max={balance} defaultValue={balance} required />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="method">Moyen de paiement</Label>
-          <Select id="method" name="method" defaultValue="CASH">
-            <option value="CASH">Cash</option>
-            <option value="MOBILE_MONEY">Mobile Money</option>
-            <option value="CARD">Carte</option>
-            <option value="BANK_TRANSFER">Virement</option>
-            <option value="OTHER">Autre</option>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="reference">Référence</Label>
-          <Input id="reference" name="reference" />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Annuler
-          </Button>
-          <Button type="submit" disabled={submitting}>
-            {submitting ? "Enregistrement..." : "Encaisser"}
-          </Button>
-        </div>
-      </form>
+    <Dialog open={open} onClose={handleClose} title="Encaisser un paiement">
+      {intent ? (
+        <MobileMoneyStatus intent={intent} onClose={handleClose} />
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <p className="text-sm text-muted-foreground">Solde restant : {formatMoney(balance)}</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="amount">Montant *</Label>
+            <Input id="amount" name="amount" type="number" min={1} max={balance} defaultValue={balance} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="method">Moyen de paiement</Label>
+            <Select id="method" name="method" value={method} onChange={(e) => setMethod(e.target.value)}>
+              <option value="CASH">Cash</option>
+              <option value="ORANGE_MONEY">Orange Money</option>
+              <option value="MTN_MOMO">MTN Mobile Money</option>
+              <option value="CARD">Carte</option>
+              <option value="BANK_TRANSFER">Virement</option>
+              <option value="OTHER">Autre</option>
+            </Select>
+          </div>
+          {isMobileMoney ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Numéro {method === "ORANGE_MONEY" ? "Orange Money" : "MTN MoMo"} *</Label>
+              <Input id="phone" name="phone" placeholder="+237 6XX XXX XXX" required />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label htmlFor="reference">Référence</Label>
+              <Input id="reference" name="reference" />
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={handleClose}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Enregistrement..." : isMobileMoney ? "Envoyer la demande" : "Encaisser"}
+            </Button>
+          </div>
+        </form>
+      )}
     </Dialog>
   );
 }
@@ -316,9 +353,9 @@ function TicketDialog({ open, onClose, orderId }: { open: boolean; onClose: () =
         <div>
           <div id="ticket-print" className="space-y-2 rounded-md border border-border p-4 text-sm">
             <div className="text-center">
-              <p className="font-semibold">Pressing Étoile</p>
-              <p className="text-xs text-muted-foreground">Avenue Chardy, Plateau, Abidjan</p>
-              <p className="text-xs text-muted-foreground">+225 27 20 30 40 50</p>
+              <p className="font-semibold">{data.business.name}</p>
+              {data.business.address && <p className="text-xs text-muted-foreground">{data.business.address}</p>}
+              {data.business.phone && <p className="text-xs text-muted-foreground">{data.business.phone}</p>}
             </div>
             <hr className="border-border" />
             <p>

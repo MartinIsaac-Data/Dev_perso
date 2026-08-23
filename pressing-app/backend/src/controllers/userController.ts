@@ -5,6 +5,7 @@ import { userCreateSchema, userUpdateSchema } from "../validators/userValidators
 import { ApiError } from "../middleware/errorHandler";
 import { recordAudit } from "../services/auditService";
 import { branchScope } from "../middleware/auth";
+import { getAccessibleBranchIds, setStaffBranches } from "../services/branchService";
 
 const SAFE_SELECT = {
   id: true,
@@ -17,7 +18,17 @@ const SAFE_SELECT = {
   active: true,
   branchId: true,
   createdAt: true,
+  branchAssignments: { select: { branchId: true } },
 } as const;
+
+function withBranchIds<T extends { branchId: string | null; branchAssignments: { branchId: string }[] }>(
+  user: T
+) {
+  const { branchAssignments, ...rest } = user;
+  const ids = new Set(branchAssignments.map((a) => a.branchId));
+  if (rest.branchId) ids.add(rest.branchId);
+  return { ...rest, branchIds: [...ids] };
+}
 
 export async function listEmployees(req: Request, res: Response) {
   const users = await prisma.user.findMany({
@@ -44,7 +55,7 @@ export async function listEmployees(req: Request, res: Response) {
         }),
       ]);
       return {
-        ...user,
+        ...withBranchIds(user),
         performance: {
           ordersHandled: orderStats._count,
           revenueGenerated: orderStats._sum.total ?? 0,
@@ -78,15 +89,23 @@ export async function createEmployee(req: Request, res: Response) {
     select: SAFE_SELECT,
   });
 
+  const assignedBranchIds = data.branchIds && data.branchIds.length > 0 ? data.branchIds : data.branchId ? [data.branchId] : [];
+  if (assignedBranchIds.length > 0) {
+    await setStaffBranches(user.id, assignedBranchIds);
+  }
+  const branchIds = await getAccessibleBranchIds(user.id);
+  const { branchAssignments: _createdAssignments, ...userWithoutAssignments } = user;
+  const result = { ...userWithoutAssignments, branchIds };
+
   await recordAudit({
     userId: req.user!.id,
     action: "CREATE",
     entityType: "User",
     entityId: user.id,
-    newValue: user,
+    newValue: result,
   });
 
-  res.status(201).json(user);
+  res.status(201).json(result);
 }
 
 export async function updateEmployee(req: Request, res: Response) {
@@ -110,14 +129,21 @@ export async function updateEmployee(req: Request, res: Response) {
     select: SAFE_SELECT,
   });
 
+  if (data.branchIds) {
+    await setStaffBranches(user.id, data.branchIds);
+  }
+  const branchIds = await getAccessibleBranchIds(user.id);
+  const { branchAssignments: _updatedAssignments, ...userWithoutAssignments } = user;
+  const result = { ...userWithoutAssignments, branchIds };
+
   await recordAudit({
     userId: req.user!.id,
     action: "UPDATE",
     entityType: "User",
     entityId: user.id,
     oldValue: { ...existing, passwordHash: undefined },
-    newValue: user,
+    newValue: result,
   });
 
-  res.json(user);
+  res.json(result);
 }

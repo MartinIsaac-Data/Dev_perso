@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   taxRate: 0,
   openingHours: "Lun-Sam 8h-19h",
   termsAndConditions: "Les articles non retirés après 60 jours ne sont plus garantis.",
+  paymentsSimulationMode: true,
+  notificationsSimulationMode: true,
 };
 
 export async function getSettings(_req: Request, res: Response) {

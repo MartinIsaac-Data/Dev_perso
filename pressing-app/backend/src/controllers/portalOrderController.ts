@@ -1,12 +1,14 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { portalOrderCreateSchema } from "../validators/portalOrderValidators";
+import { paymentIntentInitiateSchema } from "../validators/paymentIntentValidators";
 import { ApiError } from "../middleware/errorHandler";
 import { recordAudit } from "../services/auditService";
 import { generateOrderNumber } from "../utils/orderNumber";
 import { computeItemTotal, computeOrderTotals } from "../services/pricingService";
-import { notify } from "../services/notificationService";
+import { notifyOrderStatusChange } from "../services/notificationService";
 import { getDefaultBranchId } from "../services/branchService";
+import { checkPaymentIntent, initiatePaymentIntent } from "../services/paymentIntentService";
 
 const DELIVERY_FEE = 1000;
 
@@ -124,11 +126,10 @@ export async function createOwnOrder(req: Request, res: Response) {
     newValue: order,
   });
 
-  await notify(
-    "SMS",
+  await notifyOrderStatusChange(
     customer.phone,
-    `Votre réservation en ligne ${order.orderNumber} a bien été enregistrée. Total estimé : ${totals.total} FCFA.`,
-    { relatedOrderId: order.id }
+    order.id,
+    `Votre réservation en ligne ${order.orderNumber} a bien été enregistrée. Total estimé : ${totals.total} FCFA.`
   );
 
   res.status(201).json(order);
@@ -150,4 +151,29 @@ export async function getOwnOrder(req: Request, res: Response) {
   });
   if (!order) throw new ApiError(404, "Commande introuvable");
   res.json(order);
+}
+
+export async function initiateOwnMobileMoneyPayment(req: Request, res: Response) {
+  const data = paymentIntentInitiateSchema.parse(req.body);
+  const order = await prisma.order.findFirst({ where: { id: req.params.id, customerId: req.customerId! } });
+  if (!order) throw new ApiError(404, "Commande introuvable");
+
+  const { intent, redirectUrl } = await initiatePaymentIntent({
+    orderId: order.id,
+    provider: data.provider,
+    phone: data.phone,
+    amount: data.amount,
+  });
+
+  res.status(201).json({ ...intent, redirectUrl });
+}
+
+export async function getOwnPaymentIntentStatus(req: Request, res: Response) {
+  const intent = await prisma.paymentIntent.findFirst({
+    where: { id: req.params.intentId, customerId: req.customerId! },
+  });
+  if (!intent) throw new ApiError(404, "Paiement introuvable");
+
+  const updated = await checkPaymentIntent(intent.id);
+  res.json(updated);
 }

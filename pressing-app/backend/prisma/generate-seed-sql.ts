@@ -6,8 +6,9 @@
  * (`run_sql_transaction`) executes SQL over Neon's API instead, which does
  * work. This script reuses the exact same random-data logic as seed.ts,
  * but records rows in memory and serializes them to SQL instead of calling
- * prisma.x.create(). Output: prisma/seed-statements.json (array of SQL
- * statement strings, FK-safe order, ready for run_sql_transaction).
+ * prisma.x.create(). Output: prisma/seed-statements.sql (SQL statements
+ * separated by a --STMT-- marker line, FK-safe order, ready for
+ * run_sql_transaction).
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -24,6 +25,10 @@ function daysAgo(n: number): Date {
   d.setDate(d.getDate() - n);
   d.setHours(randomInt(8, 18), randomInt(0, 59), 0, 0);
   return d;
+}
+function cmPhone(seed: number): string {
+  const digits = String(600000000 + (Math.abs(seed * 137) % 99999999)).padStart(9, "0");
+  return `+237 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}`;
 }
 
 let orderCounter = 0;
@@ -44,67 +49,81 @@ function insertRow(table: string, row: Record<string, unknown>) {
 }
 
 const FIRST_NAMES = [
-  "Awa", "Kossi", "Fatou", "Moussa", "Aminata", "Ibrahim", "Adjoa", "Kwame", "Nadia", "Yao",
-  "Salimata", "Kofi", "Aicha", "Bakary", "Grace", "Emmanuel", "Rokia", "Didier", "Chantal", "Serge",
-  "Mariam", "Paul", "Estelle", "Jean", "Fanta", "Alassane", "Sonia", "Herve", "Rachelle", "Aristide",
-  "Nafissatou", "Olivier", "Prisca", "Boubacar", "Larissa", "Cedric", "Assetou", "Landry", "Odile", "Fabrice",
-  "Hawa", "Regis", "Bintou", "Armand", "Clarisse", "Souleymane", "Vanessa", "Thierry", "Mah", "Patrick",
+  "Achille", "Solange", "Yannick", "Carine", "Brice", "Reine", "Arnaud", "Prudence", "Steve", "Ornella",
+  "Junior", "Merveille", "Christelle", "Boris", "Flore", "Cabrel", "Divine", "Armelle", "Ghislain", "Pélagie",
+  "Ferdinand", "Clotilde", "Rodrigue", "Bertille", "Aurélien", "Nadège", "Franck", "Huguette", "Loïc", "Sandra",
+  "Emmanuel", "Chantal", "Blaise", "Delphine", "Anicet", "Judith", "Serge", "Vanessa", "Patrick", "Grace",
+  "Aicha", "Moussa", "Fadimatou", "Aboubakar", "Oumarou", "Hadja", "Landry", "Estelle", "Cedric", "Larissa",
 ];
 const LAST_NAMES = [
-  "Diallo", "Traore", "Kone", "Ouattara", "Sanogo", "Coulibaly", "Bamba", "Toure", "Konate", "Diarra",
-  "Kouassi", "N'Guessan", "Yao", "Kouame", "Assi", "Adjei", "Mensah", "Owusu", "Boateng", "Agbo",
+  "Mballa", "Fotso", "Etoundi", "Mvondo", "Nkeng", "Talla", "Kamga", "Ndzana", "Abena", "Onana",
+  "Tchamba", "Wandji", "Eyenga", "Biyiha", "Ngo Bidjeck", "Essomba", "Belinga", "Mfomo", "Njoya", "Tabi",
+  "Ateba", "Bikoro", "Ndam", "Sende", "Zambo", "Mengue", "Owona", "Ekani", "Tchoua", "Ngo Nlend",
 ];
 
 async function main() {
   const now = new Date();
 
-  // --- Branches -----------------------------------------------------
-  const branchMain = insertRow("branches", {
-    name: "Pressing Étoile — Plateau",
-    address: "Avenue Chardy, Plateau, Abidjan",
-    phone: "+225 27 20 30 40 50",
+  // --- Branches (Cameroon: Douala + Yaoundé) --------------------------
+  const branchDouala = insertRow("branches", {
+    name: "Pressing Étoile — Akwa, Douala",
+    address: "Avenue de Gaulle, Akwa, Douala",
+    phone: "+237 233 42 10 20",
     managerId: null,
     status: "ACTIVE",
     createdAt: now,
     updatedAt: now,
   });
-  const branchAnnex = insertRow("branches", {
-    name: "Pressing Étoile — Cocody",
-    address: "Rue des Jardins, Cocody, Abidjan",
-    phone: "+225 27 22 44 66 88",
+  const branchYaounde = insertRow("branches", {
+    name: "Pressing Étoile — Bastos, Yaoundé",
+    address: "Rue 1750, Bastos, Yaoundé",
+    phone: "+237 222 20 30 40",
     managerId: null,
     status: "ACTIVE",
     createdAt: now,
     updatedAt: now,
   });
+  const branchCity: Record<string, string> = {
+    [branchDouala.id as string]: "Douala",
+    [branchYaounde.id as string]: "Yaoundé",
+  };
+  const neighborhoods: Record<string, string[]> = {
+    [branchDouala.id as string]: ["Akwa", "Bonanjo", "Bonapriso", "Deido", "New-Bell", "Bépanda", "Makepe", "Ndokoti", "Bali"],
+    [branchYaounde.id as string]: ["Bastos", "Nlongkak", "Mvog-Mbi", "Essos", "Mfandena", "Nkolbisson", "Emana", "Etoa-Meki", "Mvan"],
+  };
 
   // --- Users ----------------------------------------------------------
   const passwordHash = await bcrypt.hash("Demo1234!", 10);
   const userDefs = [
-    { email: "superadmin@pressing.demo", fullName: "Aïcha Bamba", role: "SUPER_ADMIN", branchId: branchMain.id as string, position: "Direction générale" },
-    { email: "admin@pressing.demo", fullName: "Moussa Diallo", role: "ADMIN", branchId: branchMain.id as string, position: "Administrateur" },
-    { email: "manager@pressing.demo", fullName: "Fatou Traoré", role: "MANAGER", branchId: branchMain.id as string, position: "Responsable de boutique" },
-    { email: "cashier1@pressing.demo", fullName: "Kossi Yao", role: "CASHIER", branchId: branchMain.id as string, position: "Caissier" },
-    { email: "cashier2@pressing.demo", fullName: "Adjoa Kouassi", role: "CASHIER", branchId: branchAnnex.id as string, position: "Caissière" },
-    { email: "operator1@pressing.demo", fullName: "Bakary Koné", role: "OPERATOR", branchId: branchMain.id as string, position: "Agent de traitement" },
-    { email: "operator2@pressing.demo", fullName: "Grace Mensah", role: "OPERATOR", branchId: branchMain.id as string, position: "Agent de traitement" },
-    { email: "operator3@pressing.demo", fullName: "Ibrahim Ouattara", role: "OPERATOR", branchId: branchAnnex.id as string, position: "Agent de traitement" },
-    { email: "delivery1@pressing.demo", fullName: "Serge N'Guessan", role: "DELIVERY", branchId: branchMain.id as string, position: "Livreur" },
-    { email: "delivery2@pressing.demo", fullName: "Chantal Assi", role: "DELIVERY", branchId: branchAnnex.id as string, position: "Livreuse" },
+    { email: "superadmin@pressing.demo", fullName: "Aïcha Bello", role: "SUPER_ADMIN", branchId: branchDouala.id as string, position: "Direction générale" },
+    { email: "admin@pressing.demo", fullName: "Ferdinand Mballa", role: "ADMIN", branchId: branchDouala.id as string, position: "Administrateur" },
+    { email: "manager@pressing.demo", fullName: "Solange Etoundi", role: "MANAGER", branchId: branchDouala.id as string, position: "Gérante multi-agences (Douala & Yaoundé)" },
+    { email: "cashier1@pressing.demo", fullName: "Achille Fotso", role: "CASHIER", branchId: branchDouala.id as string, position: "Caissier" },
+    { email: "cashier2@pressing.demo", fullName: "Christelle Nkeng", role: "CASHIER", branchId: branchYaounde.id as string, position: "Caissière" },
+    { email: "operator1@pressing.demo", fullName: "Brice Talla", role: "OPERATOR", branchId: branchDouala.id as string, position: "Agent de traitement" },
+    { email: "operator2@pressing.demo", fullName: "Merveille Onana", role: "OPERATOR", branchId: branchDouala.id as string, position: "Agent de traitement" },
+    { email: "operator3@pressing.demo", fullName: "Steve Kamga", role: "OPERATOR", branchId: branchYaounde.id as string, position: "Agent de traitement" },
+    { email: "delivery1@pressing.demo", fullName: "Arnaud Mvondo", role: "DELIVERY", branchId: branchDouala.id as string, position: "Livreur" },
+    { email: "delivery2@pressing.demo", fullName: "Ornella Abena", role: "DELIVERY", branchId: branchYaounde.id as string, position: "Livreuse" },
   ];
 
-  const users = userDefs.map((u) =>
+  const users = userDefs.map((u, i) =>
     insertRow("users", {
       ...u,
       passwordHash,
       hireDate: daysAgo(randomInt(60, 400)),
-      phone: `+225 07 ${randomInt(10, 99)} ${randomInt(10, 99)} ${randomInt(10, 99)} ${randomInt(10, 99)}`,
+      phone: cmPhone(i + 1),
       active: true,
       createdAt: now,
       updatedAt: now,
     })
   );
-  branchMain.managerId = users[2].id;
+  branchDouala.managerId = users[2].id;
+  branchYaounde.managerId = users[2].id;
+
+  // Solange Etoundi (manager, index 2) manages both agencies.
+  insertRow("staff_branches", { userId: users[2].id, branchId: branchDouala.id, createdAt: now });
+  insertRow("staff_branches", { userId: users[2].id, branchId: branchYaounde.id, createdAt: now });
 
   const cashiers = users.filter((u) => u.role === "CASHIER" || u.role === "MANAGER" || u.role === "ADMIN");
   const deliverers = users.filter((u) => u.role === "DELIVERY");
@@ -134,17 +153,19 @@ async function main() {
 
   // --- Customers --------------------------------------------------------
   const customerTypes = ["INDIVIDUAL", "INDIVIDUAL", "INDIVIDUAL", "COMPANY", "VIP"] as const;
+  const branchIds = [branchDouala.id as string, branchYaounde.id as string];
   const customers = Array.from({ length: 16 }).map((_, i) => {
     const fullName = `${randomItem(FIRST_NAMES)} ${randomItem(LAST_NAMES)}`;
+    const branchId = randomItem(branchIds);
     return insertRow("customers", {
       fullName,
-      phone: `+225 07${String(10000000 + i * 137).slice(0, 8)}`,
+      phone: cmPhone(1000 + i),
       email: Math.random() > 0.4 ? `${fullName.toLowerCase().replace(/[^a-z]/g, ".")}@example.com` : null,
-      address: Math.random() > 0.3 ? `Rue ${randomInt(1, 40)}, ${randomItem(["Plateau", "Cocody", "Marcory", "Yopougon", "Treichville"])}` : null,
+      address: Math.random() > 0.3 ? `Rue ${randomInt(1, 40)}, ${randomItem(neighborhoods[branchId])}, ${branchCity[branchId]}` : null,
       birthDate: null,
       type: randomItem(customerTypes),
       notes: null,
-      branchId: randomItem([branchMain.id, branchAnnex.id]) as string,
+      branchId,
       active: true,
       createdAt: daysAgo(randomInt(0, 300)),
       updatedAt: now,
@@ -171,7 +192,7 @@ async function main() {
   };
   const categories = Object.keys(ARTICLES);
   const colors = ["Blanc", "Noir", "Bleu", "Gris", "Beige", "Rouge", "Vert"];
-  const paymentMethods = ["CASH", "MOBILE_MONEY", "CARD", "BANK_TRANSFER"];
+  const paymentMethods = ["CASH", "ORANGE_MONEY", "MTN_MOMO", "CARD", "BANK_TRANSFER"];
 
   // --- Orders, items, payments, deliveries, status history --------------
   // Note: shorter window than the local dev seed (which uses 60 days / 50
@@ -184,7 +205,7 @@ async function main() {
       const depositDate = daysAgo(day);
       const customer = randomItem(customers);
       const employee = randomItem(cashiers);
-      const branchId = (customer.branchId as string) ?? branchMain.id;
+      const branchId = (customer.branchId as string) ?? (branchDouala.id as string);
       const priority = Math.random() > 0.75 ? "EXPRESS" : "NORMAL";
       const itemCount = randomInt(1, 4);
 
@@ -301,7 +322,7 @@ async function main() {
           type: "DELIVERY",
           address: (customer.address as string) ?? "Adresse non précisée",
           neighborhood: null,
-          city: "Abidjan",
+          city: branchCity[branchId] ?? "Douala",
           phone: customer.phone,
           delivererId: Math.random() > 0.3 ? randomItem(deliverers).id : null,
           fee: deliveryFee,
@@ -325,7 +346,7 @@ async function main() {
   for (let i = 0; i < 10; i++) {
     const date = daysAgo(randomInt(0, 11));
     insertRow("expenses", {
-      branchId: randomItem([branchMain.id, branchAnnex.id]),
+      branchId: randomItem(branchIds),
       date,
       amount: randomInt(2000, 80000),
       category: randomItem(expenseCategories),
@@ -352,8 +373,8 @@ async function main() {
     const product = insertRow("products", {
       ...p,
       purchasePrice: randomInt(1500, 15000),
-      supplier: "Fournisseur Ivoire Chimie",
-      branchId: branchMain.id,
+      supplier: "Fournisseur Cameroun Chimie",
+      branchId: branchDouala.id,
       createdAt: now,
       updatedAt: now,
     });
@@ -371,7 +392,7 @@ async function main() {
   for (let day = 5; day >= 1; day--) {
     const opened = daysAgo(day);
     const register = insertRow("cash_registers", {
-      branchId: branchMain.id,
+      branchId: branchDouala.id,
       openedById: users[3].id,
       openedAt: opened,
       closedById: null,
@@ -408,7 +429,7 @@ async function main() {
     register.variance = randomInt(-500, 500);
   }
   insertRow("cash_registers", {
-    branchId: branchMain.id,
+    branchId: branchDouala.id,
     openedById: users[3].id,
     openedAt: now,
     closedById: null,
@@ -422,14 +443,16 @@ async function main() {
 
   // --- Settings -----------------------------------------------------
   const settingDefs: [string, unknown][] = [
-    ["businessName", "Pressing Étoile"],
-    ["phone", "+225 27 20 30 40 50"],
-    ["email", "contact@pressingetoile.demo"],
-    ["address", "Avenue Chardy, Plateau, Abidjan"],
+    ["businessName", "Pressing Étoile Cameroun"],
+    ["phone", "+237 233 42 10 20"],
+    ["email", "contact@pressingetoile.cm"],
+    ["address", "Avenue de Gaulle, Akwa, Douala"],
     ["currency", "FCFA"],
     ["taxRate", 0],
     ["openingHours", "Lun-Sam 8h-19h"],
     ["termsAndConditions", "Les articles non retirés après 60 jours ne sont plus garantis."],
+    ["paymentsSimulationMode", true],
+    ["notificationsSimulationMode", true],
   ];
   for (const [key, value] of settingDefs) {
     insertRow("settings", { key, value, updatedAt: now });
@@ -450,6 +473,7 @@ async function main() {
   const TABLE_ORDER = [
     "branches",
     "users",
+    "staff_branches",
     "services",
     "customers",
     "orders",
@@ -496,6 +520,7 @@ async function main() {
   console.log("Statement count:", statements.length);
   console.log("Demo accounts (password: Demo1234!):");
   userDefs.forEach((u) => console.log(`  ${u.role.padEnd(12)} ${u.email}`));
+  console.log("Multi-agency demo: manager@pressing.demo manages both Douala and Yaoundé.");
 }
 
 main();

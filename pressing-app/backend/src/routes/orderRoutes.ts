@@ -10,6 +10,7 @@ import {
   updateOrder,
   updateOrderStatus,
 } from "../controllers/orderController";
+import { initiateOrderMobileMoneyPayment } from "../controllers/paymentIntentController";
 
 export const orderRoutes = Router();
 orderRoutes.use(requireAuth);
@@ -21,3 +22,8 @@ orderRoutes.post("/", requirePermission("orders:write"), asyncHandler(createOrde
 orderRoutes.put("/:id", requirePermission("orders:write"), asyncHandler(updateOrder));
 orderRoutes.post("/:id/status", requirePermission("orders:status"), asyncHandler(updateOrderStatus));
 orderRoutes.post("/:id/payments", requirePermission("payments:write"), asyncHandler(addPayment));
+orderRoutes.post(
+  "/:id/mobile-money",
+  requirePermission("payments:write"),
+  asyncHandler(initiateOrderMobileMoneyPayment)
+);

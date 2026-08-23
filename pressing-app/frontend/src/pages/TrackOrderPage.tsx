@@ -59,7 +59,7 @@ export default function TrackOrderPage() {
 
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
-            placeholder="PR-20260101-0001 ou +225 07..."
+            placeholder="PR-20260101-0001 ou +237 6..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             required

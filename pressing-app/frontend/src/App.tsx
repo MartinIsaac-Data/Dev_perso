@@ -15,6 +15,7 @@ import CashRegisterPage from "@/pages/CashRegisterPage";
 import ExpensesPage from "@/pages/ExpensesPage";
 import InventoryPage from "@/pages/InventoryPage";
 import EmployeesPage from "@/pages/EmployeesPage";
+import BranchesPage from "@/pages/BranchesPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import NotFoundPage from "@/pages/NotFoundPage";
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="/expenses" element={<ExpensesPage />} />
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/employees" element={<EmployeesPage />} />
+        <Route path="/branches" element={<BranchesPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
