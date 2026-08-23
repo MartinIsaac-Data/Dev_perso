@@ -58,6 +58,12 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "settings:read",
     "dashboard:read",
   ],
+  // CASHIER, OPERATOR and DELIVERY are front-line, task-focused roles: they
+  // land on their own Workspace (see App.tsx's landingRouteForRole), not the
+  // management Dashboard, so none of them carry dashboard:read. The
+  // Dashboard component itself isn't removed — SUPER_ADMIN/ADMIN/MANAGER
+  // still have it — this just keeps operational roles off a screen that
+  // isn't built for their job, both as a landing page and via direct URL.
   CASHIER: [
     "customers:read",
     "customers:write",
@@ -71,7 +77,6 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "cash:manage",
     "expenses:read",
     "expenses:write",
-    "dashboard:read",
   ],
   OPERATOR: [
     "customers:read",
@@ -80,9 +85,8 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "orders:status",
     "deliveries:read",
     "inventory:read",
-    "dashboard:read",
   ],
-  DELIVERY: ["orders:read", "deliveries:read", "deliveries:write", "dashboard:read"],
+  DELIVERY: ["orders:read", "deliveries:read", "deliveries:write"],
 };
 
 export function roleHasPermission(role: Role, permission: Permission): boolean {

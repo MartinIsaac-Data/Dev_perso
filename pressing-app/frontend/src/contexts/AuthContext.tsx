@@ -5,7 +5,7 @@ import type { AuthUser } from "@/types";
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   activeBranchId: string | null;
@@ -44,12 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string): Promise<AuthUser> {
     try {
       const res = await api.post("/auth/login", { email, password });
       localStorage.setItem("pressing_token", res.data.token);
       localStorage.setItem("pressing_user", JSON.stringify(res.data.user));
       setUser(res.data.user);
+      return res.data.user as AuthUser;
     } catch (error) {
       throw new Error(apiErrorMessage(error, "Identifiants invalides"));
     }

@@ -4,6 +4,7 @@ import { Shirt } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { landingRouteForRole } from "@/lib/roles";
 
 const DEMO_ACCOUNTS = [
   { role: "SUPER_ADMIN", email: "superadmin@pressing.demo" },
@@ -21,7 +22,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   if (user) {
-    const from = (location.state as { from?: string })?.from || "/";
+    const from = (location.state as { from?: string })?.from || landingRouteForRole(user.role);
     return <Navigate to={from} replace />;
   }
 
@@ -30,8 +31,8 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
-      navigate("/");
+      const loggedInUser = await login(email, password);
+      navigate(landingRouteForRole(loggedInUser.role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de connexion");
     } finally {

@@ -12,13 +12,27 @@ import {
   BarChart3,
   Settings,
   Building2,
+  ClipboardList,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Role } from "@/types";
 
-const NAV = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  permission?: string;
+  /** Restricts an entry to specific roles regardless of permission — used for the Workspace home pages, which are role-specific rather than permission-gated features. */
+  roles?: Role[];
+}
+
+const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard:read" },
+  { to: "/workspace/cashier", label: "Espace caissier", icon: Wallet, roles: ["CASHIER"] },
+  { to: "/workspace/operator", label: "Espace atelier", icon: ClipboardList, roles: ["OPERATOR"] },
+  { to: "/workspace/delivery", label: "Mes livraisons", icon: Truck, roles: ["DELIVERY"] },
   { to: "/orders", label: "Commandes", icon: ShoppingBag, permission: "orders:read" },
   { to: "/customers", label: "Clients", icon: Users, permission: "customers:read" },
   { to: "/services", label: "Services", icon: Shirt, permission: "services:read" },
@@ -33,7 +47,7 @@ const NAV = [
 ];
 
 export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
-  const { hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   const content = (
     <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3">
@@ -48,7 +62,11 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
           <X className="h-4 w-4" />
         </button>
       </div>
-      {NAV.filter((item) => hasPermission(item.permission)).map((item) => (
+      {NAV.filter((item) => {
+        if (item.roles && (!user || !item.roles.includes(user.role))) return false;
+        if (item.permission && !hasPermission(item.permission)) return false;
+        return true;
+      }).map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
