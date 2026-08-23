@@ -76,6 +76,12 @@ export default function TrackOrderPage() {
           </Link>
         </p>
 
+        <p className="text-center text-xs text-muted-foreground">
+          <Link to="/login" className="hover:underline">
+            Retour à la connexion
+          </Link>
+        </p>
+
         {error && <p className="text-center text-sm text-destructive">{error}</p>}
 
         <div className="space-y-4">
