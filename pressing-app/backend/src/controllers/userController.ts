@@ -75,34 +75,48 @@ export async function createEmployee(req: Request, res: Response) {
   if (existing) throw new ApiError(409, "Email already in use");
 
   const passwordHash = await bcrypt.hash(data.password, 10);
-  const user = await prisma.user.create({
-    data: {
-      email: data.email,
-      passwordHash,
-      fullName: data.fullName,
-      phone: data.phone,
-      role: data.role,
-      position: data.position,
-      hireDate: data.hireDate,
-      branchId: data.branchId,
-    },
-    select: SAFE_SELECT,
-  });
 
-  const assignedBranchIds = data.branchIds && data.branchIds.length > 0 ? data.branchIds : data.branchId ? [data.branchId] : [];
-  if (assignedBranchIds.length > 0) {
-    await setStaffBranches(user.id, assignedBranchIds);
-  }
-  const branchIds = await getAccessibleBranchIds(user.id);
-  const { branchAssignments: _createdAssignments, ...userWithoutAssignments } = user;
-  const result = { ...userWithoutAssignments, branchIds };
+  // Atomic: the User row, its branch assignments, and the audit entry all
+  // commit together or not at all. Previously these ran as separate calls
+  // after the User was already created — if setStaffBranches or recordAudit
+  // threw, the client saw an error even though the employee had, in fact,
+  // been created (a real bug: retrying then hit "Email already in use").
+  const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email: data.email,
+        passwordHash,
+        fullName: data.fullName,
+        phone: data.phone,
+        role: data.role,
+        position: data.position,
+        hireDate: data.hireDate,
+        branchId: data.branchId,
+      },
+      select: SAFE_SELECT,
+    });
 
-  await recordAudit({
-    userId: req.user!.id,
-    action: "CREATE",
-    entityType: "User",
-    entityId: user.id,
-    newValue: result,
+    const assignedBranchIds =
+      data.branchIds && data.branchIds.length > 0 ? data.branchIds : data.branchId ? [data.branchId] : [];
+    if (assignedBranchIds.length > 0) {
+      await setStaffBranches(user.id, assignedBranchIds, tx);
+    }
+    const branchIds = await getAccessibleBranchIds(user.id, tx);
+    const { branchAssignments: _createdAssignments, ...userWithoutAssignments } = user;
+    const created = { ...userWithoutAssignments, branchIds };
+
+    await recordAudit(
+      {
+        userId: req.user!.id,
+        action: "CREATE",
+        entityType: "User",
+        entityId: user.id,
+        newValue: created,
+      },
+      tx
+    );
+
+    return created;
   });
 
   res.status(201).json(result);
@@ -115,34 +129,41 @@ export async function updateEmployee(req: Request, res: Response) {
 
   const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : undefined;
 
-  const user = await prisma.user.update({
-    where: { id: req.params.id },
-    data: {
-      fullName: data.fullName,
-      phone: data.phone,
-      role: data.role,
-      position: data.position,
-      active: data.active,
-      branchId: data.branchId,
-      ...(passwordHash ? { passwordHash } : {}),
-    },
-    select: SAFE_SELECT,
-  });
+  const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { id: req.params.id },
+      data: {
+        fullName: data.fullName,
+        phone: data.phone,
+        role: data.role,
+        position: data.position,
+        active: data.active,
+        branchId: data.branchId,
+        ...(passwordHash ? { passwordHash } : {}),
+      },
+      select: SAFE_SELECT,
+    });
 
-  if (data.branchIds) {
-    await setStaffBranches(user.id, data.branchIds);
-  }
-  const branchIds = await getAccessibleBranchIds(user.id);
-  const { branchAssignments: _updatedAssignments, ...userWithoutAssignments } = user;
-  const result = { ...userWithoutAssignments, branchIds };
+    if (data.branchIds) {
+      await setStaffBranches(user.id, data.branchIds, tx);
+    }
+    const branchIds = await getAccessibleBranchIds(user.id, tx);
+    const { branchAssignments: _updatedAssignments, ...userWithoutAssignments } = user;
+    const updated = { ...userWithoutAssignments, branchIds };
 
-  await recordAudit({
-    userId: req.user!.id,
-    action: "UPDATE",
-    entityType: "User",
-    entityId: user.id,
-    oldValue: { ...existing, passwordHash: undefined },
-    newValue: result,
+    await recordAudit(
+      {
+        userId: req.user!.id,
+        action: "UPDATE",
+        entityType: "User",
+        entityId: user.id,
+        oldValue: { ...existing, passwordHash: undefined },
+        newValue: updated,
+      },
+      tx
+    );
+
+    return updated;
   });
 
   res.json(result);

@@ -1,4 +1,7 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+
+type Db = Prisma.TransactionClient | typeof prisma;
 
 /**
  * Customers who sign up through the online portal never pick a branch —
@@ -22,23 +25,38 @@ export async function getDefaultBranchId(): Promise<string | null> {
  * the source of truth for the rest of that session (branch reassignment
  * takes effect on next login, not live).
  */
-export async function getAccessibleBranchIds(userId: string): Promise<string[]> {
+export async function getAccessibleBranchIds(userId: string, db: Db = prisma): Promise<string[]> {
   const [assignments, user] = await Promise.all([
-    prisma.staffBranch.findMany({ where: { userId }, select: { branchId: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { branchId: true } }),
+    db.staffBranch.findMany({ where: { userId }, select: { branchId: true } }),
+    db.user.findUnique({ where: { id: userId }, select: { branchId: true } }),
   ]);
   const ids = new Set(assignments.map((a) => a.branchId));
   if (user?.branchId) ids.add(user.branchId);
   return [...ids];
 }
 
-/** Replaces a staff member's branch assignments wholesale. */
-export async function setStaffBranches(userId: string, branchIds: string[]): Promise<void> {
+/**
+ * Replaces a staff member's branch assignments wholesale. Pass a
+ * transaction client (`db`) when this needs to be atomic with the User
+ * row it's assigning branches to — e.g. employee creation, where a
+ * standalone $transaction here would let the User commit even if this
+ * step then failed.
+ */
+export async function setStaffBranches(userId: string, branchIds: string[], db: Db = prisma): Promise<void> {
   const unique = [...new Set(branchIds)];
-  await prisma.$transaction([
-    prisma.staffBranch.deleteMany({ where: { userId } }),
-    ...(unique.length > 0
-      ? [prisma.staffBranch.createMany({ data: unique.map((branchId) => ({ userId, branchId })) })]
-      : []),
-  ]);
+  const run = async (client: Db) => {
+    await client.staffBranch.deleteMany({ where: { userId } });
+    if (unique.length > 0) {
+      await client.staffBranch.createMany({ data: unique.map((branchId) => ({ userId, branchId })) });
+    }
+  };
+  // Already inside a transaction (the caller passed a tx client): just run —
+  // wrapping again would fail, since a Prisma.TransactionClient has no
+  // $transaction of its own. Called standalone (the default `prisma`): wrap
+  // ourselves so delete+recreate stays atomic on its own.
+  if (db === prisma) {
+    await prisma.$transaction((tx) => run(tx));
+  } else {
+    await run(db);
+  }
 }

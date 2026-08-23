@@ -1,4 +1,7 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+
+type Db = Prisma.TransactionClient | typeof prisma;
 
 interface AuditParams {
   userId?: string | null;
@@ -10,8 +13,9 @@ interface AuditParams {
   ipAddress?: string | null;
 }
 
-export async function recordAudit(params: AuditParams) {
-  await prisma.auditLog.create({
+/** Pass a transaction client as `db` to make the audit entry atomic with the change it's logging. */
+export async function recordAudit(params: AuditParams, db: Db = prisma) {
+  await db.auditLog.create({
     data: {
       userId: params.userId ?? null,
       action: params.action,
