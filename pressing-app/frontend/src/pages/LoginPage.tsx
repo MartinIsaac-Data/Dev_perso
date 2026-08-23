@@ -90,6 +90,10 @@ export default function LoginPage() {
           Vous êtes un client ?{" "}
           <Link to="/portal/login" className="hover:underline">
             Réservez en ligne
+          </Link>{" "}
+          ·{" "}
+          <Link to="/track" className="hover:underline">
+            Suivre ma commande
           </Link>
         </p>
       </div>

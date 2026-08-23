@@ -71,6 +71,12 @@ export default function PortalLoginPage() {
             Créer un compte
           </Link>
         </p>
+        <p className="text-center text-sm">
+          <Link to="/track" className="font-medium text-primary hover:underline">
+            Suivre ma commande
+          </Link>{" "}
+          <span className="text-muted-foreground">sans compte</span>
+        </p>
         <p className="text-center text-xs text-muted-foreground">
           Vous êtes un employé ?{" "}
           <Link to="/login" className="hover:underline">
