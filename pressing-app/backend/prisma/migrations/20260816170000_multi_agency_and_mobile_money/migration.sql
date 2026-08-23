@@ -9,6 +9,13 @@ BEGIN;
 CREATE TYPE "PaymentMethod_new" AS ENUM ('CASH', 'ORANGE_MONEY', 'MTN_MOMO', 'CARD', 'BANK_TRANSFER', 'OTHER');
 ALTER TABLE "cash_transactions" ALTER COLUMN "method" DROP DEFAULT;
 ALTER TABLE "expenses" ALTER COLUMN "paymentMethod" DROP DEFAULT;
+-- Pre-existing rows using the old generic MOBILE_MONEY value have no
+-- equivalent in the new enum (split into ORANGE_MONEY / MTN_MOMO, which we
+-- can't infer after the fact) — fall back to CASH so the cast below doesn't
+-- fail on real production data.
+UPDATE "payments" SET "method" = 'CASH' WHERE "method" = 'MOBILE_MONEY';
+UPDATE "expenses" SET "paymentMethod" = 'CASH' WHERE "paymentMethod" = 'MOBILE_MONEY';
+UPDATE "cash_transactions" SET "method" = 'CASH' WHERE "method" = 'MOBILE_MONEY';
 ALTER TABLE "payments" ALTER COLUMN "method" TYPE "PaymentMethod_new" USING ("method"::text::"PaymentMethod_new");
 ALTER TABLE "expenses" ALTER COLUMN "paymentMethod" TYPE "PaymentMethod_new" USING ("paymentMethod"::text::"PaymentMethod_new");
 ALTER TABLE "cash_transactions" ALTER COLUMN "method" TYPE "PaymentMethod_new" USING ("method"::text::"PaymentMethod_new");
