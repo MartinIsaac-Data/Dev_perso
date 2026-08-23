@@ -86,16 +86,20 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Vous êtes un client ?{" "}
-          <Link to="/portal/login" className="hover:underline">
-            Réservez en ligne
-          </Link>{" "}
-          ·{" "}
-          <Link to="/track" className="hover:underline">
-            Suivre ma commande
-          </Link>
-        </p>
+        <div className="space-y-1.5 text-center text-xs text-muted-foreground">
+          <p>
+            Vous êtes un client ?{" "}
+            <Link to="/portal/login" className="hover:underline">
+              Réservez en ligne
+            </Link>
+          </p>
+          <p>
+            Vous avez une commande en cours ?{" "}
+            <Link to="/track" className="hover:underline">
+              Suivre ma commande
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
