@@ -26,6 +26,38 @@ back-end, client, infrastructure et modèles IA. Les versions de documentation
 
 ## [Non publié]
 
+### Ajouté — Le flux OAuth, et le renouvellement qui manquait
+
+Trois des sept intégrations tenaient soixante minutes. Le `refresh_token` était
+chiffré, rangé en base et **jamais relu** : passé l'heure de validité d'un jeton
+Google, le connecteur prenait un 401, la connexion passait `expired`, et
+`expired` n'est jamais retenté (ADR-056).
+
+- **`GET /v1/integrations/{provider}/authorize`** rend l'adresse de consentement
+  et un `state` chiffré qui porte l'identité du demandeur, le fournisseur et le
+  vérificateur PKCE. Rien n'est stocké entre l'aller et le retour : pas de
+  table, pas de Redis, pas de session à purger.
+- **`POST /v1/integrations/{provider}/callback`** échange le code et enregistre
+  la connexion. Le fournisseur effectif vient du `state`, qui est authentifié,
+  pas du chemin.
+- **Le renouvellement est préventif** — deux minutes avant l'échéance — et un
+  401 malgré tout déclenche **un** renouvellement puis une reprise. Une seule :
+  boucler transformerait une connexion cassée en déni de service.
+
+Trois pièges sont encodés dans le code plutôt que documentés ailleurs, parce
+qu'ils se manifestent tous par « la synchronisation s'est arrêtée » :
+`access_type=offline` et `prompt=consent` sans lesquels Google ne rend aucun
+jeton de rafraîchissement ; la rotation Microsoft là où Google ne renvoie rien
+et où il faut garder l'ancien ; le remplissage base64 de PKCE.
+
+Slack, Teams et Notion restent hors du flux : URL de webhook entrant et jeton
+d'intégration interne n'expirent pas. Ce sont aujourd'hui les seuls connecteurs
+utilisables sans déclarer une application (ADR-064).
+
+48 tests, dont neuf contre une vraie base : le nouveau jeton est bien écrit,
+chiffré, sur la ligne. **Aucun fournisseur réel n'a confirmé quoi que ce soit** —
+le serveur d'autorisation est simulé (`TODO.md` B8).
+
 ### Ajouté — `dev_up.sh --lan`, pour qu'un téléphone puisse joindre l'API
 
 Opt-in, jamais le défaut : sans l'option, l'API n'écoute que sur `127.0.0.1` et

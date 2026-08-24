@@ -82,6 +82,7 @@
 | [061](#adr-061) | Le stockage local est un port, pas `dart:io` | ✅ | 4 |
 | [062](#adr-062) | L'analyse en réunion se déclenche sur un signal, pas sur une horloge | ✅ | 4 |
 | [063](#adr-063) | Le CORS est ouvert en développement, fermé par défaut ailleurs | ✅ | 4 |
+| [064](#adr-064) | Le `state` OAuth est chiffré, et ne stocke rien | ✅ | 4 |
 
 ---
 
@@ -2308,3 +2309,90 @@ tacite.
 **Réexamen.** Si un jour l'authentification passe par cookie — par exemple pour
 un mode hors ligne prolongé —, `allow_credentials` et le CSRF redeviennent une
 vraie question, et cette décision est à reprendre entièrement.
+
+---
+
+<a id="adr-064"></a>
+## ADR-064 — Le `state` OAuth est chiffré, et ne stocke rien
+
+**Statut** ✅ Acceptée · Phase 4 · **Complète** [ADR-056](#adr-056), [ADR-058](#adr-058)
+
+**Contexte.** Le flux OAuth n'existait pas. `POST /v1/integrations` acceptait un
+jeton *déjà obtenu*, et le `refresh_token` était chiffré, rangé en base, et
+**jamais relu**. Conséquence mesurable : un jeton Google vit une heure. Passé ce
+délai, le connecteur recevait un 401, la connexion passait `expired`, et
+`expired` n'est jamais retenté (ADR-056). Trois des sept intégrations tenaient
+donc soixante minutes.
+
+Écrire l'échange pose deux questions dont les réponses habituelles coûtent
+cher : où vivre entre la demande d'autorisation et le retour, et comment
+distinguer un octroi mort d'une panne passagère.
+
+**Décision 1 — le `state` est chiffré et porte tout.**
+
+Il contient l'identité du demandeur, le fournisseur, l'instant d'émission et le
+vérificateur PKCE. Chiffré avec le trousseau d'ADR-058, donc opaque au
+navigateur et lisible de nous seuls.
+
+| Ce qu'on évite | Pourquoi |
+| --- | --- |
+| Une table `oauth_request` | Une table à purger, un index, une migration, et un état qui survit à ce qu'il représente |
+| Redis | Une demande d'autorisation perdue au redémarrage, pour économiser 200 octets |
+| Un `state` signé | Le vérificateur PKCE y serait **lisible**, et PKCE ne protégerait plus de rien |
+
+Le dernier point est le seul qui ne soit pas qu'une question de commodité :
+signer suffit contre le rejeu, pas contre la lecture. Le vérificateur traverse
+le navigateur ; il doit en sortir intact et secret.
+
+**PKCE alors que nous sommes un client confidentiel** — nous détenons un secret
+côté serveur. Cela ne coûte rien et couvre le cas où le code d'autorisation
+fuite du navigateur : sans le vérificateur, il ne s'échange pas.
+
+**Décision 2 — le renouvellement est préventif, et le 401 reste un filet.**
+
+Le jeton est renouvelé deux minutes avant l'échéance, pas à la première erreur :
+une passe qui échoue puis renouvelle a perdu son tour, et à cinq minutes de
+cadence l'utilisateur le voit. Un 401 malgré tout — révocation d'appareil,
+changement de mot de passe — déclenche **un** renouvellement, puis une reprise.
+Une seule : boucler ici transformerait une connexion cassée en déni de service
+contre le fournisseur.
+
+Un échec de renouvellement préventif **ne fait pas échouer la passe** : le jeton
+en place est encore valable, et abandonner perdrait une synchronisation qui
+allait réussir. Ce point a été écrit après avoir vu un test échouer en
+affirmant le contraire.
+
+**Décision 3 — `invalid_grant` est terminal, le reste ne l'est pas.**
+
+Un octroi révoqué ne guérit jamais ; un 503 du fournisseur d'identité, si.
+Confondre les deux donne soit des reconnexions demandées pour rien, soit un
+compteur d'échecs qui monte contre un jeton mort.
+
+**Trois pièges encodés dans le code plutôt que dans une page de wiki**, parce
+qu'ils coûtent chacun une demi-journée et se manifestent tous par « la
+synchronisation s'est arrêtée » :
+
+1. **Google ne rend un jeton de rafraîchissement que si on le demande** —
+   `access_type=offline` *et* `prompt=consent`. Sans eux, le défaut qu'on répare
+   est reproduit à l'identique, et il ne se voit qu'à la deuxième autorisation
+   du même compte.
+2. **Microsoft fait tourner ses jetons de rafraîchissement, pas Google.** Une
+   réponse Google n'en contient aucun : écraser avec `None` casse la connexion
+   au renouvellement suivant, une heure plus tard, loin de la cause.
+3. **Le remplissage base64 de PKCE.** Un `=` de trop et le fournisseur répond
+   `invalid_grant`, ce qui envoie chercher du côté du code d'autorisation.
+
+**Ce qui reste hors du flux, délibérément.** Slack et Teams s'authentifient par
+une URL de webhook entrant ; Notion par un jeton d'intégration interne ;
+Obsidian est un dossier. Rien de tout cela n'expire. Les faire passer par OAuth
+ajouterait une cérémonie sans rien résoudre — et masquerait qu'ils fonctionnent
+déjà, ce qui en fait aujourd'hui les seuls connecteurs utilisables sans
+enregistrer une application.
+
+**Coût accepté.** Deux applications à déclarer chez deux fournisseurs, et une
+`redirect_uri` qui doit correspondre à l'octet près — d'où sa dérivation depuis
+`MINDFLOW_PUBLIC_BASE_URL` plutôt qu'une seconde variable à tenir synchronisée.
+
+**Réexamen.** Au premier appel réel. Le flux est testé contre un serveur
+d'autorisation simulé (`respx`) : les formats sont conformes aux
+spécifications, aucun fournisseur ne les a jamais confirmés (`TODO.md` B8).

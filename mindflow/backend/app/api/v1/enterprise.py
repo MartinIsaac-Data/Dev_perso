@@ -28,6 +28,8 @@ from app.api.schemas.common import ERROR_RESPONSES, Collection, Envelope
 from app.api.schemas.enterprise import (
     AcceptInvitationRequest,
     AddMemberRequest,
+    AuthorisationView,
+    CallbackRequest,
     CommentRequest,
     CommentView,
     ConflictView,
@@ -127,6 +129,18 @@ def _share_view(link: ShareLink, *, token: str | None = None) -> ShareLinkView:
         view_count=link.view_count,
         created_at=link.created_at,
     )
+
+
+def _provider(value: str) -> Provider:
+    """Le fournisseur nommé dans le chemin, ou un 404.
+
+    Un nom inconnu est une adresse qui n'existe pas, pas une donnée invalide :
+    `/v1/integrations/dropbox/authorize` ne désigne rien.
+    """
+    try:
+        return Provider(value)
+    except ValueError as exc:
+        raise NotFoundError(f"Fournisseur inconnu : {value}.") from exc
 
 
 def _connection_view(connection: IntegrationConnection) -> ConnectionView:
@@ -613,6 +627,63 @@ async def connect_integration(
         access_token=payload.access_token,
         refresh_token=payload.refresh_token,
         expires_at=payload.expires_at,
+        label=payload.label,
+        direction=Direction(payload.direction),
+        settings=payload.settings,
+    )
+    return Envelope(data=_connection_view(connection))
+
+
+@router.get(
+    "/integrations/{provider}/authorize",
+    response_model=Envelope[AuthorisationView],
+    summary="Démarrer une autorisation OAuth",
+)
+async def authorize_integration(
+    session: SessionDep,
+    principal: PrincipalDep,
+    settings: SettingsDep,
+    provider: str,
+) -> Envelope[AuthorisationView]:
+    """L'adresse du consentement, et le `state` à renvoyer avec le code.
+
+    Rien n'est stocké entre cet appel et le retour : le vérificateur PKCE et
+    l'identité du demandeur voyagent chiffrés dans le `state` (ADR-064).
+    """
+    service = IntegrationService(session, principal=principal, settings=settings)
+    request = service.begin_authorisation(_provider(provider))
+    return Envelope(
+        data=AuthorisationView(
+            provider=request.provider.value,
+            authorize_url=request.url,
+            state=request.state,
+        )
+    )
+
+
+@router.post(
+    "/integrations/{provider}/callback",
+    response_model=Envelope[ConnectionView],
+    status_code=status.HTTP_201_CREATED,
+    summary="Terminer une autorisation OAuth",
+)
+async def complete_integration(
+    session: SessionDep,
+    principal: PrincipalDep,
+    settings: SettingsDep,
+    provider: str,
+    payload: Annotated[CallbackRequest, Body()],
+) -> Envelope[ConnectionView]:
+    """Échange le code contre des jetons, puis enregistre la connexion.
+
+    Le fournisseur effectif vient du `state`, pas du chemin : c'est le `state`
+    qui est authentifié.
+    """
+    _provider(provider)
+    service = IntegrationService(session, principal=principal, settings=settings)
+    connection = await service.complete_authorisation(
+        code=payload.code,
+        state=payload.state,
         label=payload.label,
         direction=Direction(payload.direction),
         settings=payload.settings,

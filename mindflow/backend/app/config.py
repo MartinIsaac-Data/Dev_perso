@@ -174,6 +174,19 @@ class Settings(BaseSettings):
     pipeline_max_retries: int = 5
     queue_backend: Literal["arq", "inline"] = "arq"
 
+    # -- OAuth des intégrations (Phase 4) -----------------------------------
+    # Une application déclarée chez chaque fournisseur. Microsoft n'en demande
+    # qu'une pour Outlook et To Do : c'est un seul jeton Graph, deux produits.
+    #
+    # Absents, les fournisseurs concernés se contentent de refuser la connexion
+    # avec un message qui nomme la variable manquante — ils ne bloquent pas le
+    # démarrage. Slack, Teams et Notion n'apparaissent pas ici : leur secret est
+    # une URL de webhook ou un jeton d'intégration interne, qui n'expirent pas.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    microsoft_client_id: str = ""
+    microsoft_client_secret: str = ""
+
     # -- Navigateur (Phase 4) ----------------------------------------------
     # Origines autorisées à appeler l'API depuis un navigateur, séparées par des
     # virgules. Vide, aucun en-tête CORS n'est émis : c'est le bon réglage quand

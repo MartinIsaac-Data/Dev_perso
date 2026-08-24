@@ -170,6 +170,29 @@ class ConnectRequest(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
 
+class AuthorisationView(BaseModel):
+    """Où envoyer l'utilisateur, et le `state` qui devra revenir avec lui."""
+
+    provider: str
+    authorize_url: str
+    state: str
+
+
+class CallbackRequest(BaseModel):
+    """Le retour du fournisseur, relayé par le client.
+
+    Le `state` n'est pas un jeton de session : il est chiffré, porte le
+    vérificateur PKCE et l'identité du demandeur, et expire en un quart d'heure
+    (`app/infra/oauth.py`).
+    """
+
+    code: str = Field(min_length=1)
+    state: str = Field(min_length=1)
+    label: str | None = Field(default=None, max_length=255)
+    direction: str = Field(default="pull", pattern="^(pull|push|two_way)$")
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
 class ConnectionView(BaseModel):
     id: uuid.UUID
     provider: str

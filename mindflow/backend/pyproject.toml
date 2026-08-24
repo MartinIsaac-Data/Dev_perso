@@ -54,7 +54,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Test credentials, temp paths and literal SQL are intentional inside tests.
-"tests/*" = ["S105", "S106", "S108", "S607", "S608"]
+"tests/*" = ["S105", "S106", "S107", "S108", "S607", "S608"]
 # Migrations build DDL from a fixed, code-controlled table list — never user input.
 # French typography in migration rationale is deliberate; N999 because the
 # revision filenames carry their revision number.

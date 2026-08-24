@@ -31,6 +31,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings
 from app.domain.enums import EntryOrigin, EntryStatus, EntryType
 from app.domain.errors import NotFoundError, ValidationError
+from app.domain.oauth import (
+    OAuthError,
+    make_pkce_pair,
+    needs_refresh,
+    provider_config,
+    supports_oauth,
+)
 from app.domain.permissions import Action
 from app.domain.sync import (
     MAX_CONSECUTIVE_FAILURES,
@@ -43,6 +50,13 @@ from app.domain.sync import (
 from app.infra.crypto import KeyRing, decrypt, encrypt
 from app.infra.db.models.core import Entry, Task
 from app.infra.db.models.enterprise import ExternalLink, IntegrationConnection
+from app.infra.oauth import (
+    OAuthClient,
+    credentials_for,
+    decode_state,
+    encode_state,
+    redirect_uri_for,
+)
 from app.infra.sync.connectors import ConnectorAuthError, ConnectorUnavailableError
 from app.infra.sync.factory import build_connector
 from app.observability import metrics
@@ -51,6 +65,15 @@ from app.services.identity_service import Principal
 from app.services.workspace_service import WorkspaceService
 
 log = get_logger("integration")
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorisationRequest:
+    """Où envoyer l'utilisateur, et le `state` qui reviendra avec lui."""
+
+    provider: Provider
+    url: str
+    state: str
 
 
 @dataclass(slots=True)
@@ -145,6 +168,79 @@ class IntegrationService:
         log.info("integration.connected", provider=provider.value)
         return connection
 
+    # -- OAuth ---------------------------------------------------------------- #
+
+    def begin_authorisation(self, provider: Provider) -> AuthorisationRequest:
+        """L'adresse vers laquelle envoyer l'utilisateur.
+
+        Rien n'est stocké : le vérificateur PKCE et l'identité du demandeur
+        voyagent chiffrés dans le `state` (`app/infra/oauth.py`). Pas de table à
+        purger, pas d'état qui survit à un redémarrage.
+        """
+        config = provider_config(provider)
+        credentials = credentials_for(provider, self._settings)
+        verifier, challenge = make_pkce_pair()
+        state = encode_state(
+            ring=self._ring(),
+            account_id=self._principal.account_id,
+            user_id=self._principal.user_id,
+            provider=provider,
+            verifier=verifier,
+        )
+        client = OAuthClient(
+            config, credentials, redirect_uri=redirect_uri_for(provider, self._settings)
+        )
+        return AuthorisationRequest(
+            provider=provider,
+            url=client.authorisation_url(state=state, challenge=challenge),
+            state=state,
+        )
+
+    async def complete_authorisation(
+        self,
+        *,
+        code: str,
+        state: str,
+        label: str | None = None,
+        direction: Direction = Direction.PULL,
+        settings: dict[str, object] | None = None,
+    ) -> IntegrationConnection:
+        """Échange le code contre des jetons, puis enregistre la connexion."""
+        payload = decode_state(state, ring=self._ring())
+
+        # Le `state` porte qui a demandé. Sans cette comparaison, un retour
+        # valide obtenu par un utilisateur pourrait rattacher un compte externe
+        # à la connexion d'un autre — c'est la raison d'être du `state`, pas
+        # seulement sa protection contre le rejeu.
+        if payload.user_id != self._principal.user_id:
+            log.warning("oauth.state_user_mismatch", provider=payload.provider.value)
+            raise ValidationError("Demande d'autorisation invalide.", field="state")
+
+        provider = payload.provider
+        client = OAuthClient(
+            provider_config(provider),
+            credentials_for(provider, self._settings),
+            redirect_uri=redirect_uri_for(provider, self._settings),
+        )
+        grant = await client.exchange_code(code=code, verifier=payload.verifier)
+
+        if not grant.refresh_token:
+            # Signalé, jamais fatal : la connexion fonctionnera une heure puis
+            # demandera une reconnexion. C'est le défaut que tout ce flux
+            # existe pour supprimer, et le voir dans les journaux vaut mieux que
+            # de le découvrir à la 61e minute.
+            log.warning("oauth.no_refresh_token", provider=provider.value)
+
+        return await self.connect(
+            provider=provider,
+            access_token=grant.access_token,
+            refresh_token=grant.refresh_token,
+            expires_at=grant.expires_at,
+            label=label,
+            direction=direction,
+            settings=settings,
+        )
+
     async def disconnect(self, connection_id: uuid.UUID) -> IntegrationConnection:
         await self._workspaces.require(Action.INTEGRATION_DISCONNECT)
         connection = await self._connection(connection_id)
@@ -189,32 +285,47 @@ class IntegrationService:
             report.reason = f"Connexion {connection.status}."
             return report
 
-        token = self._token(connection)
-        connector = build_connector(connection, access_token=token)
+        # Renouvelé *avant* d'essayer plutôt qu'après un 401 : une passe qui
+        # échoue puis renouvelle a perdu son tour, et à cinq minutes de cadence
+        # cela se voit.
+        if needs_refresh(connection.token_expires_at):
+            await self._refresh(connection)
+            if connection.status != "active":
+                report.failed = True
+                report.reason = "Reconnexion requise."
+                await self._session.flush()
+                metrics.integration_syncs_total.labels(provider.value, "failed").inc()
+                return report
 
         try:
-            if Direction(connection.direction).reads:
-                await self._pull(connection, connector, report)
+            await self._run_pass(connection, report)
             connection.last_sync_at = datetime.now(UTC)
             connection.consecutive_failures = 0
             connection.last_error = None
         except ConnectorAuthError as exc:
-            # Terminal: retrying a revoked grant never succeeds. Marked so the
-            # user is asked to reconnect instead of waiting for a sync that
-            # will not come.
-            connection.status = "expired"
-            connection.last_error = str(exc)
-            report.failed = True
-            report.reason = "Reconnexion requise."
-            log.warning("integration.auth_expired", provider=provider.value)
+            # Un 401 n'est plus terminal en soi : il peut vouloir dire « ce
+            # jeton d'accès a été révoqué » comme « il a expiré plus tôt que
+            # promis ». On tente le renouvellement une fois, et une seule — une
+            # boucle ici deviendrait un déni de service contre le fournisseur.
+            refreshed = await self._refresh(connection)
+            if refreshed:
+                try:
+                    await self._run_pass(connection, report)
+                    connection.last_sync_at = datetime.now(UTC)
+                    connection.consecutive_failures = 0
+                    connection.last_error = None
+                except ConnectorAuthError as retry_exc:
+                    self._mark_expired(connection, retry_exc, report)
+                except ConnectorUnavailableError as retry_exc:
+                    self._mark_unavailable(connection, retry_exc, report)
+            else:
+                # Le renouvellement a échoué, ou il n'y avait rien à renouveler.
+                # Réessayer un octroi révoqué ne réussit jamais : la connexion
+                # est marquée pour que l'utilisateur soit prévenu, au lieu
+                # d'attendre une synchronisation qui ne viendra pas.
+                self._mark_expired(connection, exc, report)
         except ConnectorUnavailableError as exc:
-            connection.consecutive_failures += 1
-            connection.last_error = str(exc)[:500]
-            if connection.consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                connection.status = "error"
-                log.error("integration.gave_up", provider=provider.value)
-            report.failed = True
-            report.reason = str(exc)
+            self._mark_unavailable(connection, exc, report)
 
         await self._session.flush()
         metrics.integration_syncs_total.labels(
@@ -386,6 +497,80 @@ class IntegrationService:
         return link
 
     # -- Helpers -------------------------------------------------------------- #
+
+    async def _run_pass(self, connection: IntegrationConnection, report: SyncReport) -> None:
+        """Une passe, avec le jeton tel qu'il est maintenant.
+
+        Le connecteur est reconstruit à chaque appel plutôt que réutilisé : il
+        tient son jeton en attribut, donc un connecteur gardé au travers d'un
+        renouvellement présenterait poliment l'ancien.
+        """
+        connector = build_connector(connection, access_token=self._token(connection))
+        if Direction(connection.direction).reads:
+            await self._pull(connection, connector, report)
+
+    def _mark_expired(
+        self, connection: IntegrationConnection, exc: Exception, report: SyncReport
+    ) -> None:
+        connection.status = "expired"
+        connection.last_error = str(exc)[:500]
+        report.failed = True
+        report.reason = "Reconnexion requise."
+        log.warning("integration.auth_expired", provider=connection.provider)
+
+    def _mark_unavailable(
+        self, connection: IntegrationConnection, exc: Exception, report: SyncReport
+    ) -> None:
+        connection.consecutive_failures += 1
+        connection.last_error = str(exc)[:500]
+        if connection.consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+            connection.status = "error"
+            log.error("integration.gave_up", provider=connection.provider)
+        report.failed = True
+        report.reason = str(exc)
+
+    async def _refresh(self, connection: IntegrationConnection) -> bool:
+        """Renouvelle le jeton d'accès. Rend `True` si la connexion est repartie.
+
+        Ne lève jamais : appelée depuis le chemin de synchronisation, qui a déjà
+        sa façon de rendre compte d'un échec. Un `OAuthError` terminal marque la
+        connexion `expired` — un octroi révoqué ne guérit pas —, tout le reste
+        est laissé au compteur d'échecs.
+        """
+        provider = Provider(connection.provider)
+        if not supports_oauth(provider) or not connection.refresh_token_encrypted:
+            return False
+
+        ring = self._ring()
+        previous = decrypt(connection.refresh_token_encrypted, ring=ring)
+        try:
+            client = OAuthClient(
+                provider_config(provider),
+                credentials_for(provider, self._settings),
+                redirect_uri=redirect_uri_for(provider, self._settings),
+            )
+            grant = (await client.refresh(refresh_token=previous)).merged_with(previous)
+        except OAuthError as exc:
+            if exc.terminal:
+                connection.status = "expired"
+                connection.last_error = str(exc)[:500]
+                log.warning("integration.refresh_rejected", provider=provider.value)
+            else:
+                log.warning("integration.refresh_unavailable", provider=provider.value)
+            await self._session.flush()
+            return False
+
+        connection.access_token_encrypted = encrypt(grant.access_token, ring=ring)
+        # Microsoft fait tourner ses jetons de rafraîchissement, Google n'en
+        # renvoie pas : `merged_with` a déjà conservé l'ancien le cas échéant,
+        # donc écrire `None` ici signifierait vraiment « il n'y en a plus ».
+        connection.refresh_token_encrypted = (
+            encrypt(grant.refresh_token, ring=ring) if grant.refresh_token else None
+        )
+        connection.token_expires_at = grant.expires_at
+        await self._session.flush()
+        log.info("integration.refreshed", provider=provider.value)
+        return True
 
     def _ring(self) -> KeyRing:
         return KeyRing.from_settings(self._settings.token_encryption_keys)

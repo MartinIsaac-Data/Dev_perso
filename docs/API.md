@@ -1297,7 +1297,9 @@ inconnu une session cadrée sur tout le compte.
 | Méthode | Chemin | Rôle |
 | --- | --- | --- |
 | GET | `/v1/integrations` | Connexions du compte, statut et dernier succès |
-| POST | `/v1/integrations` | Connecter. Le jeton est chiffré avant d'atteindre le disque |
+| GET | `/v1/integrations/{provider}/authorize` | Démarrer OAuth : rend l'adresse de consentement et un `state` |
+| POST | `/v1/integrations/{provider}/callback` | Terminer OAuth : échange le code, enregistre la connexion |
+| POST | `/v1/integrations` | Connecter avec un secret déjà en main (webhook Slack, jeton Notion) |
 | DELETE | `/v1/integrations/{id}` | Déconnecter |
 | POST | `/v1/integrations/{id}/sync` | Synchroniser maintenant. Renvoie un rapport |
 | GET | `/v1/integrations/conflicts` | Éléments modifiés **des deux côtés** |
@@ -1326,6 +1328,34 @@ une opération qui ne peut pas réussir.
 aucun accès à un coffre local. La connexion existe pour porter les préférences de
 rendu ; l'écriture des fichiers se fait dans l'application. `POST
 /v1/integrations/{id}/sync` sur Obsidian ne fait aucune E/S serveur.
+
+### OAuth, en trois échanges
+
+```
+1. GET  /v1/integrations/google_calendar/authorize
+        → { authorize_url, state }
+2. Le client ouvre `authorize_url`. L'utilisateur consent.
+   Le fournisseur redirige vers
+   {MINDFLOW_PUBLIC_BASE_URL}/integrations/google_calendar/callback?code=…&state=…
+3. POST /v1/integrations/google_calendar/callback  { code, state }
+        → la connexion, sans aucun jeton dans la réponse
+```
+
+**Le `state` n'est pas un identifiant de session.** Il est chiffré et porte
+l'identité du demandeur, le fournisseur, l'instant d'émission et le vérificateur
+PKCE. Rien n'est stocké côté serveur entre les étapes 1 et 3 ; il expire en un
+quart d'heure. Un `state` altéré, périmé, ou émis pour un autre utilisateur est
+refusé (ADR-064).
+
+**Les jetons ne sortent jamais de l'API**, ni ici ni ailleurs. Ils sont chiffrés
+avant d'atteindre le disque (ADR-058), et renouvelés automatiquement deux
+minutes avant leur échéance.
+
+**Trois fournisseurs seulement passent par là** : Google Calendar, Outlook
+Calendar et Microsoft To Do. Slack et Teams s'authentifient par une URL de
+webhook entrant, Notion par un jeton d'intégration interne : rien n'expire, donc
+`POST /v1/integrations` suffit et reste le chemin pour eux.
+
 
 **Un conflit n'est jamais résolu tout seul** (ADR-056). Quand les deux côtés ont
 changé depuis la dernière synchronisation, l'élément est *classé* en conflit et
