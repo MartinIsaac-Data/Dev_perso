@@ -152,6 +152,23 @@ export const PRIORITY_BADGE_VARIANT: Record<
   LOW: "outline",
 };
 
+export const STORY_TAGS = [
+  "LEADERSHIP",
+  "FAILURE",
+  "CONFLICT",
+  "INNOVATION",
+  "TEAMWORK",
+  "ETHICS",
+  "INTERNATIONAL",
+  "PROBLEM_SOLVING",
+  "ACHIEVEMENT",
+  "RESILIENCE",
+  "DIVERSITY",
+  "CAREER_TRANSITION",
+  "COMMUNITY",
+  "ENTREPRENEURSHIP",
+] as const;
+
 export const MILESTONE_STATUS_BADGE_VARIANT: Record<
   (typeof MILESTONE_STATUSES)[number],
   "default" | "secondary" | "success" | "warning" | "destructive" | "outline"

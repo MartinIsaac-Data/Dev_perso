@@ -22,8 +22,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { computeReadiness } from "@/lib/scoring/engine";
 import { gatherScoringInputs } from "@/app/(app)/mba-readiness/gather";
-
-const PRIORITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+import { computeNextBestActions } from "@/lib/recommendations/engine";
 
 export default async function DashboardPage() {
   const userId = await requireUserId();
@@ -37,7 +36,7 @@ export default async function DashboardPage() {
     countries,
     certifications,
     courses,
-    openTasks,
+    nextBestActions,
     financialPlan,
   ] = await Promise.all([
     prisma.profile.findUnique({ where: { userId } }),
@@ -51,11 +50,7 @@ export default async function DashboardPage() {
     prisma.internationalExperience.findMany({ where: { userId }, select: { country: true }, distinct: ["country"] }),
     prisma.certification.findMany({ where: { userId }, select: { status: true } }),
     prisma.course.findMany({ where: { userId }, select: { hours: true, completedAt: true } }),
-    prisma.task.findMany({
-      where: { userId, status: { not: "DONE" } },
-      orderBy: [{ deadline: "asc" }],
-      take: 20,
-    }),
+    computeNextBestActions(userId),
     prisma.financialPlan.findFirst({ where: { userId } }),
   ]);
 
@@ -82,17 +77,6 @@ export default async function DashboardPage() {
   ).length;
   const coursesCompleted = courses.filter((c) => c.completedAt).length;
   const learningHours = courses.reduce((sum, c) => sum + Number(c.hours ?? 0), 0);
-
-  const topActions = [...openTasks]
-    .sort((a, b) => {
-      const p = (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
-      if (p !== 0) return p;
-      if (a.deadline && b.deadline) return a.deadline.getTime() - b.deadline.getTime();
-      if (a.deadline) return -1;
-      if (b.deadline) return 1;
-      return 0;
-    })
-    .slice(0, 3);
 
   return (
     <div className="flex flex-col gap-6">
@@ -231,30 +215,25 @@ export default async function DashboardPage() {
           <CardDescription>Your highest-priority open tasks, soonest deadline first.</CardDescription>
         </CardHeader>
         <CardContent>
-          {topActions.length > 0 ? (
+          {nextBestActions.length > 0 ? (
             <ul className="flex flex-col gap-3">
-              {topActions.map((task) => (
-                <li key={task.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
-                  <div>
-                    <p className="text-sm font-medium">{task.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {task.category ?? "General"}
-                      {task.deadline &&
-                        ` · Due ${task.deadline.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
-                    </p>
-                  </div>
-                  <Badge
-                    variant={
-                      task.priority === "CRITICAL" || task.priority === "HIGH" ? "destructive" : "secondary"
-                    }
-                  >
-                    {task.priority}
-                  </Badge>
+              {nextBestActions.map((action) => (
+                <li key={action.title} className="rounded-lg border p-3">
+                  <Link href={action.href} className="text-sm font-medium hover:underline">
+                    {action.title}
+                  </Link>
+                  <p className="text-xs text-muted-foreground">{action.reason}</p>
+                  {action.expectedImpact && (
+                    <p className="mt-1 text-xs text-muted-foreground">{action.expectedImpact}</p>
+                  )}
                 </li>
               ))}
             </ul>
           ) : (
-            <EmptyState title="No open tasks" description="You're all caught up — add tasks from the Tasks page." />
+            <EmptyState
+              title="Nothing urgent right now"
+              description="No overdue tasks, near-term deadlines or open readiness gaps flagged."
+            />
           )}
         </CardContent>
       </Card>
