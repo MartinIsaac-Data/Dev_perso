@@ -83,7 +83,7 @@ export function TaskFormDialog({
             <Plus className="size-4" /> Add task
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="size-7">
+          <Button variant="ghost" size="icon" className="size-7" aria-label="Edit">
             <Pencil className="size-3.5" />
           </Button>
         )}

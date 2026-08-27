@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/session";
 import { generateChatCompletion, isAIConfigured, type ChatMessage } from "@/lib/ai/provider";
 import { ADVISOR_SYSTEM_PROMPT, buildAdvisorContext } from "@/lib/ai/context";
+import { checkAIRateLimit } from "@/lib/ai/rate-limit";
 
 type StoredMessage = { role: "user" | "assistant"; content: string; createdAt: string };
 
@@ -19,6 +20,14 @@ export async function sendAdvisorMessage(content: string): Promise<ActionResult>
     return { ok: false, error: "No AI provider is configured. Set AI_PROVIDER and an API key to enable the advisor." };
   }
   if (!content.trim()) return { ok: false, error: "Message cannot be empty" };
+
+  const rateLimit = checkAIRateLimit(userId);
+  if (!rateLimit.allowed) {
+    return {
+      ok: false,
+      error: `You've sent a lot of messages — try again in about ${rateLimit.retryAfterSeconds}s.`,
+    };
+  }
 
   let conversation = await prisma.aIConversation.findFirst({ where: { userId }, orderBy: { createdAt: "asc" } });
   if (!conversation) {

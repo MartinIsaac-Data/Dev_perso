@@ -81,7 +81,7 @@ export function EducationFormDialog({
             <Plus className="size-4" /> Add education
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="size-8">
+          <Button variant="ghost" size="icon" className="size-8" aria-label="Edit">
             <Pencil className="size-4" />
           </Button>
         )}
