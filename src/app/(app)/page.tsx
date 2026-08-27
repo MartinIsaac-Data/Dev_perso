@@ -18,7 +18,10 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { computeReadiness } from "@/lib/scoring/engine";
+import { gatherScoringInputs } from "@/app/(app)/mba-readiness/gather";
 
 const PRIORITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
@@ -39,7 +42,7 @@ export default async function DashboardPage() {
     prisma.profile.findUnique({ where: { userId } }),
     prisma.mBAProgram.findFirst({
       where: { userId, isPrimaryTarget: true, isArchived: false },
-      include: { deadlines: { orderBy: { deadline: "asc" }, take: 1 } },
+      include: { deadlines: { orderBy: { deadline: "asc" }, take: 1 }, dimensionWeights: true },
     }),
     prisma.careerExperience.findMany({ where: { userId }, select: { company: true } }),
     prisma.project.count({ where: { userId } }),
@@ -53,6 +56,22 @@ export default async function DashboardPage() {
       take: 20,
     }),
   ]);
+
+  const readiness = primaryProgram
+    ? await (async () => {
+        const [dimensions, inputs] = await Promise.all([
+          prisma.scoringDimension.findMany({ orderBy: { sortOrder: "asc" } }),
+          gatherScoringInputs(userId),
+        ]);
+        const weightMap = new Map(primaryProgram.dimensionWeights.map((w) => [w.dimensionKey, Number(w.weight)]));
+        const config = dimensions.map((d) => ({
+          key: d.key,
+          label: d.label,
+          weight: weightMap.get(d.key) ?? Number(d.defaultWeight),
+        }));
+        return computeReadiness(inputs, config);
+      })()
+    : null;
 
   const distinctCompanies = new Set(careerExperiences.map((c) => c.company)).size;
   const certsCompleted = certifications.filter((c) => c.status === "PASSED").length;
@@ -147,19 +166,57 @@ export default async function DashboardPage() {
       {/* Readiness score */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Gauge className="size-4 text-muted-foreground" /> MBA Readiness
-          </CardTitle>
-          <CardDescription>
-            A preparation/readiness score against your configured criteria — not an admission probability.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Gauge className="size-4 text-muted-foreground" /> MBA Readiness
+              </CardTitle>
+              <CardDescription>
+                A preparation/readiness score against your configured criteria — not an admission
+                probability.
+              </CardDescription>
+            </div>
+            {readiness && (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/mba-readiness">
+                  Full breakdown <ArrowUpRight className="size-3.5" />
+                </Link>
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <EmptyState
-            icon={Gauge}
-            title="Scoring engine not configured yet"
-            description="The readiness engine — dimension scores, gap analysis and the What-If simulator — ships in Phase 3, once MBA Targets is in place."
-          />
+          {readiness ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-4">
+                <p className="text-4xl font-semibold tabular-nums">{readiness.totalScore}</p>
+                <p className="text-sm text-muted-foreground">/ 100</p>
+              </div>
+              {[...readiness.dimensions]
+                .sort((a, b) => b.weight * (100 - b.score) - a.weight * (100 - a.score))
+                .slice(0, 3)
+                .map((d) => (
+                  <div key={d.key} className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-foreground">{d.label}</span>
+                      <span className="text-muted-foreground">{d.score}/100</span>
+                    </div>
+                    <Progress value={d.score} />
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={Gauge}
+              title="Set a primary MBA target"
+              description="Mark a program as your primary target to compute your readiness score against it."
+              action={
+                <Button asChild size="sm">
+                  <Link href="/mba-targets">Go to MBA Targets</Link>
+                </Button>
+              }
+            />
+          )}
         </CardContent>
       </Card>
 

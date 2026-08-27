@@ -101,3 +101,53 @@ export const CERTIFICATION_STATUS_BADGE_VARIANT: Record<
   FAILED: "destructive",
   EXPIRED: "destructive",
 };
+
+export const PROGRAM_TYPES = ["FULL_TIME", "EXECUTIVE", "PART_TIME", "ONLINE"] as const;
+
+export const SCHOLARSHIP_STATUSES = [
+  "RESEARCHING",
+  "PLANNED",
+  "APPLYING",
+  "SUBMITTED",
+  "AWARDED",
+  "REJECTED",
+] as const;
+
+export const APPLICATION_STATUSES = [
+  "RESEARCHING",
+  "PREPARING",
+  "READY",
+  "SUBMITTED",
+  "INTERVIEW",
+  "ADMITTED",
+  "WAITLISTED",
+  "REJECTED",
+] as const;
+
+export const APPLICATION_STATUS_BADGE_VARIANT: Record<
+  (typeof APPLICATION_STATUSES)[number],
+  "default" | "secondary" | "success" | "warning" | "destructive" | "outline"
+> = {
+  RESEARCHING: "outline",
+  PREPARING: "secondary",
+  READY: "secondary",
+  SUBMITTED: "warning",
+  INTERVIEW: "warning",
+  ADMITTED: "success",
+  WAITLISTED: "warning",
+  REJECTED: "destructive",
+};
+
+export const TASK_STATUSES = ["TODO", "IN_PROGRESS", "BLOCKED", "DONE"] as const;
+export const PRIORITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
+export const MILESTONE_STATUSES = ["PLANNED", "IN_PROGRESS", "DONE", "AT_RISK"] as const;
+
+export const PRIORITY_BADGE_VARIANT: Record<
+  (typeof PRIORITIES)[number],
+  "default" | "secondary" | "success" | "warning" | "destructive" | "outline"
+> = {
+  CRITICAL: "destructive",
+  HIGH: "warning",
+  MEDIUM: "secondary",
+  LOW: "outline",
+};
