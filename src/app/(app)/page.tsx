@@ -38,6 +38,7 @@ export default async function DashboardPage() {
     certifications,
     courses,
     openTasks,
+    financialPlan,
   ] = await Promise.all([
     prisma.profile.findUnique({ where: { userId } }),
     prisma.mBAProgram.findFirst({
@@ -55,6 +56,7 @@ export default async function DashboardPage() {
       orderBy: [{ deadline: "asc" }],
       take: 20,
     }),
+    prisma.financialPlan.findFirst({ where: { userId } }),
   ]);
 
   const readiness = primaryProgram
@@ -293,17 +295,74 @@ export default async function DashboardPage() {
       {/* Financial snapshot */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Wallet className="size-4 text-muted-foreground" /> Financial snapshot
-          </CardTitle>
-          <CardDescription>Estimated cost, funding secured and the savings gap.</CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Wallet className="size-4 text-muted-foreground" /> Financial snapshot
+              </CardTitle>
+              <CardDescription>Estimated cost, planned funding and the gap.</CardDescription>
+            </div>
+            {financialPlan && (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/financial-plan">
+                  Full plan <ArrowUpRight className="size-3.5" />
+                </Link>
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <EmptyState
-            icon={Wallet}
-            title="Financial plan not set up yet"
-            description="Shipping in Phase 4 — estimated cost, funding sources and a savings projection chart."
-          />
+          {financialPlan ? (
+            (() => {
+              const totalCost =
+                Number(financialPlan.tuition ?? 0) +
+                Number(financialPlan.livingCost ?? 0) +
+                Number(financialPlan.travelCost ?? 0) +
+                Number(financialPlan.visaCost ?? 0) +
+                Number(financialPlan.insuranceCost ?? 0) +
+                Number(financialPlan.otherCost ?? 0);
+              const plannedFunding =
+                Number(financialPlan.currentSavings) +
+                Number(financialPlan.scholarshipTarget) +
+                Number(financialPlan.employerSponsorship) +
+                Number(financialPlan.studentLoanTarget) +
+                Number(financialPlan.familySupport);
+              const gap = totalCost - plannedFunding;
+              return (
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Estimated cost</p>
+                    <p className="font-medium tabular-nums">
+                      {totalCost.toLocaleString()} {financialPlan.currency}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Planned funding</p>
+                    <p className="font-medium tabular-nums">
+                      {plannedFunding.toLocaleString()} {financialPlan.currency}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{gap > 0 ? "Gap" : "Surplus"}</p>
+                    <p className="font-medium tabular-nums">
+                      {Math.abs(gap).toLocaleString()} {financialPlan.currency}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <EmptyState
+              icon={Wallet}
+              title="Financial plan not set up yet"
+              description="Estimate the total cost, funding sources and a savings projection."
+              action={
+                <Button asChild size="sm">
+                  <Link href="/financial-plan">Set up financial plan</Link>
+                </Button>
+              }
+            />
+          )}
         </CardContent>
       </Card>
 

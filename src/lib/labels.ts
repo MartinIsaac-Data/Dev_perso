@@ -151,3 +151,13 @@ export const PRIORITY_BADGE_VARIANT: Record<
   MEDIUM: "secondary",
   LOW: "outline",
 };
+
+export const MILESTONE_STATUS_BADGE_VARIANT: Record<
+  (typeof MILESTONE_STATUSES)[number],
+  "default" | "secondary" | "success" | "warning" | "destructive" | "outline"
+> = {
+  PLANNED: "outline",
+  IN_PROGRESS: "warning",
+  DONE: "success",
+  AT_RISK: "destructive",
+};
