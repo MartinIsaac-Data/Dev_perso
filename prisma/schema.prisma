@@ -1,0 +1,994 @@
+// MBA Compass — data model
+// PostgreSQL + Prisma. Every domain record hangs off `userId` so the app can
+// grow from single-user to multi-user without a schema rewrite.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile                Profile?
+  careerExperiences      CareerExperience[]
+  projects               Project[]
+  evidence               Evidence[]
+  skills                 Skill[]
+  certifications         Certification[]
+  courses                Course[]
+  education              Education[]
+  leadershipExperiences  LeadershipExperience[]
+  leadershipStories      LeadershipStory[]
+  internationalExperiences InternationalExperience[]
+  mbaPrograms            MBAProgram[]
+  mbaApplications        MBAApplication[]
+  mbaAssessments         MBAAssessment[]
+  goals                  Goal[]
+  roadmaps               Roadmap[]
+  tasks                  Task[]
+  financialPlans         FinancialPlan[]
+  financialTransactions  FinancialTransaction[]
+  aiRecommendations      AIRecommendation[]
+  aiConversations        AIConversation[]
+  reflections            Reflection[]
+  documents              Document[]
+  notifications          Notification[]
+  auditLogs              AuditLog[]
+
+  @@map("users")
+}
+
+enum AppMode {
+  PRE_MBA
+  POST_MBA
+}
+
+model Profile {
+  id       String @id @default(uuid())
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName            String
+  currentLocation      String?
+  dateOfBirth          DateTime?
+  currentJobTitle      String?
+  currentCompany       String?
+  yearsOfExperience    Decimal?  @db.Decimal(4, 1)
+  languages            String[]  @default([])
+  careerGoalShortTerm  String?   @db.Text
+  careerGoalLongTerm   String?   @db.Text
+  mbaRationale         String?   @db.Text
+  mbaTargetYear        Int?
+  professionalInterests String[] @default([])
+  currency             String    @default("EUR")
+  timezone             String    @default("Europe/Paris")
+  appMode              AppMode   @default(PRE_MBA)
+  avatarUrl            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Career
+// ---------------------------------------------------------------------------
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  INTERNSHIP
+  CONTRACT
+  FREELANCE
+}
+
+model CareerExperience {
+  id        String @id @default(uuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  company         String
+  role            String
+  department      String?
+  location        String?
+  startDate       DateTime
+  endDate         DateTime?
+  isCurrent       Boolean        @default(false)
+  employmentType  EmploymentType @default(FULL_TIME)
+  responsibilities String?       @db.Text
+  teamSize        Int?
+  manager         String?
+  countriesCovered String[]      @default([])
+  skillsUsed      String[]       @default([])
+
+  achievements CareerAchievement[]
+  projects     Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("career_experiences")
+}
+
+model CareerAchievement {
+  id                 String           @id @default(uuid())
+  careerExperienceId String
+  careerExperience   CareerExperience @relation(fields: [careerExperienceId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?  @db.Text
+  date        DateTime?
+  evidence    Evidence[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([careerExperienceId])
+  @@map("career_achievements")
+}
+
+// ---------------------------------------------------------------------------
+// Projects & Impact
+// ---------------------------------------------------------------------------
+
+enum ImpactCategory {
+  COST_REDUCTION
+  REVENUE
+  PRODUCTIVITY
+  TIME_SAVED
+  QUALITY
+  SERVICE_LEVEL
+  INVENTORY
+  FORECAST_ACCURACY
+  CUSTOMER_SATISFACTION
+  RISK_REDUCTION
+  AUTOMATION
+  DIGITAL_TRANSFORMATION
+}
+
+model Project {
+  id        String @id @default(uuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  careerExperienceId String?
+  careerExperience   CareerExperience? @relation(fields: [careerExperienceId], references: [id], onDelete: SetNull)
+
+  name          String
+  company       String?
+  date          DateTime?
+  problem       String? @db.Text
+  context       String? @db.Text
+  objective     String? @db.Text
+  actions       String? @db.Text
+  role          String?
+  stakeholders  String[] @default([])
+  skillsUsed    String[] @default([])
+  tools         String[] @default([])
+  countries     String[] @default([])
+  result        String? @db.Text
+  mbaRelevance  String? @db.Text
+
+  impacts  ProjectImpact[]
+  evidence Evidence[]
+  stories  LeadershipStory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("projects")
+}
+
+model ProjectImpact {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  category      ImpactCategory
+  metricName    String
+  beforeValue   Decimal? @db.Decimal(14, 2)
+  afterValue    Decimal? @db.Decimal(14, 2)
+  unit          String?
+  annualizedValue Decimal? @db.Decimal(14, 2)
+  narrative     String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("project_impacts")
+}
+
+// ---------------------------------------------------------------------------
+// Evidence bank
+// ---------------------------------------------------------------------------
+
+enum EvidenceType {
+  PDF
+  IMAGE
+  EXCEL
+  POWERPOINT
+  WORD
+  CERTIFICATE
+  EMAIL_SCREENSHOT
+  KPI_REPORT
+  MANAGER_FEEDBACK
+  PERFORMANCE_REVIEW
+  OTHER
+}
+
+model Evidence {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  type        EvidenceType
+  date        DateTime?
+  description String?  @db.Text
+  tags        String[] @default([])
+  fileUrl     String?
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  achievementId String?
+  achievement   CareerAchievement? @relation(fields: [achievementId], references: [id], onDelete: SetNull)
+
+  certificationId String?
+  certification   Certification? @relation(fields: [certificationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("evidence")
+}
+
+// ---------------------------------------------------------------------------
+// Skills
+// ---------------------------------------------------------------------------
+
+enum SkillCategory {
+  TECHNICAL
+  BUSINESS
+  LEADERSHIP
+  DATA
+  SUPPLY_CHAIN
+  PROJECT_MANAGEMENT
+  COMMUNICATION
+  LANGUAGE
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+model Skill {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name         String
+  category     SkillCategory
+  currentLevel SkillLevel @default(BEGINNER)
+  targetLevel  SkillLevel @default(ADVANCED)
+  notes        String?    @db.Text
+
+  assessments SkillAssessment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("skills")
+}
+
+model SkillAssessment {
+  id      String @id @default(uuid())
+  skillId String
+  skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  level     SkillLevel
+  assessedAt DateTime @default(now())
+  source     String?
+  notes      String?  @db.Text
+
+  @@index([skillId])
+  @@map("skill_assessments")
+}
+
+// ---------------------------------------------------------------------------
+// Certifications & courses
+// ---------------------------------------------------------------------------
+
+enum CertificationStatus {
+  NOT_STARTED
+  PLANNING
+  IN_PROGRESS
+  EXAM_SCHEDULED
+  PASSED
+  FAILED
+  EXPIRED
+}
+
+model Certification {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name           String
+  provider       String
+  category       String?
+  status         CertificationStatus @default(NOT_STARTED)
+  startDate      DateTime?
+  examDate       DateTime?
+  completionDate DateTime?
+  score          String?
+  cost           Decimal? @db.Decimal(10, 2)
+  currency       String   @default("EUR")
+  expirationDate DateTime?
+  certificateUrl String?
+  notes          String?  @db.Text
+
+  evidence Evidence[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("certifications")
+}
+
+model Course {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  provider    String?
+  type        String? // online course, workshop, conference, professional training
+  completedAt DateTime?
+  hours       Decimal? @db.Decimal(6, 1)
+  notes       String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("courses")
+}
+
+// ---------------------------------------------------------------------------
+// Education
+// ---------------------------------------------------------------------------
+
+model Education {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  degree               String
+  university           String
+  field                String?
+  country              String?
+  startDate            DateTime?
+  endDate              DateTime?
+  gradeGpa             String?
+  honors               String?
+  relevantCoursework   String[] @default([])
+  documentUrl          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("education")
+}
+
+// ---------------------------------------------------------------------------
+// Leadership
+// ---------------------------------------------------------------------------
+
+enum LeadershipType {
+  PROJECT_LEADERSHIP
+  TEAM_LEADERSHIP
+  MENTORING
+  TEACHING
+  COMMUNITY
+  ENTREPRENEURSHIP
+}
+
+model LeadershipExperience {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type            LeadershipType
+  title           String
+  organization    String?
+  role            String?
+  teamSize        Int?
+  startDate       DateTime?
+  endDate         DateTime?
+  isOngoing       Boolean  @default(false)
+  responsibilities String? @db.Text
+  results         String?  @db.Text
+  skillsUsed      String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("leadership_experiences")
+}
+
+enum StoryTag {
+  LEADERSHIP
+  FAILURE
+  CONFLICT
+  INNOVATION
+  TEAMWORK
+  ETHICS
+  INTERNATIONAL
+  PROBLEM_SOLVING
+  ACHIEVEMENT
+  RESILIENCE
+  DIVERSITY
+  CAREER_TRANSITION
+  COMMUNITY
+  ENTREPRENEURSHIP
+}
+
+model LeadershipStory {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  title      String
+  situation  String? @db.Text
+  task       String? @db.Text
+  action     String? @db.Text
+  result     String? @db.Text
+  reflection String? @db.Text
+  tags       StoryTag[] @default([])
+  mbaRelevanceScore Int? // 0-100, self-assessed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("leadership_stories")
+}
+
+// ---------------------------------------------------------------------------
+// International exposure
+// ---------------------------------------------------------------------------
+
+enum InternationalExposureType {
+  WORKED_IN_COUNTRY
+  MANAGED_STAKEHOLDERS
+  MANAGED_SUPPLY
+  INTERNATIONAL_PROJECT
+  INTERNATIONAL_CLIENT
+  MULTICULTURAL_TEAM
+  BUSINESS_TRAVEL
+}
+
+model InternationalExperience {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  country         String
+  company         String?
+  project         String?
+  role            String?
+  type            InternationalExposureType
+  startDate       DateTime?
+  endDate         DateTime?
+  team            String?
+  responsibilities String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("international_experiences")
+}
+
+// ---------------------------------------------------------------------------
+// MBA programs
+// ---------------------------------------------------------------------------
+
+enum ProgramType {
+  FULL_TIME
+  EXECUTIVE
+  PART_TIME
+  ONLINE
+}
+
+model MBAProgram {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  schoolName   String
+  programName  String
+  country      String?
+  city         String?
+  campus       String?
+  programType  ProgramType @default(FULL_TIME)
+  durationMonths Int?
+
+  tuition            Decimal? @db.Decimal(12, 2)
+  estimatedLivingCost Decimal? @db.Decimal(12, 2)
+  currency           String   @default("EUR")
+
+  minExperienceYears Decimal? @db.Decimal(4, 1)
+  avgExperienceYears Decimal? @db.Decimal(4, 1)
+  gmatRequirement    String?
+  greRequirement     String?
+  englishRequirement String?
+
+  officialWebsite String?
+  notes           String? @db.Text
+
+  isPrimaryTarget Boolean   @default(false)
+  isArchived      Boolean   @default(false)
+  targetIntake    String?   // e.g. "August 2030"
+  targetYear      Int?
+  lastVerifiedAt  DateTime?
+  sourceUrl       String?
+
+  requirements MBARequirement[]
+  deadlines    MBADeadline[]
+  scholarships MBAScholarship[]
+  applications MBAApplication[]
+  assessments  MBAAssessment[]
+  dimensionWeights MBADimensionWeight[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("mba_programs")
+}
+
+model MBARequirement {
+  id        String     @id @default(uuid())
+  programId String
+  program   MBAProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  label       String
+  value       String?
+  notes       String?
+  lastVerifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programId])
+  @@map("mba_requirements")
+}
+
+model MBADeadline {
+  id        String     @id @default(uuid())
+  programId String
+  program   MBAProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  round     String
+  deadline  DateTime
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programId])
+  @@map("mba_deadlines")
+}
+
+enum ScholarshipStatus {
+  RESEARCHING
+  PLANNED
+  APPLYING
+  SUBMITTED
+  AWARDED
+  REJECTED
+}
+
+model MBAScholarship {
+  id        String     @id @default(uuid())
+  programId String
+  program   MBAProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  name         String
+  amount       Decimal? @db.Decimal(12, 2)
+  currency     String   @default("EUR")
+  eligibility  String?  @db.Text
+  deadline     DateTime?
+  status       ScholarshipStatus @default(RESEARCHING)
+  requirements String? @db.Text
+  website      String?
+  notes        String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programId])
+  @@map("mba_scholarships")
+}
+
+// Configurable scoring weights per program (percentage points, should total 100)
+model MBADimensionWeight {
+  id        String     @id @default(uuid())
+  programId String
+  program   MBAProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  dimensionKey String // matches ScoringDimension.key
+  weight       Decimal @db.Decimal(5, 2)
+
+  @@unique([programId, dimensionKey])
+  @@map("mba_dimension_weights")
+}
+
+model ScoringDimension {
+  key           String  @id
+  label         String
+  description   String? @db.Text
+  defaultWeight Decimal @db.Decimal(5, 2)
+  sortOrder     Int     @default(0)
+
+  @@map("scoring_dimensions")
+}
+
+// A computed, explainable readiness snapshot
+model MBAAssessment {
+  id        String     @id @default(uuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programId String
+  program   MBAProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  totalScore Int
+  isSimulation Boolean @default(false)
+  scenarioLabel String?
+  breakdown  Json // { dimensionKey: { score, weight, weighted, target, gap, factors: [{label, score}], recommendations: [] } }
+
+  computedAt DateTime @default(now())
+
+  @@index([userId, programId])
+  @@map("mba_assessments")
+}
+
+enum ApplicationStatus {
+  RESEARCHING
+  PREPARING
+  READY
+  SUBMITTED
+  INTERVIEW
+  ADMITTED
+  WAITLISTED
+  REJECTED
+}
+
+model MBAApplication {
+  id        String     @id @default(uuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programId String
+  program   MBAProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  intake String?
+  round  String?
+  deadline DateTime?
+  status ApplicationStatus @default(RESEARCHING)
+
+  cvReady            Boolean @default(false)
+  essaysReady        Boolean @default(false)
+  recommendationsReady Boolean @default(false)
+  transcriptReady    Boolean @default(false)
+  testScoreReady     Boolean @default(false)
+  englishTestReady   Boolean @default(false)
+  passportReady      Boolean @default(false)
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("mba_applications")
+}
+
+// ---------------------------------------------------------------------------
+// Goals, roadmap, tasks
+// ---------------------------------------------------------------------------
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model Goal {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String? @db.Text
+  horizon     String? // short-term, long-term
+  targetDate  DateTime?
+  isAchieved  Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("goals")
+}
+
+model Roadmap {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name       String
+  startYear  Int
+  endYear    Int
+  isActive   Boolean @default(true)
+
+  milestones RoadmapMilestone[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("roadmaps")
+}
+
+enum MilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  AT_RISK
+}
+
+model RoadmapMilestone {
+  id        String  @id @default(uuid())
+  roadmapId String
+  roadmap   Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+
+  year        Int
+  title       String
+  objective   String? @db.Text
+  deadline    DateTime?
+  status      MilestoneStatus @default(PLANNED)
+  priority    Priority @default(MEDIUM)
+  kpi         String?
+  dependsOnId String?
+  dependsOn   RoadmapMilestone? @relation("MilestoneDeps", fields: [dependsOnId], references: [id], onDelete: SetNull)
+  dependents  RoadmapMilestone[] @relation("MilestoneDeps")
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roadmapId])
+  @@map("roadmap_milestones")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+model Task {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?  @db.Text
+  category    String?
+  priority    Priority   @default(MEDIUM)
+  status      TaskStatus @default(TODO)
+  deadline    DateTime?
+
+  milestoneId String?
+  milestone   RoadmapMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("tasks")
+}
+
+// ---------------------------------------------------------------------------
+// Financial plan
+// ---------------------------------------------------------------------------
+
+model FinancialPlan {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  targetProgramId String?
+  targetYear      Int?
+  tuition         Decimal? @db.Decimal(12, 2)
+  livingCost      Decimal? @db.Decimal(12, 2)
+  travelCost      Decimal? @db.Decimal(12, 2)
+  visaCost        Decimal? @db.Decimal(12, 2)
+  insuranceCost   Decimal? @db.Decimal(12, 2)
+  otherCost       Decimal? @db.Decimal(12, 2)
+  currency        String   @default("EUR")
+
+  currentSavings         Decimal @default(0) @db.Decimal(12, 2)
+  monthlyContribution    Decimal @default(0) @db.Decimal(12, 2)
+  annualContributionGrowthPct Decimal @default(0) @db.Decimal(5, 2)
+  expectedAnnualReturnPct     Decimal @default(0) @db.Decimal(5, 2)
+
+  scholarshipTarget Decimal @default(0) @db.Decimal(12, 2)
+  employerSponsorship Decimal @default(0) @db.Decimal(12, 2)
+  studentLoanTarget Decimal @default(0) @db.Decimal(12, 2)
+  familySupport     Decimal @default(0) @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("financial_plans")
+}
+
+model FinancialTransaction {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label    String
+  amount   Decimal  @db.Decimal(12, 2)
+  currency String   @default("EUR")
+  date     DateTime @default(now())
+  category String? // savings-contribution, scholarship, certification-cost, other
+  notes    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("financial_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// AI
+// ---------------------------------------------------------------------------
+
+model AIRecommendation {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title          String
+  reason         String  @db.Text
+  recommendedAction String @db.Text
+  expectedImpact String? @db.Text
+  deadline       DateTime?
+  priority       Priority @default(MEDIUM)
+  source         String   @default("rule_engine") // rule_engine | ai_advisor | monthly_review | quarterly_review
+  isDismissed    Boolean  @default(false)
+  isCompleted    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("ai_recommendations")
+}
+
+model AIConversation {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title    String  @default("New conversation")
+  messages Json[]  @default([]) // [{role, content, createdAt}]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("ai_conversations")
+}
+
+model Reflection {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      String // monthly_review | quarterly_review
+  periodLabel String // e.g. "2027-03" or "2027-Q1"
+  content   Json // structured review content
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("reflections")
+}
+
+// ---------------------------------------------------------------------------
+// Documents, notifications, audit
+// ---------------------------------------------------------------------------
+
+model Document {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title    String
+  type     String?
+  fileUrl  String?
+  notes    String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("documents")
+}
+
+model Notification {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title    String
+  message  String
+  category String? // deadline | certification | scholarship | financial | roadmap | evidence | review
+  isRead   Boolean @default(false)
+  dueAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("audit_logs")
+}
