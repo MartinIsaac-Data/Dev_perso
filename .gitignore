@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# netlify
+.netlify
+deploy-*.zip
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
