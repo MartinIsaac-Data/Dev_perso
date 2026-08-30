@@ -116,6 +116,16 @@ Optional (AI Advisor):
 None of these are ever sent to the client — they're read only in server-side code (Server
 Actions, Route Handlers, the Prisma client, the AI provider module).
 
+## Deployment
+
+Live on Netlify: https://mba-compass-swcvm8.netlify.app (auto-deploys from
+`claude/mba-compass-build-swcvm8` via the Next.js Runtime, `netlify.toml`).
+
+On top of the required env vars above, set on the hosting platform:
+
+- `AUTH_TRUST_HOST` — `true` (Auth.js v5 needs this on any host that isn't Vercel)
+- `NODE_VERSION` — `22`
+
 ## Database
 
 `prisma/schema.prisma` defines the full data model. Highlights:
