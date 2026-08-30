@@ -39,7 +39,15 @@ const PERIODS = [
   { value: "year", label: "Cette année" },
 ];
 
-const CHART_COLORS = ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#db2777"];
+// Validated categorical palette (dataviz skill, references/palette.md) — fixed
+// hue order, passes CVD-safety checks. Not brand-derived: the brand palette
+// (bottle green + brass) is too narrow in hue to separate 7+ categories
+// safely, so status/payment-method breakdowns use this instead.
+const CHART_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
+// Single-series charts (one hue = magnitude, no CVD pairing needed) use the
+// brand identity directly.
+const CHART_PRIMARY = "#1F3A32";
+const CHART_BRASS = "#B8935A";
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState("month");
@@ -86,7 +94,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Paiements en attente</CardTitle>
           </CardHeader>
-          <CardContent className="text-xl font-semibold text-amber-600 dark:text-amber-400">
+          <CardContent className="text-xl font-semibold text-warning">
             {data ? formatMoney(data.kpis.paymentsPending) : <Skeleton className="h-6 w-24" />}
           </CardContent>
         </Card>
@@ -103,7 +111,7 @@ export default function DashboardPage() {
             <CardTitle>Bénéfice estimé (mois en cours)</CardTitle>
           </CardHeader>
           <CardContent
-            className={`text-xl font-semibold ${data && data.kpis.estimatedProfit < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`}
+            className={`text-xl font-semibold ${data && data.kpis.estimatedProfit < 0 ? "text-destructive" : "text-success"}`}
           >
             {data ? formatMoney(data.kpis.estimatedProfit) : <Skeleton className="h-6 w-24" />}
           </CardContent>
@@ -125,7 +133,7 @@ export default function DashboardPage() {
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v: number) => formatMoney(v)} />
-                  <Line type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="total" stroke={CHART_PRIMARY} strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -168,7 +176,7 @@ export default function DashboardPage() {
                   <XAxis type="number" tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v: number) => formatMoney(v)} />
-                  <Bar dataKey="revenue" fill="#2563eb" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="revenue" fill={CHART_BRASS} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -212,7 +220,7 @@ export default function DashboardPage() {
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: number) => formatMoney(v)} />
-                <Bar dataKey="revenue" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenue" fill={CHART_PRIMARY} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

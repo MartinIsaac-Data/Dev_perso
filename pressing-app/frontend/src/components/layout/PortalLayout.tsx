@@ -1,7 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { LogOut, Plus, Shirt } from "lucide-react";
+import { LogOut, Plus } from "lucide-react";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/cn";
 
 export function PortalLayout() {
@@ -11,12 +12,7 @@ export function PortalLayout() {
     <div className="min-h-screen bg-muted/30">
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-3xl items-center justify-between p-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Shirt className="h-4 w-4" />
-            </div>
-            <span className="font-semibold">Pressing Étoile</span>
-          </div>
+          <Logo size="sm" />
           <nav className="flex items-center gap-1 text-sm">
             <NavLink
               to="/portal/orders"

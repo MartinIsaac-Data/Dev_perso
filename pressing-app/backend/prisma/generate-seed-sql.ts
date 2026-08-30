@@ -66,7 +66,7 @@ async function main() {
 
   // --- Branches (Cameroon: Douala + Yaoundé) --------------------------
   const branchDouala = insertRow("branches", {
-    name: "Pressing Étoile — Akwa, Douala",
+    name: "NMI Clean — Akwa, Douala",
     address: "Avenue de Gaulle, Akwa, Douala",
     phone: "+237 233 42 10 20",
     managerId: null,
@@ -75,7 +75,7 @@ async function main() {
     updatedAt: now,
   });
   const branchYaounde = insertRow("branches", {
-    name: "Pressing Étoile — Bastos, Yaoundé",
+    name: "NMI Clean — Bastos, Yaoundé",
     address: "Rue 1750, Bastos, Yaoundé",
     phone: "+237 222 20 30 40",
     managerId: null,
@@ -443,7 +443,7 @@ async function main() {
 
   // --- Settings -----------------------------------------------------
   const settingDefs: [string, unknown][] = [
-    ["businessName", "Pressing Étoile Cameroun"],
+    ["businessName", "NMI Clean Cameroun"],
     ["phone", "+237 233 42 10 20"],
     ["email", "contact@pressingetoile.cm"],
     ["address", "Avenue de Gaulle, Akwa, Douala"],

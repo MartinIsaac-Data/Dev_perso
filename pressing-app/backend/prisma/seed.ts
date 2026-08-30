@@ -69,10 +69,10 @@ async function main() {
 
   // --- Branches (Cameroon: Douala + Yaoundé) --------------------------
   const branchDouala = await prisma.branch.create({
-    data: { name: "Pressing Étoile — Akwa, Douala", address: "Avenue de Gaulle, Akwa, Douala", phone: "+237 233 42 10 20" },
+    data: { name: "NMI Clean — Akwa, Douala", address: "Avenue de Gaulle, Akwa, Douala", phone: "+237 233 42 10 20" },
   });
   const branchYaounde = await prisma.branch.create({
-    data: { name: "Pressing Étoile — Bastos, Yaoundé", address: "Rue 1750, Bastos, Yaoundé", phone: "+237 222 20 30 40" },
+    data: { name: "NMI Clean — Bastos, Yaoundé", address: "Rue 1750, Bastos, Yaoundé", phone: "+237 222 20 30 40" },
   });
   const branchCity: Record<string, string> = { [branchDouala.id]: "Douala", [branchYaounde.id]: "Yaoundé" };
   const neighborhoods: Record<string, string[]> = {
@@ -391,7 +391,7 @@ async function main() {
   // --- Settings -----------------------------------------------------
   await prisma.setting.createMany({
     data: [
-      { key: "businessName", value: "Pressing Étoile Cameroun" },
+      { key: "businessName", value: "NMI Clean Cameroun" },
       { key: "phone", value: "+237 233 42 10 20" },
       { key: "email", value: "contact@pressingetoile.cm" },
       { key: "address", value: "Avenue de Gaulle, Akwa, Douala" },

@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Role } from "@/types";
 
@@ -52,12 +53,7 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
   const content = (
     <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3">
       <div className="mb-3 flex items-center justify-between px-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Shirt className="h-4 w-4" />
-          </div>
-          <span className="font-semibold">Pressing Étoile</span>
-        </div>
+        <Logo size="sm" />
         <button onClick={onClose} className="rounded p-1 hover:bg-accent lg:hidden" aria-label="Fermer le menu">
           <X className="h-4 w-4" />
         </button>

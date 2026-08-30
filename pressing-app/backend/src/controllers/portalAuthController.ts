@@ -141,7 +141,7 @@ export async function forgotPassword(req: Request, res: Response) {
       where: { id: customer.id },
       data: { resetCodeHash, resetCodeExpiresAt: new Date(Date.now() + RESET_CODE_TTL_MS) },
     });
-    const message = `Votre code de réinitialisation Pressing Étoile : ${code}. Valable 15 minutes.`;
+    const message = `Votre code de réinitialisation NMI Clean : ${code}. Valable 15 minutes.`;
     const sends = [notify("SMS", customer.phone, message), notify("WHATSAPP", customer.phone, message)];
     if (customer.email) {
       sends.push(notify("EMAIL", customer.email, message, { subject: "Réinitialisation de votre mot de passe" }));

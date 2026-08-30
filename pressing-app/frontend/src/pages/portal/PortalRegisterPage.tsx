@@ -1,9 +1,9 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { Shirt } from "lucide-react";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { Logo } from "@/components/Logo";
 
 export default function PortalRegisterPage() {
   const { customer, register } = usePortalAuth();
@@ -38,11 +38,9 @@ export default function PortalRegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Shirt className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-semibold">Créer un compte</h1>
-          <p className="text-sm text-muted-foreground">Réservez vos passages au pressing en ligne</p>
+          <Logo size="lg" withWordmark={false} />
+          <h1 className="font-display text-xl font-medium">Créer un compte</h1>
+          <p className="text-sm text-muted-foreground">Réservez vos passages chez NMI Clean en ligne</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-border bg-card p-6 shadow-sm">

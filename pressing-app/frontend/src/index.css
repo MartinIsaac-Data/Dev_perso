@@ -2,41 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * NMI Clean — Direction B "Premium Textile"
+ * Deep bottle green + muted brass on warm linen. --brass/--success/--warning
+ * are the sparing semantic accents (badges, active nav, focus highlights) —
+ * never used as a general hover surface, that stays on --accent.
+ */
 :root {
-  --background: 210 20% 98%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --border: 214 32% 91%;
-  --muted: 210 20% 95%;
-  --muted-foreground: 215 16% 47%;
-  --primary: 221 83% 53%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 20% 95%;
-  --secondary-foreground: 222 47% 11%;
-  --accent: 210 20% 93%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 210 40% 98%;
-  --radius: 0.6rem;
+  --background: 42 26% 95%;
+  --foreground: 45 8% 10%;
+  --card: 40 30% 97%;
+  --card-foreground: 45 8% 10%;
+  --border: 36 24% 84%;
+  --muted: 40 20% 90%;
+  --muted-foreground: 35 12% 40%;
+  --primary: 162 30% 17%;
+  --primary-foreground: 42 26% 95%;
+  --secondary: 40 20% 90%;
+  --secondary-foreground: 45 8% 10%;
+  --accent: 40 18% 88%;
+  --accent-foreground: 45 8% 10%;
+  --destructive: 10 55% 42%;
+  --destructive-foreground: 42 26% 96%;
+  --brass: 36 40% 54%;
+  --brass-foreground: 45 8% 10%;
+  --success: 145 34% 34%;
+  --success-foreground: 42 26% 96%;
+  --warning: 36 50% 45%;
+  --warning-foreground: 42 26% 96%;
+  --radius: 0.625rem;
 }
 
 .dark {
-  --background: 222 47% 8%;
-  --foreground: 210 20% 96%;
-  --card: 222 40% 11%;
-  --card-foreground: 210 20% 96%;
-  --border: 217 33% 20%;
-  --muted: 217 33% 15%;
-  --muted-foreground: 215 16% 65%;
-  --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 11%;
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 20% 96%;
-  --accent: 217 33% 20%;
-  --accent-foreground: 210 20% 96%;
-  --destructive: 0 63% 56%;
-  --destructive-foreground: 210 20% 96%;
+  --background: 150 14% 8%;
+  --foreground: 42 20% 92%;
+  --card: 150 12% 11%;
+  --card-foreground: 42 20% 92%;
+  --border: 150 10% 20%;
+  --muted: 150 10% 15%;
+  --muted-foreground: 40 10% 65%;
+  --primary: 148 30% 55%;
+  --primary-foreground: 150 14% 8%;
+  --secondary: 150 10% 16%;
+  --secondary-foreground: 42 20% 92%;
+  --accent: 150 10% 18%;
+  --accent-foreground: 42 20% 92%;
+  --destructive: 10 55% 55%;
+  --destructive-foreground: 150 14% 8%;
+  --brass: 36 55% 62%;
+  --brass-foreground: 150 14% 8%;
+  --success: 145 34% 48%;
+  --success-foreground: 150 14% 8%;
+  --warning: 36 50% 55%;
+  --warning-foreground: 150 14% 8%;
 }
 
 * {
@@ -46,7 +64,11 @@
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.font-display {
+  font-family: "Newsreader", ui-serif, Georgia, serif;
 }
 
 ::-webkit-scrollbar {

@@ -105,7 +105,7 @@ class ResendEmailProvider implements NotificationProvider {
       body: JSON.stringify({
         from: this.from,
         to: recipient,
-        subject: subject || "Pressing Étoile",
+        subject: subject || "NMI Clean",
         text: message,
       }),
     });

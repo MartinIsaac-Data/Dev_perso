@@ -358,7 +358,7 @@ function TicketDialog({ open, onClose, orderId }: { open: boolean; onClose: () =
         <div>
           <div id="ticket-print" className="space-y-2 rounded-md border border-border p-4 text-sm">
             <div className="text-center">
-              <p className="font-semibold">{data.business.name}</p>
+              <p className="font-display text-base font-medium">{data.business.name}</p>
               {data.business.address && <p className="text-xs text-muted-foreground">{data.business.address}</p>}
               {data.business.phone && <p className="text-xs text-muted-foreground">{data.business.phone}</p>}
             </div>
@@ -385,13 +385,13 @@ function TicketDialog({ open, onClose, orderId }: { open: boolean; onClose: () =
               </tbody>
             </table>
             <hr className="border-border" />
-            <p className="flex justify-between">
+            <p className="flex justify-between font-display text-base">
               <span>Total</span> <strong>{formatMoney(data.order.total)}</strong>
             </p>
-            <p className="flex justify-between">
+            <p className="flex justify-between text-muted-foreground">
               <span>Payé</span> <span>{formatMoney(data.order.paidAmount)}</span>
             </p>
-            <p className="flex justify-between">
+            <p className="flex justify-between text-muted-foreground">
               <span>Solde</span> <span>{formatMoney(data.order.balance)}</span>
             </p>
             <div className="flex justify-center pt-2">

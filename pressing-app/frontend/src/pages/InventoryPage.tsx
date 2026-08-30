@@ -53,7 +53,7 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-2xl font-semibold">Stock</h1>
           {lowStockCount > 0 && (
-            <p className="flex items-center gap-1 text-sm text-amber-600 dark:text-amber-400">
+            <p className="flex items-center gap-1 text-sm text-warning">
               <AlertTriangle className="h-4 w-4" /> {lowStockCount} produit(s) sous le seuil minimum
             </p>
           )}

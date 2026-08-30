@@ -35,7 +35,7 @@ export function MobileMoneyStatus({
           )}
         </>
       )}
-      {intent.status === "SUCCESS" && <p className="text-sm font-medium text-emerald-600">Paiement confirmé !</p>}
+      {intent.status === "SUCCESS" && <p className="text-sm font-medium text-success">Paiement confirmé !</p>}
       {intent.status === "FAILED" && (
         <>
           <p className="text-sm font-medium text-destructive">Paiement échoué</p>

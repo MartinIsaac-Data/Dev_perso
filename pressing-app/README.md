@@ -1,4 +1,4 @@
-# Pressing Étoile — Application de gestion de pressing
+# NMI Clean — Application de gestion de pressing
 
 Application web complète (POS + back-office) pour la gestion d'un pressing :
 clients, commandes, articles, services, tarification, paiements, caisse,

@@ -1,10 +1,11 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Shirt, CheckCircle2, Circle } from "lucide-react";
+import { Search, CheckCircle2, Circle } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Logo } from "@/components/Logo";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { ORDER_STATUS_FLOW, ORDER_STATUS_LABELS } from "@/lib/statusMeta";
 
@@ -50,10 +51,8 @@ export default function TrackOrderPage() {
     <div className="min-h-screen bg-muted/30 p-4">
       <div className="mx-auto max-w-2xl space-y-6 py-10">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Shirt className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-semibold">Suivre ma commande</h1>
+          <Logo size="lg" withWordmark={false} />
+          <h1 className="font-display text-xl font-medium">Suivre ma commande</h1>
           <p className="text-sm text-muted-foreground">Numéro de commande ou numéro de téléphone</p>
         </div>
 
@@ -102,7 +101,7 @@ export default function TrackOrderPage() {
                     {ORDER_STATUS_FLOW.map((status, i) => (
                       <li key={status} className="flex items-center gap-1.5 text-xs">
                         {i <= currentIndex ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                         ) : (
                           <Circle className="h-3.5 w-3.5 text-muted-foreground" />
                         )}

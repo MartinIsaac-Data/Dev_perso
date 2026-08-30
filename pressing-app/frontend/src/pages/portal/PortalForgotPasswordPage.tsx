@@ -1,9 +1,9 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Shirt } from "lucide-react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { Logo } from "@/components/Logo";
 
 export default function PortalForgotPasswordPage() {
   const navigate = useNavigate();
@@ -48,10 +48,8 @@ export default function PortalForgotPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Shirt className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-semibold">Mot de passe oublié</h1>
+          <Logo size="lg" withWordmark={false} />
+          <h1 className="font-display text-xl font-medium">Mot de passe oublié</h1>
           <p className="text-sm text-muted-foreground">
             {step === "request"
               ? "Recevez un code par SMS, WhatsApp et/ou email pour réinitialiser votre mot de passe"
