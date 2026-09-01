@@ -27,7 +27,7 @@ import {
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/states";
+import { EmptyState, Skeleton } from "@/components/ui/states";
 import { formatMoney } from "@/lib/format";
 import type { DashboardData } from "@/types";
 
@@ -126,6 +126,8 @@ export default function DashboardPage() {
           <CardContent className="h-64">
             {isLoading || !data ? (
               <Skeleton className="h-full w-full" />
+            ) : data.charts.dailyRevenue.length === 0 ? (
+              <EmptyState title="Aucune donnée sur cette période" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.charts.dailyRevenue}>
@@ -147,6 +149,8 @@ export default function DashboardPage() {
           <CardContent className="h-64">
             {isLoading || !data ? (
               <Skeleton className="h-full w-full" />
+            ) : data.charts.ordersByStatus.length === 0 ? (
+              <EmptyState title="Aucune donnée sur cette période" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -169,6 +173,8 @@ export default function DashboardPage() {
           <CardContent className="h-64">
             {isLoading || !data ? (
               <Skeleton className="h-full w-full" />
+            ) : data.charts.topServices.length === 0 ? (
+              <EmptyState title="Aucune donnée sur cette période" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.charts.topServices} layout="vertical" margin={{ left: 24 }}>
@@ -190,6 +196,8 @@ export default function DashboardPage() {
           <CardContent className="h-64">
             {isLoading || !data ? (
               <Skeleton className="h-full w-full" />
+            ) : data.charts.paymentMethodBreakdown.length === 0 ? (
+              <EmptyState title="Aucune donnée sur cette période" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -213,6 +221,8 @@ export default function DashboardPage() {
         <CardContent className="h-64">
           {isLoading || !data ? (
             <Skeleton className="h-full w-full" />
+          ) : data.charts.employeePerformance.length === 0 ? (
+            <EmptyState title="Aucune donnée sur cette période" />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.charts.employeePerformance}>
