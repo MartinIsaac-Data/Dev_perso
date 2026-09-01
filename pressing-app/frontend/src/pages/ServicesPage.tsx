@@ -57,10 +57,10 @@ export default function ServicesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nom</TableHead>
-                <TableHead>Catégorie</TableHead>
+                <TableHead className="hidden md:table-cell">Catégorie</TableHead>
                 <TableHead>Prix standard</TableHead>
-                <TableHead>Prix express</TableHead>
-                <TableHead>Délai</TableHead>
+                <TableHead className="hidden lg:table-cell">Prix express</TableHead>
+                <TableHead className="hidden lg:table-cell">Délai</TableHead>
                 <TableHead>Statut</TableHead>
               </TableRow>
             </TableHeader>
@@ -68,10 +68,10 @@ export default function ServicesPage() {
               {data.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>{s.category}</TableCell>
+                  <TableCell className="hidden md:table-cell">{s.category}</TableCell>
                   <TableCell>{formatMoney(s.price)}</TableCell>
-                  <TableCell>{s.expressPrice ? formatMoney(s.expressPrice) : "—"}</TableCell>
-                  <TableCell>{s.standardDurationHours}h</TableCell>
+                  <TableCell className="hidden lg:table-cell">{s.expressPrice ? formatMoney(s.expressPrice) : "—"}</TableCell>
+                  <TableCell className="hidden lg:table-cell">{s.standardDurationHours}h</TableCell>
                   <TableCell>
                     <button onClick={() => toggleActive(s)} disabled={!hasPermission("services:write")}>
                       <Badge tone={s.active ? "success" : "muted"}>{s.active ? "Actif" : "Inactif"}</Badge>
@@ -139,7 +139,7 @@ function CreateServiceDialog({
           <Label htmlFor="category">Catégorie *</Label>
           <Input id="category" name="category" required placeholder="Lavage, Nettoyage à sec..." />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="price">Prix standard (FCFA) *</Label>
             <Input id="price" name="price" type="number" min="0" required />

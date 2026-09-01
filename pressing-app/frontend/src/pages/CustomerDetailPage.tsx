@@ -92,7 +92,7 @@ export default function CustomerDetailPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>N° commande</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead className="hidden sm:table-cell">Date</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Total</TableHead>
               </TableRow>
@@ -101,7 +101,7 @@ export default function CustomerDetailPage() {
               {data.orders.map((o) => (
                 <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/orders/${o.id}`)}>
                   <TableCell className="font-medium">{o.orderNumber}</TableCell>
-                  <TableCell>{formatDate(o.depositDate)}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{formatDate(o.depositDate)}</TableCell>
                   <TableCell>
                     <Badge tone={ORDER_STATUS_TONE[o.status]}>{ORDER_STATUS_LABELS[o.status]}</Badge>
                   </TableCell>

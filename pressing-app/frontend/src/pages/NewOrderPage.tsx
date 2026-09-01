@@ -124,7 +124,7 @@ export default function NewOrderPage() {
   }
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-36 sm:pb-24">
       <div>
         <h1 className="text-2xl font-semibold">Nouvelle commande</h1>
         <p className="text-sm text-muted-foreground">Client → articles → services → paiement</p>
@@ -319,7 +319,7 @@ export default function NewOrderPage() {
             Le client paie maintenant
           </label>
           {payNow && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Montant</Label>
                 <Input
@@ -347,7 +347,7 @@ export default function NewOrderPage() {
       </Card>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 p-4">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm">
             <p className="text-muted-foreground">
               Sous-total {formatMoney(subtotal)} {deliveryFee ? `+ livraison ${formatMoney(deliveryFee)}` : ""}{" "}
@@ -355,7 +355,7 @@ export default function NewOrderPage() {
             </p>
             <p className="text-lg font-semibold">Total : {formatMoney(total)}</p>
           </div>
-          <Button size="lg" onClick={handleSubmit} disabled={submitting}>
+          <Button size="lg" className="w-full sm:w-auto" onClick={handleSubmit} disabled={submitting}>
             {submitting ? "Création..." : "Créer la commande"}
           </Button>
         </div>

@@ -65,10 +65,10 @@ export default function DeliveriesPage() {
               <TableRow>
                 <TableHead>Commande</TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Adresse</TableHead>
-                <TableHead>Livreur</TableHead>
-                <TableHead>Frais</TableHead>
-                <TableHead>Date prévue</TableHead>
+                <TableHead className="hidden lg:table-cell">Adresse</TableHead>
+                <TableHead className="hidden md:table-cell">Livreur</TableHead>
+                <TableHead className="hidden lg:table-cell">Frais</TableHead>
+                <TableHead className="hidden sm:table-cell">Date prévue</TableHead>
                 <TableHead>Statut</TableHead>
               </TableRow>
             </TableHeader>
@@ -77,10 +77,12 @@ export default function DeliveriesPage() {
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.order?.orderNumber}</TableCell>
                   <TableCell>{d.order?.customer?.fullName}</TableCell>
-                  <TableCell>{[d.address, d.neighborhood, d.city].filter(Boolean).join(", ") || "—"}</TableCell>
-                  <TableCell>{d.deliverer?.fullName ?? "Non assigné"}</TableCell>
-                  <TableCell>{formatMoney(d.fee)}</TableCell>
-                  <TableCell>{formatDate(d.scheduledDate)}</TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    {[d.address, d.neighborhood, d.city].filter(Boolean).join(", ") || "—"}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">{d.deliverer?.fullName ?? "Non assigné"}</TableCell>
+                  <TableCell className="hidden lg:table-cell">{formatMoney(d.fee)}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{formatDate(d.scheduledDate)}</TableCell>
                   <TableCell>
                     {hasPermission("deliveries:write") ? (
                       <Select

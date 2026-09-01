@@ -52,7 +52,7 @@ export default function BranchesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nom</TableHead>
-                <TableHead>Adresse</TableHead>
+                <TableHead className="hidden sm:table-cell">Adresse</TableHead>
                 <TableHead>Téléphone</TableHead>
                 {hasPermission("branches:manage") && <TableHead />}
               </TableRow>
@@ -61,7 +61,7 @@ export default function BranchesPage() {
               {data.map((b) => (
                 <TableRow key={b.id}>
                   <TableCell className="font-medium">{b.name}</TableCell>
-                  <TableCell>{b.address ?? "—"}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{b.address ?? "—"}</TableCell>
                   <TableCell>{b.phone ?? "—"}</TableCell>
                   {hasPermission("branches:manage") && (
                     <TableCell className="text-right">

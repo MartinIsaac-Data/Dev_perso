@@ -73,12 +73,12 @@ export default function EmployeesPage() {
               <TableRow>
                 <TableHead>Nom</TableHead>
                 <TableHead>Rôle</TableHead>
-                <TableHead>Agences</TableHead>
-                <TableHead>Poste</TableHead>
-                <TableHead>Commandes traitées</TableHead>
-                <TableHead>Articles traités</TableHead>
-                <TableHead>CA généré</TableHead>
-                <TableHead>Retards</TableHead>
+                <TableHead className="hidden md:table-cell">Agences</TableHead>
+                <TableHead className="hidden lg:table-cell">Poste</TableHead>
+                <TableHead className="hidden lg:table-cell">Commandes traitées</TableHead>
+                <TableHead className="hidden lg:table-cell">Articles traités</TableHead>
+                <TableHead className="hidden md:table-cell">CA généré</TableHead>
+                <TableHead className="hidden lg:table-cell">Retards</TableHead>
                 <TableHead>Statut</TableHead>
                 {hasPermission("employees:write") && <TableHead />}
               </TableRow>
@@ -90,18 +90,18 @@ export default function EmployeesPage() {
                   <TableCell>
                     <Badge>{e.role}</Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {e.branchIds.length > 1 ? (
                       <Badge>{e.branchIds.length} agences</Badge>
                     ) : (
                       branches?.find((b) => b.id === e.branchIds[0])?.name ?? "—"
                     )}
                   </TableCell>
-                  <TableCell>{e.position ?? "—"}</TableCell>
-                  <TableCell>{e.performance.ordersHandled}</TableCell>
-                  <TableCell>{e.performance.itemsProcessed}</TableCell>
-                  <TableCell>{formatMoney(e.performance.revenueGenerated)}</TableCell>
-                  <TableCell>{e.performance.lateOrders}</TableCell>
+                  <TableCell className="hidden lg:table-cell">{e.position ?? "—"}</TableCell>
+                  <TableCell className="hidden lg:table-cell">{e.performance.ordersHandled}</TableCell>
+                  <TableCell className="hidden lg:table-cell">{e.performance.itemsProcessed}</TableCell>
+                  <TableCell className="hidden md:table-cell">{formatMoney(e.performance.revenueGenerated)}</TableCell>
+                  <TableCell className="hidden lg:table-cell">{e.performance.lateOrders}</TableCell>
                   <TableCell>
                     <Badge tone={e.active ? "success" : "muted"}>{e.active ? "Actif" : "Inactif"}</Badge>
                   </TableCell>
@@ -205,7 +205,7 @@ function EmployeeDialog({
           <Label htmlFor="fullName">Nom complet *</Label>
           <Input id="fullName" name="fullName" required defaultValue={employee?.fullName} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email {!isEdit && "*"}</Label>
             <Input id="email" name="email" type="email" required={!isEdit} disabled={isEdit} defaultValue={employee?.email} />
@@ -215,7 +215,7 @@ function EmployeeDialog({
             <Input id="password" name="password" type="password" minLength={6} required={!isEdit} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="role">Rôle *</Label>
             <Select id="role" name="role" required defaultValue={employee?.role}>

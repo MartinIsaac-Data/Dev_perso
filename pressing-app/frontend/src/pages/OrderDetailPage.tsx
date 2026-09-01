@@ -159,11 +159,11 @@ export default function OrderDetailPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Catégorie</TableHead>
+              <TableHead className="hidden md:table-cell">Catégorie</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Qté</TableHead>
-              <TableHead>Service</TableHead>
-              <TableHead>Prix unitaire</TableHead>
+              <TableHead className="hidden lg:table-cell">Service</TableHead>
+              <TableHead className="hidden lg:table-cell">Prix unitaire</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Photos</TableHead>
             </TableRow>
@@ -171,11 +171,13 @@ export default function OrderDetailPage() {
           <TableBody>
             {order.items.map((item) => (
               <TableRow key={item.id}>
-                <TableCell>{ARTICLE_CATEGORY_LABELS[item.category] ?? item.category}</TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {ARTICLE_CATEGORY_LABELS[item.category] ?? item.category}
+                </TableCell>
                 <TableCell>{item.articleType}</TableCell>
                 <TableCell>{item.quantity}</TableCell>
-                <TableCell>{item.service?.name}</TableCell>
-                <TableCell>{formatMoney(item.unitPrice)}</TableCell>
+                <TableCell className="hidden lg:table-cell">{item.service?.name}</TableCell>
+                <TableCell className="hidden lg:table-cell">{formatMoney(item.unitPrice)}</TableCell>
                 <TableCell className="font-medium">{formatMoney(item.totalPrice)}</TableCell>
                 <TableCell>
                   <ItemPhotos itemId={item.id} canEdit={hasPermission("orders:write")} />
@@ -196,8 +198,8 @@ export default function OrderDetailPage() {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Montant</TableHead>
-                <TableHead>Moyen</TableHead>
-                <TableHead>Référence</TableHead>
+                <TableHead className="hidden sm:table-cell">Moyen</TableHead>
+                <TableHead className="hidden md:table-cell">Référence</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -205,8 +207,8 @@ export default function OrderDetailPage() {
                 <TableRow key={p.id}>
                   <TableCell>{formatDateTime(p.paidAt)}</TableCell>
                   <TableCell className="font-medium">{formatMoney(p.amount)}</TableCell>
-                  <TableCell>{p.method}</TableCell>
-                  <TableCell>{p.reference ?? "—"}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{p.method}</TableCell>
+                  <TableCell className="hidden md:table-cell">{p.reference ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

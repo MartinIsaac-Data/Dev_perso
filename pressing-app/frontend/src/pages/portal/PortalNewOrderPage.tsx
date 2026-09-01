@@ -95,7 +95,7 @@ export default function PortalNewOrderPage() {
   }
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-32 sm:pb-24">
       <div>
         <h1 className="text-2xl font-semibold">Nouvelle réservation</h1>
         <p className="text-sm text-muted-foreground">Choisissez vos articles, le pressing s'occupe du reste.</p>
@@ -211,9 +211,9 @@ export default function PortalNewOrderPage() {
       </Card>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 p-4">
+        <div className="mx-auto flex max-w-3xl flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-lg font-semibold">Total estimé : {formatMoney(total)}</p>
-          <Button size="lg" onClick={handleSubmit} disabled={submitting}>
+          <Button size="lg" className="w-full sm:w-auto" onClick={handleSubmit} disabled={submitting}>
             {submitting ? "Envoi..." : "Envoyer ma réservation"}
           </Button>
         </div>

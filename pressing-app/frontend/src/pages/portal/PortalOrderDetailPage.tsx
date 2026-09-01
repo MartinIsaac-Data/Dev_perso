@@ -104,7 +104,7 @@ export default function PortalOrderDetailPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Catégorie</TableHead>
+              <TableHead className="hidden sm:table-cell">Catégorie</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Qté</TableHead>
               <TableHead>Total</TableHead>
@@ -113,7 +113,9 @@ export default function PortalOrderDetailPage() {
           <TableBody>
             {order.items.map((item) => (
               <TableRow key={item.id}>
-                <TableCell>{ARTICLE_CATEGORY_LABELS[item.category] ?? item.category}</TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  {ARTICLE_CATEGORY_LABELS[item.category] ?? item.category}
+                </TableCell>
                 <TableCell>{item.articleType}</TableCell>
                 <TableCell>{item.quantity}</TableCell>
                 <TableCell className="font-medium">{formatMoney(item.totalPrice)}</TableCell>

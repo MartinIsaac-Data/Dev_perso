@@ -75,10 +75,10 @@ export default function InventoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Produit</TableHead>
-                <TableHead>Catégorie</TableHead>
+                <TableHead className="hidden md:table-cell">Catégorie</TableHead>
                 <TableHead>Stock actuel</TableHead>
-                <TableHead>Stock minimum</TableHead>
-                <TableHead>Fournisseur</TableHead>
+                <TableHead className="hidden lg:table-cell">Stock minimum</TableHead>
+                <TableHead className="hidden lg:table-cell">Fournisseur</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead />
               </TableRow>
@@ -89,14 +89,16 @@ export default function InventoryPage() {
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell>{CATEGORIES.find(([k]) => k === p.category)?.[1] ?? p.category}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {CATEGORIES.find(([k]) => k === p.category)?.[1] ?? p.category}
+                    </TableCell>
                     <TableCell>
                       {p.currentStock} {p.unit}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       {p.minStock} {p.unit}
                     </TableCell>
-                    <TableCell>{p.supplier ?? "—"}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{p.supplier ?? "—"}</TableCell>
                     <TableCell>
                       <Badge tone={low ? "warning" : "success"}>{low ? "Stock bas" : "OK"}</Badge>
                     </TableCell>
@@ -173,7 +175,7 @@ function CreateProductDialog({
           <Label htmlFor="name">Nom *</Label>
           <Input id="name" name="name" required />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="category">Catégorie *</Label>
             <Select id="category" name="category" required>
@@ -189,7 +191,7 @@ function CreateProductDialog({
             <Input id="unit" name="unit" placeholder="bidon, unité..." required />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="currentStock">Stock initial</Label>
             <Input id="currentStock" name="currentStock" type="number" min={0} defaultValue={0} />
@@ -245,7 +247,7 @@ function MovementDialog({ product, onClose, onDone }: { product: Product; onClos
         <p className="text-sm text-muted-foreground">
           Stock actuel : {product.currentStock} {product.unit}
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="type">Type</Label>
             <Select id="type" name="type" defaultValue="ENTRY">

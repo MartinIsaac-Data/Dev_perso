@@ -81,11 +81,11 @@ export default function OrdersPage() {
               <TableRow>
                 <TableHead>N° commande</TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Origine</TableHead>
-                <TableHead>Articles</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead className="hidden lg:table-cell">Origine</TableHead>
+                <TableHead className="hidden lg:table-cell">Articles</TableHead>
+                <TableHead className="hidden sm:table-cell">Date</TableHead>
                 <TableHead>Statut</TableHead>
-                <TableHead>Paiement</TableHead>
+                <TableHead className="hidden md:table-cell">Paiement</TableHead>
                 <TableHead>Total</TableHead>
               </TableRow>
             </TableHeader>
@@ -94,13 +94,15 @@ export default function OrdersPage() {
                 <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/orders/${o.id}`)}>
                   <TableCell className="font-medium">{o.orderNumber}</TableCell>
                   <TableCell>{o.customer?.fullName}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{ORDER_SOURCE_LABELS[o.source]}</TableCell>
-                  <TableCell>{o.items?.length ?? 0}</TableCell>
-                  <TableCell>{formatDate(o.depositDate)}</TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
+                    {ORDER_SOURCE_LABELS[o.source]}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">{o.items?.length ?? 0}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{formatDate(o.depositDate)}</TableCell>
                   <TableCell>
                     <Badge tone={ORDER_STATUS_TONE[o.status]}>{ORDER_STATUS_LABELS[o.status]}</Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <Badge tone={PAYMENT_STATUS_TONE[o.paymentStatus]}>{PAYMENT_STATUS_LABELS[o.paymentStatus]}</Badge>
                   </TableCell>
                   <TableCell>{formatMoney(o.total)}</TableCell>

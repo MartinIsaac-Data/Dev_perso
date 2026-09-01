@@ -56,14 +56,14 @@ export default function TrackOrderPage() {
           <p className="text-sm text-muted-foreground">Numéro de commande ou numéro de téléphone</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
           <Input
             placeholder="PR-20260101-0001 ou +237 6..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             required
           />
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading} className="sm:shrink-0">
             <Search className="h-4 w-4" /> {loading ? "Recherche..." : "Rechercher"}
           </Button>
         </form>

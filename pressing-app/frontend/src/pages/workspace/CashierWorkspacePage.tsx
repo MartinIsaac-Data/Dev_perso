@@ -66,18 +66,18 @@ export default function CashierWorkspacePage() {
         <p className="text-sm text-muted-foreground">Espace caissier</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Button size="lg" className="col-span-2 h-16 text-base sm:col-span-1" onClick={() => navigate("/orders/new")}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Button size="lg" className="min-h-16 text-base" onClick={() => navigate("/orders/new")}>
           <Plus className="h-5 w-5" /> Nouvelle commande
         </Button>
-        <Button size="lg" variant="outline" className="h-16" onClick={openSearch}>
+        <Button size="lg" variant="outline" className="min-h-16" onClick={openSearch}>
           <Search className="h-5 w-5" /> Chercher une commande
         </Button>
-        <Button size="lg" variant="outline" className="h-16" onClick={openSearch}>
+        <Button size="lg" variant="outline" className="min-h-16" onClick={openSearch}>
           <UserSearch className="h-5 w-5" /> Chercher un client
         </Button>
-        <Link to="/cash-register" className="col-span-2 sm:col-span-1">
-          <Button size="lg" variant="outline" className="h-16 w-full">
+        <Link to="/cash-register">
+          <Button size="lg" variant="outline" className="min-h-16 w-full">
             <Wallet className="h-5 w-5" /> Ouvrir la caisse
           </Button>
         </Link>
@@ -124,8 +124,8 @@ export default function CashierWorkspacePage() {
               <TableRow>
                 <TableHead>N° commande</TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Heure</TableHead>
-                <TableHead>Statut</TableHead>
+                <TableHead className="hidden sm:table-cell">Heure</TableHead>
+                <TableHead className="hidden md:table-cell">Statut</TableHead>
                 <TableHead>Solde</TableHead>
               </TableRow>
             </TableHeader>
@@ -134,8 +134,8 @@ export default function CashierWorkspacePage() {
                 <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/orders/${o.id}`)}>
                   <TableCell className="font-medium">{o.orderNumber}</TableCell>
                   <TableCell>{o.customer?.fullName}</TableCell>
-                  <TableCell>{formatDateTime(o.depositDate)}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">{formatDateTime(o.depositDate)}</TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <Badge tone={ORDER_STATUS_TONE[o.status]}>{ORDER_STATUS_LABELS[o.status]}</Badge>
                   </TableCell>
                   <TableCell className={Number(o.balance) > 0 ? "font-medium text-destructive" : "text-muted-foreground"}>

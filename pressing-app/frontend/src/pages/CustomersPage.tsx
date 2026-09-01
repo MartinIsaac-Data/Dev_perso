@@ -152,7 +152,7 @@ function CreateCustomerDialog({
           <Label htmlFor="phone">Téléphone *</Label>
           <Input id="phone" name="phone" required />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" />

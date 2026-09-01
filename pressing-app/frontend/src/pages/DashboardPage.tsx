@@ -250,7 +250,7 @@ function KpiCard({
           <Icon className="h-4.5 w-4.5" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-xs text-muted-foreground">{label}</p>
+          <p className="text-xs leading-tight text-muted-foreground">{label}</p>
           {loading || value === undefined ? (
             <Skeleton className="mt-1 h-5 w-16" />
           ) : (

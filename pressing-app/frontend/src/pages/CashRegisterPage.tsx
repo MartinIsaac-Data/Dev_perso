@@ -112,8 +112,8 @@ export default function CashRegisterPage() {
                   <TableRow>
                     <TableHead>Heure</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Méthode</TableHead>
-                    <TableHead>Description</TableHead>
+                    <TableHead className="hidden md:table-cell">Méthode</TableHead>
+                    <TableHead className="hidden lg:table-cell">Description</TableHead>
                     <TableHead>Montant</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -122,8 +122,8 @@ export default function CashRegisterPage() {
                     <TableRow key={t.id}>
                       <TableCell>{formatDateTime(t.createdAt)}</TableCell>
                       <TableCell>{t.type}</TableCell>
-                      <TableCell>{t.method}</TableCell>
-                      <TableCell>{t.description ?? "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell">{t.method}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{t.description ?? "—"}</TableCell>
                       <TableCell className="font-medium">{formatMoney(t.amount)}</TableCell>
                     </TableRow>
                   ))}

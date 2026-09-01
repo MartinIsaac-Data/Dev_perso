@@ -71,9 +71,9 @@ export default function ExpensesPage() {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Catégorie</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Employé</TableHead>
-                <TableHead>Moyen</TableHead>
+                <TableHead className="hidden lg:table-cell">Description</TableHead>
+                <TableHead className="hidden md:table-cell">Employé</TableHead>
+                <TableHead className="hidden md:table-cell">Moyen</TableHead>
                 <TableHead>Montant</TableHead>
               </TableRow>
             </TableHeader>
@@ -82,9 +82,9 @@ export default function ExpensesPage() {
                 <TableRow key={e.id}>
                   <TableCell>{formatDate(e.date)}</TableCell>
                   <TableCell>{CATEGORIES.find(([k]) => k === e.category)?.[1] ?? e.category}</TableCell>
-                  <TableCell>{e.description ?? "—"}</TableCell>
-                  <TableCell>{e.employee?.fullName ?? "—"}</TableCell>
-                  <TableCell>{e.paymentMethod}</TableCell>
+                  <TableCell className="hidden lg:table-cell">{e.description ?? "—"}</TableCell>
+                  <TableCell className="hidden md:table-cell">{e.employee?.fullName ?? "—"}</TableCell>
+                  <TableCell className="hidden md:table-cell">{e.paymentMethod}</TableCell>
                   <TableCell className="font-medium">{formatMoney(e.amount)}</TableCell>
                 </TableRow>
               ))}
@@ -130,7 +130,7 @@ function ExpenseDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
   return (
     <Dialog open={open} onClose={onClose} title="Nouvelle dépense">
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="amount">Montant (FCFA) *</Label>
             <Input id="amount" name="amount" type="number" min={1} required />

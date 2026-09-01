@@ -98,9 +98,9 @@ export default function ReportsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Commande</TableHead>
-                      <TableHead>Date</TableHead>
+                      <TableHead className="hidden sm:table-cell">Date</TableHead>
                       <TableHead>Client</TableHead>
-                      <TableHead>Statut</TableHead>
+                      <TableHead className="hidden md:table-cell">Statut</TableHead>
                       <TableHead>Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -108,9 +108,9 @@ export default function ReportsPage() {
                     {data.orders.map((o: { orderNumber: string; date: string; customer: string; status: string; total: number }) => (
                       <TableRow key={o.orderNumber}>
                         <TableCell>{o.orderNumber}</TableCell>
-                        <TableCell>{o.date}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{o.date}</TableCell>
                         <TableCell>{o.customer}</TableCell>
-                        <TableCell>{o.status}</TableCell>
+                        <TableCell className="hidden md:table-cell">{o.status}</TableCell>
                         <TableCell>{formatMoney(o.total)}</TableCell>
                       </TableRow>
                     ))}
