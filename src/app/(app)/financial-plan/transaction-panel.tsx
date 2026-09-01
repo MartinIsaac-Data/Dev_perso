@@ -69,7 +69,7 @@ export function TransactionPanel({ transactions }: { transactions: Transaction[]
                 <Label>Label</Label>
                 <Input {...register("label", { required: true })} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label>Amount</Label>
                   <Input type="number" step="0.01" {...register("amount", { required: true })} />
@@ -79,7 +79,7 @@ export function TransactionPanel({ transactions }: { transactions: Transaction[]
                   <Input {...register("currency")} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label>Date</Label>
                   <Input type="date" {...register("date", { required: true })} />

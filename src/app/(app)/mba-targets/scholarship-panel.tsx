@@ -100,7 +100,7 @@ export function ScholarshipPanel({
                 <Label>Name</Label>
                 <Input {...register("name", { required: true })} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label>Amount</Label>
                   <Input type="number" min="0" {...register("amount")} />

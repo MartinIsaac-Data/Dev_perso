@@ -170,7 +170,7 @@ export function ApplicationFormDialog({
           </div>
           <div>
             <Label className="mb-2 block">Document checklist</Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               {CHECKLIST_FIELDS.map((f) => (
                 <label key={f.key} className="flex items-center gap-2 text-sm">
                   <Checkbox

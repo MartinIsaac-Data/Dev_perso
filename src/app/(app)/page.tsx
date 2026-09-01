@@ -308,7 +308,7 @@ export default async function DashboardPage() {
                 Number(financialPlan.familySupport);
               const gap = totalCost - plannedFunding;
               return (
-                <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Estimated cost</p>
                     <p className="font-medium tabular-nums">

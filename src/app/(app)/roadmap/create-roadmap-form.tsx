@@ -29,7 +29,7 @@ export function CreateRoadmapForm({ suggestedEndYear }: { suggestedEndYear: numb
         <Label htmlFor="name">Roadmap name</Label>
         <Input id="name" {...register("name", { required: true })} />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="startYear">Start year</Label>
           <Input id="startYear" type="number" {...register("startYear", { required: true })} />
