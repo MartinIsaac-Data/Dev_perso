@@ -80,7 +80,7 @@ export default function OrdersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>N° commande</TableHead>
-                <TableHead>Client</TableHead>
+                <TableHead className="hidden sm:table-cell">Client</TableHead>
                 <TableHead className="hidden lg:table-cell">Origine</TableHead>
                 <TableHead className="hidden lg:table-cell">Articles</TableHead>
                 <TableHead className="hidden sm:table-cell">Date</TableHead>
@@ -92,8 +92,13 @@ export default function OrdersPage() {
             <TableBody>
               {data.data.map((o) => (
                 <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/orders/${o.id}`)}>
-                  <TableCell className="font-medium">{o.orderNumber}</TableCell>
-                  <TableCell>{o.customer?.fullName}</TableCell>
+                  <TableCell className="font-medium">
+                    {o.orderNumber}
+                    <span className="block text-xs font-normal text-muted-foreground sm:hidden">
+                      {o.customer?.fullName}
+                    </span>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">{o.customer?.fullName}</TableCell>
                   <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
                     {ORDER_SOURCE_LABELS[o.source]}
                   </TableCell>
