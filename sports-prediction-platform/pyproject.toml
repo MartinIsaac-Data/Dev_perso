@@ -1,0 +1,114 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sports-prediction-platform"
+version = "0.1.0"
+description = "Plateforme probabiliste d'analyse de matchs sportifs"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "structlog>=24.4",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    "redis>=5.2",
+    "httpx>=0.28",
+    "tenacity>=9.0",
+    "orjson>=3.10",
+]
+
+[project.optional-dependencies]
+ml = [
+    "polars>=1.14",
+    "numpy>=2.1",
+    "scipy>=1.14",
+    "scikit-learn>=1.5",
+    "lightgbm>=4.5",
+    "shap>=0.46",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.119",
+    "mypy>=1.13",
+    "ruff>=0.8",
+    "import-linter>=2.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["spp"]
+
+# ---------------------------------------------------------------------------
+#  Ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["spp", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # isort
+    "N",           # pep8-naming
+    "UP",          # pyupgrade
+    "B",           # bugbear
+    "A",           # builtins shadowing  <- garde-fou contre un second "platform"
+    "C4",          # comprehensions
+    "DTZ",         # datetimes sans fuseau  <- critique pour le point-in-time
+    "RUF",
+]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+# ---------------------------------------------------------------------------
+#  Mypy — strict sur le noyau quantitatif, permissif ailleurs pour l'instant
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["spp.core.*", "spp.common.*", "spp.valuation.*", "spp.market.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+strict_equality = true
+warn_return_any = true
+
+# ---------------------------------------------------------------------------
+#  Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "integration: nécessite une base de données",
+    "leakage: test anti-fuite — doit passer avant tout backtest",
+]
+# Une DeprecationWarning dans NOTRE code est une erreur. Celles des
+# bibliothèques tierces sont ignorées nommément, jamais en bloc : chaque
+# ignore documente ce qu'il masque et pourra être retiré à la mise à jour.
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["spp"]
+omit = ["*/migrations/*"]

@@ -109,6 +109,46 @@ marché inefficace : il a un bug, une fuite de données, ou un mauvais
 
 ---
 
+## État du code
+
+**Phase 1 terminée** — socle exécutable, frontières de modules appliquées en
+CI, neuf ADR. Les phases 2 à 10 sont décrites dans
+[la roadmap](docs/13-mvp-et-roadmap.md).
+
+| Phase | Contenu | État |
+| --- | --- | --- |
+| 1 | Architecture et socle : paquet `spp`, API, CI, qualité, ADR | **fait** |
+| 2 | Base de données : migrations, repository point-in-time | à faire |
+| 3 | Ingestion de données | à faire |
+| 4 | Feature engineering | à faire |
+| 5-6 | Modèle statistique, ML et ensemble | à faire |
+| 7 | Backtesting | à faire |
+| 8-10 | API, frontend, production | à faire |
+
+### Démarrer
+
+```bash
+make setup          # environnement virtuel + dépendances de développement
+make up             # Postgres (5433) et Redis (6380) ; le schéma est appliqué au 1er démarrage
+make test           # 85 tests
+make lint           # ruff + mypy + frontières de modules
+make api            # API sur http://localhost:8000/docs
+```
+
+### Ce que la phase 1 garantit déjà
+
+| Garantie | Comment elle est vérifiée |
+| --- | --- |
+| Le schéma SQL s'applique sans erreur | `make schema-check` sur une base jetable, exécuté en CI |
+| Les modèles ne peuvent pas lire le marché en douce | Contrat `import-linter`, **testé en cassant volontairement la règle** |
+| Le noyau ne dépend d'aucune infrastructure | Contrat `import-linter` |
+| Le dénouement des paris est correct, lignes asiatiques en quarts comprises | 40 tests unitaires + 6 invariants vérifiés par génération (Hypothesis) |
+| Aucun horodatage naïf n'entre dans le domaine | `ensure_utc` lève, règle `ruff DTZ` |
+| Kelly quasi complet est refusé par la configuration | Validation Pydantic au démarrage |
+| Les énumérations Python et les contraintes SQL disent la même chose | Test de contrat sur `sql/schema.sql` |
+
+---
+
 ## Plan du dossier
 
 | # | Document | Répond aux questions |

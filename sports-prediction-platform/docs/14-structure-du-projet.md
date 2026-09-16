@@ -26,7 +26,8 @@ sports-prediction-platform/
 │   ├── schema.sql                 # DDL de référence, exécutable
 │   └── analytics/                 # requêtes DuckDB pour les backtests
 │
-├── platform/                      # ← le paquet Python principal
+├── spp/                           # ← le paquet Python principal
+│   #   (PAS `platform` : c'est un module de la stdlib — voir ADR-0009)
 │   │
 │   ├── core/                      # domaine pur, ne dépend de rien
 │   │   ├── entities.py            # Match, Competitor, Selection…
@@ -180,7 +181,7 @@ sports-prediction-platform/
 │   └── package.json
 │
 ├── notebooks/                     # exploration UNIQUEMENT, jamais en prod
-│   └── README.md                  # "aucun notebook n'est importé par platform/"
+│   └── README.md                  # "aucun notebook n'est importé par spp/"
 │
 ├── tests/
 │   ├── unit/
@@ -211,7 +212,13 @@ sports-prediction-platform/
 
 ## 2. Les décisions de structure qui comptent
 
-### 2.1 Un seul paquet `platform/`, pas un mono-repo de services
+> **Correction apportée en phase 1.** Ce document proposait initialement un
+> paquet nommé `platform/`. C'est un **module de la bibliothèque standard
+> Python** : un paquet de premier niveau portant ce nom le masque pour tout le
+> processus, y compris pour les dépendances qui l'importent. Le paquet
+> s'appelle donc `spp`. Voir [ADR-0009](adr/0009-nom-du-paquet-spp.md).
+
+### 2.1 Un seul paquet `spp/`, pas un mono-repo de services
 
 Les imports sont directs, le typage traverse tout le système, et le
 refactoring est mécanique. Les frontières sont appliquées par
@@ -222,40 +229,48 @@ refactoring est mécanique. Les frontières sont appliquées par
 name = Couches de la plateforme
 type = layers
 layers =
-    platform.api
-    platform.backtest
-    platform.valuation
-    platform.models
-    platform.market
-    platform.features
-    platform.canonical
-    platform.ingestion
-    platform.db
-    platform.core
+    spp.api
+    spp.backtest
+    spp.valuation
+    spp.models
+    spp.market
+    spp.features
+    spp.canonical
+    spp.ingestion
+    spp.db
+    spp.core
 
 [importlinter:contract:features-independent-of-models]
 name = Les features ne connaissent pas les modèles
 type = forbidden
-source_modules = platform.features
-forbidden_modules = platform.models
+source_modules = spp.features
+forbidden_modules = spp.models
 
 [importlinter:contract:models-independent-of-market]
 name = Les modèles ne lisent pas le marché directement
 type = forbidden
-source_modules = platform.models.statistical, platform.models.ml
-forbidden_modules = platform.market
+source_modules = spp.models.statistical, spp.models.ml
+forbidden_modules = spp.market
 ```
+
+Un quatrième contrat garde le domaine pur : `spp.core` ne peut importer ni
+SQLAlchemy, ni FastAPI, ni Redis, ni httpx.
 
 Le troisième contrat est le plus important : il rend **impossible** qu'un
 modèle aille chercher les cotes en douce. Le marché n'entre que par
-`platform.models.ensemble`, où il est un argument explicite de fonction.
+`spp.models.ensemble`, où il est un argument explicite de fonction.
 C'est le double comptage rendu visible par la structure du code.
+
+**Vérifié, pas supposé** : une violation délibérée a été introduite
+(`spp/models/statistical/_violation_probe.py` important `spp.market`) puis
+retirée. `lint-imports` la signale et sort en code 1, ce qui casse la CI. Un
+contrat qui n'a jamais échoué n'est pas un contrat.
 
 ### 2.2 `notebooks/` est une impasse volontaire
 
-Aucun module de `platform/` n'importe quoi que ce soit de `notebooks/`, et
+Aucun module de `spp/` n'importe quoi que ce soit de `notebooks/`, et
 la CI le vérifie. Les notebooks servent à explorer ; dès qu'une idée est
-retenue, elle est réimplémentée dans `platform/` avec des tests. C'est la
+retenue, elle est réimplémentée dans `spp/` avec des tests. C'est la
 seule façon d'éviter le classique « le modèle de production est un notebook
 exporté ».
 
@@ -282,7 +297,7 @@ un défaut de crédibilité disproportionné par rapport à sa cause.
 | Langue de la documentation | **Français** (ce dossier) |
 | Commits | Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`) |
 | Branches | `main` protégée · `feat/*`, `fix/*` · PR obligatoire |
-| Formatage | `ruff format` · `ruff check` · `mypy --strict` sur `platform/core` et `platform/valuation` |
+| Formatage | `ruff format` · `ruff check` · `mypy` strict sur `spp.core`, `spp.common`, `spp.valuation` et `spp.market` |
 | Typage | Annotations obligatoires sur toute fonction publique |
 | Tests | Couverture > 85 % sur `core`, `valuation`, `market`, `features` |
 | Secrets | Jamais en dépôt · `.env.example` documente chaque variable |

@@ -1,0 +1,46 @@
+# Services locaux. Les ports sont décalés (5433, 6380) pour ne pas entrer en
+# conflit avec un Postgres ou un Redis déjà installés sur la machine.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: spp
+      POSTGRES_PASSWORD: spp
+      POSTGRES_DB: spp
+    ports: ["5433:5432"]
+    volumes:
+      - spp_pgdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spp -d spp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["6380:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["uvicorn", "spp.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      SPP_DATABASE_URL: postgresql+psycopg://spp:spp@postgres:5432/spp
+      SPP_REDIS_URL: redis://redis:6379/0
+      SPP_LOG_FORMAT: json
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    profiles: ["full"]
+
+volumes:
+  spp_pgdata:

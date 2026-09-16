@@ -1,0 +1,66 @@
+[importlinter]
+root_package = spp
+include_external_packages = True
+
+# ---------------------------------------------------------------------------
+#  Contrat 1 — les couches. Une couche n'importe que celles du dessous.
+# ---------------------------------------------------------------------------
+[importlinter:contract:layers]
+name = Couches de la plateforme
+type = layers
+layers =
+    spp.api
+    spp.backtest
+    spp.valuation
+    spp.models
+    spp.market
+    spp.features
+    spp.canonical
+    spp.ingestion
+    spp.db
+    spp.core
+    spp.common
+
+# ---------------------------------------------------------------------------
+#  Contrat 2 — les features ignorent les modèles qui les consomment.
+#  Sans cela on ne peut plus recalculer le feature store sans charger un modèle.
+# ---------------------------------------------------------------------------
+[importlinter:contract:features-independent-of-models]
+name = Les features ne connaissent pas les modeles
+type = forbidden
+source_modules =
+    spp.features
+forbidden_modules =
+    spp.models
+    spp.valuation
+
+# ---------------------------------------------------------------------------
+#  Contrat 3 — LE contrat anti-double-comptage.
+#  Les modèles statistiques et ML ne lisent jamais le marché directement :
+#  la probabilité de marché n'entre que par spp.models.ensemble, en argument
+#  explicite de fonction. Le double comptage devient visible dans la signature.
+# ---------------------------------------------------------------------------
+[importlinter:contract:models-blind-to-market]
+name = Les modeles statistiques et ML ne lisent pas le marche
+type = forbidden
+source_modules =
+    spp.models.statistical
+    spp.models.ml
+forbidden_modules =
+    spp.market
+
+# ---------------------------------------------------------------------------
+#  Contrat 4 — le domaine est pur.
+# ---------------------------------------------------------------------------
+[importlinter:contract:core-is-pure]
+name = Le noyau ne depend d'aucune infrastructure
+type = forbidden
+source_modules =
+    spp.core
+forbidden_modules =
+    sqlalchemy
+    fastapi
+    redis
+    httpx
+    spp.db
+    spp.api
