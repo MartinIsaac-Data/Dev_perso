@@ -1,0 +1,161 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject AuthSession Session
+@inject FilterState Filters
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject UiState Ui
+@inject IJSRuntime JS
+
+@if (!_ready)
+{
+    <div class="splash">Loading Broli S&amp;OP Portal…</div>
+}
+else if (IsLoginPage)
+{
+    @Body
+}
+else if (Session.IsAuthenticated)
+{
+    @if (Ui.Busy) { <div class="loading-bar" aria-hidden="true"></div> }
+    <div class="shell @(Ui.MeetingMode ? "meeting" : "") @(_navOpen ? "nav-open" : "")">
+        <aside class="sidebar" aria-label="Main navigation">
+            <div class="brand"><div class="brand-mark">B</div><div>Broli <small>S&amp;OP Portal</small></div></div>
+            <nav class="nav" @onclick="() => _navOpen = false">
+                <div class="nav-section">Steering</div>
+                @NavItem("", "◧", "Executive", Permissions.ExecutiveView, NavLinkMatch.All)
+                @NavItem("demand", "↗", "Demand", Permissions.DemandView)
+                @NavItem("supply", "⇄", "Supply", Permissions.SupplyView)
+                @NavItem("inventory", "▦", "Inventory", Permissions.InventoryView)
+                @NavItem("risks", "⚑", "Risks", Permissions.RisksView)
+                <div class="nav-section">Phase 2</div>
+                @Planned("MRP", "∑") @Planned("Raw Materials", "⬡") @Planned("Finished Goods", "▣") @Planned("Films", "◫")
+                @Planned("Transit", "⛴") @Planned("Suppliers", "⚙") @Planned("S&OP Actions", "☑")
+                <div class="nav-section">Administration</div>
+                @NavItem("data", "⤓", "Data Management", Permissions.DataImport)
+                @NavItem("admin", "⚿", "Administration", Permissions.UsersManage, NavLinkMatch.All)
+                @NavItem("admin/config", "⚙", "Configuration", Permissions.ConfigEdit)
+                @NavItem("admin/audit", "☰", "Audit Log", Permissions.AuditView)
+            </nav>
+            <div class="sidebar-foot">Phase 1 MVP · data via REST API</div>
+        </aside>
+        <div class="main">
+            <header class="topbar">
+                <button class="icon-btn menu-btn" @onclick="() => _navOpen = !_navOpen" aria-label="Menu">☰</button>
+                <span class="title">Broli S&amp;OP Portal</span>
+                <GlobalSearch />
+                <span class="spacer"></span>
+                <button class="icon-btn" title="Meeting / TV mode" @onclick="Ui.ToggleMeeting">@(Ui.MeetingMode ? "⤡ Exit meeting" : "⤢ Meeting")</button>
+                <button class="icon-btn" title="Full screen" @onclick="FullScreen" aria-label="Full screen">⛶</button>
+                <div class="user-chip">
+                    <button class="icon-btn" style="border:0;padding:0 4px" @onclick="() => _userMenu = !_userMenu" aria-haspopup="true">
+                        <span class="avatar">@Initials</span>
+                        <span class="who"><b>@Session.User?.DisplayName</b>@string.Join(", ", Session.User?.Roles ?? [])</span>
+                    </button>
+                    @if (_userMenu)
+                    {
+                        <div class="backdrop" @onclick="() => _userMenu = false"></div>
+                        <div class="dropdown" @onclick="() => _userMenu = false">
+                            <div style="padding:8px 10px" class="muted">Signed in as <b>@Session.User?.Username</b></div>
+                            <button @onclick="@(() => SetTheme(null))">Theme: system</button>
+                            <button @onclick="@(() => SetTheme("light"))">Theme: light</button>
+                            <button @onclick="@(() => SetTheme("dark"))">Theme: dark</button>
+                            <a href="account">Change password</a>
+                            <button @onclick="SignOut">Sign out</button>
+                        </div>
+                    }
+                </div>
+            </header>
+            @if (_dataStatus?.HasDemoData == true)
+            {
+                <div class="demo-banner" role="status"><b>DEMO DATA</b> All figures are fictitious demonstration data. They are removed automatically by the first real master-data import.</div>
+            }
+            <FilterBar />
+            <main class="content">@Body</main>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _ready;
+    private bool _navOpen;
+    private bool _userMenu;
+    private DataStatus? _dataStatus;
+
+    private bool IsLoginPage => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("login", StringComparison.OrdinalIgnoreCase);
+    private string Initials => string.Concat((Session.User?.DisplayName ?? "?").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+
+    protected override void OnInitialized()
+    {
+        Ui.Changed += Refresh;
+        Session.Changed += Refresh;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Session.RestoreAsync();
+        await Filters.RestoreAsync();
+        _ready = true;
+        if (!Session.IsAuthenticated && !IsLoginPage)
+        {
+            var back = Nav.ToBaseRelativePath(Nav.Uri);
+            Nav.NavigateTo(back.Length > 0 ? $"login?returnUrl={Uri.EscapeDataString("/" + back)}" : "login");
+        }
+        else if (Session.IsAuthenticated)
+        {
+            await LoadShellDataAsync();
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadShellDataAsync()
+    {
+        try
+        {
+            Filters.Options ??= await Api.GetAsync<FilterOptions>("api/filters/options");
+            _dataStatus = await Api.GetAsync<DataStatus>("api/data/status");
+        }
+        catch (ApiException) { /* the page itself shows the error */ }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _userMenu = false;
+        if (_ready && !Session.IsAuthenticated && !IsLoginPage) Nav.NavigateTo("login");
+        else if (_ready && Session.IsAuthenticated && Filters.Options is null) _ = InvokeAsync(async () => { await LoadShellDataAsync(); StateHasChanged(); });
+        else if (_ready && Session.IsAuthenticated && e.Location.Contains("/data")) _ = InvokeAsync(async () => { await LoadShellDataAsync(); StateHasChanged(); });
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    private async Task SignOut()
+    {
+        await Session.SignOutAsync();
+        Filters.Options = null;
+        Nav.NavigateTo("login");
+    }
+
+    private async Task FullScreen() => await JS.InvokeVoidAsync("sop.toggleFullscreen");
+    private async Task SetTheme(string? theme) => await JS.InvokeVoidAsync("sop.setTheme", theme);
+
+    private RenderFragment NavItem(string href, string icon, string label, string permission, NavLinkMatch match = NavLinkMatch.Prefix) => __builder =>
+    {
+        if (!Session.Can(permission)) return;
+        <NavLink href="@href" Match="match"><span class="ico">@icon</span>@label</NavLink>
+    };
+
+    private RenderFragment Planned(string label, string icon) => __builder =>
+    {
+        <NavLink href="@($"planned/{Uri.EscapeDataString(label)}")"><span class="ico">@icon</span>@label<span class="badge-phase">P2</span></NavLink>
+    };
+
+    public void Dispose()
+    {
+        Ui.Changed -= Refresh;
+        Session.Changed -= Refresh;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}

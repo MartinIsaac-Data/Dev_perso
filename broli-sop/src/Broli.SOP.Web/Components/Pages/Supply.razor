@@ -1,0 +1,198 @@
+@page "/supply"
+@inherits SopPage
+
+<PageTitle>Supply · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.SupplyView">
+    <PageHeader Title="Supply &amp; Open Orders" Question="Which orders are late, and which ones arrive after we run out?" Period="_d?.Period">
+        <Actions><ExportMenu Dataset="supply" Query="_q" /></Actions>
+    </PageHeader>
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            var s = d.Summary;
+            <div class="kpis">
+                @Tile("Open Orders", s.OpenLines.ToString("N0"), "PO lines", $"{Fmt.Num(s.OpenTc, 1)} TC on order", "neutral", "open")
+                @Tile("TC in Transit", Fmt.Num(s.InTransitTc, 1), "TC", "Shipped, at port or in customs", "neutral", "transit")
+                @Tile("TC at Port", Fmt.Num(s.AtPortTc, 1), "TC", "At port or in customs clearance", s.AtPortTc > 0 ? "watch" : "neutral", "port")
+                @Tile("Late Orders", s.LateLines.ToString("N0"), "PO lines", $"{s.CriticalLines} arrive after the projected stockout", s.CriticalLines > 0 ? "bad" : s.LateLines > 0 ? "watch" : "good", "late")
+                @Tile("OTIF", Fmt.Pct(s.OtifPct), null, $"Deliveries in period · avg delay {Fmt.Num(s.AvgDelayDays, 1)} d · transit {Fmt.Num(s.AvgTransitDays, 0)} d", "neutral", "delivered")
+            </div>
+
+            <div class="grid g-3 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Arrivals — next 12 weeks</h2><span class="hint">TC by ETA week</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Height="240" Labels="d.ArrivalsByWeekTc.Select(p => p.Label).ToList()" Unit="TC" AriaLabel="Containers arriving by week"
+                                  Datasets="@([new ChartDataset("Arrivals", d.ArrivalsByWeekTc.Select(p => p.Value).ToList(), "--series-1",
+                                              PointColors: d.ArrivalsByWeekTc.Select(p => p.Key == "overdue" ? "--serious" : "--series-1").ToList())])" />
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Open lines by status</h2><span class="hint">PO lines</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Horizontal="true" Height="240" Labels="d.ByStatus.Select(p => p.Label).ToList()" Unit="lines" AriaLabel="Open lines per status"
+                                  Datasets="@([new ChartDataset("Lines", d.ByStatus.Select(p => p.Value).ToList(), "--series-1")])"
+                                  OnClick="c => FilterStatus(d.ByStatus[c.Index].Key)" />
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>ETA risk</h2><span class="hint">open lines · click to list</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Height="240" Labels="d.RiskLevels.Select(p => p.Label).ToList()" Unit="lines" AriaLabel="Open lines per ETA risk level"
+                                  Datasets="@([new ChartDataset("Lines", d.RiskLevels.Select(p => p.Value).ToList(), "--series-1",
+                                              PointColors: d.RiskLevels.Select(p => StatusColors.For(p.Label)).ToList())])"
+                                  OnClick="c => SetView(RiskView(d.RiskLevels[c.Index].Key))" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <ViewTabs Current="@(_q.View ?? "open")" OnSelect="SetView"
+                          Items="@([("open", "Open"), ("late", "Late"), ("critical", "Critical"), ("watch", "Watch"), ("transit", "In transit"), ("port", "At port / customs"), ("delivered", "Delivered in period"), ("all", "All")])" />
+                <div class="table-tools">
+                    <input type="search" placeholder="Search PO, CArtSAP, product, supplier, BL…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
+                    <span class="muted">Risk: ETA after projected stockout = Critical · after required date = Supply Risk · within the safety window = Watch.</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr>
+                                <Th Query="_q" Field="PoNumber" OnChanged="LoadRows">PO</Th>
+                                <Th Query="_q" Field="Product" OnChanged="LoadRows">Product</Th>
+                                <Th Query="_q" Field="Supplier" OnChanged="LoadRows">Supplier</Th>
+                                <Th Query="_q" Field="Quantity" Numeric OnChanged="LoadRows">Quantity</Th>
+                                <Th Query="_q" Field="Tc" Numeric OnChanged="LoadRows">TC</Th>
+                                <Th Query="_q" Field="Etd" OnChanged="LoadRows">ETD</Th>
+                                <Th Query="_q" Field="Eta" OnChanged="LoadRows">ETA</Th>
+                                <Th Query="_q" Field="RequiredDate" OnChanged="LoadRows">Required</Th>
+                                <Th Query="_q" Field="Status" OnChanged="LoadRows">Status</Th>
+                                <Th Query="_q" Field="DelayDays" Numeric OnChanged="LoadRows">Delay</Th>
+                                <Th Query="_q" Field="Risk" OnChanged="LoadRows">Risk</Th>
+                                @if (_canEdit) { <th></th> }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _rows?.Items ?? [])
+                            {
+                                <tr class="click" @onclick="@(() => Go($"products/{Uri.EscapeDataString(r.CArtSap)}"))">
+                                    <td class="code">@r.PoNumber<span class="sub">@Fmt.Date(r.OrderDate)</span></td>
+                                    <td><b>@r.Product</b><span class="sub">@r.CArtSap · @r.Category</span></td>
+                                    <td>@r.Supplier<span class="sub">@r.Country @(r.Port is null ? "" : "→ " + r.Port)</span></td>
+                                    <td class="num">@Fmt.Num(r.Quantity) <span class="muted">@r.Unit</span></td>
+                                    <td class="num">@Fmt.Num(r.Tc, 1)</td>
+                                    <td class="nowrap">@Fmt.Date(r.Etd)</td>
+                                    <td class="nowrap"><b>@Fmt.Date(r.ActualArrival ?? r.Eta)</b>@if (r.ActualArrival is not null) {<span class="sub">arrived</span>}</td>
+                                    <td class="nowrap">@Fmt.Date(r.RequiredDate)</td>
+                                    <td><span class="badge st-neutral">@r.Status</span>@if (r.CustomsStatus is not null) {<span class="sub">@r.CustomsStatus</span>}</td>
+                                    <td class="num">@(r.DelayDays is > 0 ? $"{r.DelayDays} d" : Fmt.Empty)</td>
+                                    <td><StatusBadge Status="@r.RiskLevel" />@if (r.RiskReason is not null) {<span class="sub">@r.RiskReason</span>}</td>
+                                    @if (_canEdit) { <td><button class="btn sm" @onclick="() => Edit(r)" @onclick:stopPropagation>Update</button></td> }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_rows is { Total: 0 }) { <div class="empty">No supply line matches this view and filter.</div> }
+                </div>
+                <Pager Query="_q" Total="@(_rows?.Total ?? 0)" OnChanged="LoadRows" />
+            </div>
+        }
+    </LoadState>
+
+    @if (_edit is not null)
+    {
+        <div class="modal-back" @onclick="() => _edit = null">
+            <div class="modal" @onclick:stopPropagation role="dialog" aria-modal="true" aria-label="Update supply line">
+                <div class="modal-head"><h2>Update PO @_edit.PoNumber — @_edit.Product</h2><button class="icon-btn" @onclick="() => _edit = null">✕</button></div>
+                <div class="modal-body">
+                    @if (_editError is not null) { <div class="alert error">@_editError</div> }
+                    <div class="form">
+                        <div class="field"><label>ETD</label><input type="date" @bind="_etd" /></div>
+                        <div class="field"><label>ETA</label><input type="date" @bind="_eta" /></div>
+                        <div class="field"><label>Status</label>
+                            <select @bind="_status">@foreach (var o in Filters.Options?.Statuses ?? []) { <option value="@o.Value">@o.Label</option> }</select>
+                        </div>
+                        <div class="field"><label>Actual arrival</label><input type="date" @bind="_arrival" /><div class="help">Required when status is Delivered.</div></div>
+                        <div class="field full"><label>Customs status</label><input @bind="_customs" maxlength="200" /></div>
+                    </div>
+                    <p class="muted" style="margin-bottom:0">Every change is recorded in the audit log (user, date, old and new value).</p>
+                </div>
+                <div class="modal-foot">
+                    <button class="btn" @onclick="() => _edit = null">Cancel</button>
+                    <button class="btn primary" @onclick="SaveEdit" disabled="@_saving">Save</button>
+                </div>
+            </div>
+        </div>
+    }
+</RequirePermission>
+
+@code {
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+    [SupplyParameterFromQuery(Name = "search")] public string? SearchParam { get; set; }
+
+    private SupplyDashboard? _d;
+    private PagedResult<SupplyRow>? _rows;
+    private readonly TableQuery _q = new();
+    private bool _canEdit => Session.Can(Permissions.SupplyEdit);
+
+    private SupplyRow? _edit;
+    private DateOnly? _etd, _eta, _arrival;
+    private string? _status, _customs, _editError;
+    private bool _saving;
+
+    protected override async Task LoadAsync(CancellationToken ct)
+    {
+        if (_q.View != View) _q.Sort = null;
+        _q.View = View ?? "open";
+        if (SearchParam is not null && _q.Search is null) _q.Search = SearchParam;
+        _q.Page = 1;
+        var dash = Api.GetAsync<SupplyDashboard>("api/supply", Filter, ct: ct);
+        var rows = Api.GetAsync<PagedResult<SupplyRow>>("api/supply/rows", Filter, _q, ct);
+        _d = await dash;
+        _rows = await rows;
+    }
+
+    private async Task LoadRows()
+    {
+        try { _rows = await Api.GetAsync<PagedResult<SupplyRow>>("api/supply/rows", Filter, _q); }
+        catch (ApiException ex) { Console.Error.WriteLine(ex.Message); }
+    }
+
+    private Task SearchChanged() { _q.Page = 1; return LoadRows(); }
+    private void SetView(string v) => Go($"supply?view={v}");
+    private static string RiskView(string? key) => key switch { "Critical" => "critical", "SupplyRisk" => "late", "Watch" => "watch", _ => "open" };
+    private Task FilterStatus(string? status) => status is null ? Task.CompletedTask : Filters.UpdateAsync(f => f.Statuses = [status]);
+
+    private void Edit(SupplyRow r)
+    {
+        _edit = r;
+        _etd = r.Etd; _eta = r.Eta; _arrival = r.ActualArrival; _customs = r.CustomsStatus;
+        _status = Filters.Options?.Statuses.FirstOrDefault(o => o.Label == r.Status)?.Value ?? r.Status.Replace(" ", "");
+        _editError = null;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (_edit is null) return;
+        _saving = true;
+        _editError = null;
+        try
+        {
+            await Api.SendAsync(HttpMethod.Put, $"api/supply/{_edit.Id}", new SupplyUpdateRequest(_etd, _eta, _arrival, _status, _customs));
+            _edit = null;
+            await ReloadAsync();
+        }
+        catch (ApiException ex) { _editError = ex.Full; }
+        finally { _saving = false; }
+    }
+
+    private RenderFragment Tile(string title, string value, string? unit, string sub, string status, string view) => __builder =>
+    {
+        <button type="button" class="kpi @status" @onclick="() => SetView(view)">
+            <div class="k-title"><span>@title</span><span class="go">›</span></div>
+            <div class="k-value">@value@if (unit is not null) {<span class="u">@unit</span>}</div>
+            <div class="k-sub">@sub</div>
+        </button>
+    };
+}

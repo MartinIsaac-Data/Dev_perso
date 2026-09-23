@@ -1,0 +1,57 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="chart" style="height:@(Height)px" role="img" aria-label="@AriaLabel">
+    <canvas id="@_id"></canvas>
+</div>
+
+@code {
+    [Parameter] public string Type { get; set; } = "bar";
+    [Parameter] public IReadOnlyList<string> Labels { get; set; } = [];
+    [Parameter] public IReadOnlyList<ChartDataset> Datasets { get; set; } = [];
+    [Parameter] public bool Horizontal { get; set; }
+    [Parameter] public bool Stacked { get; set; }
+    [Parameter] public int Height { get; set; } = 260;
+    [Parameter] public string? Unit { get; set; }
+    [Parameter] public double? Max { get; set; }
+    [Parameter] public double? Min { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public EventCallback<ChartClick> OnClick { get; set; }
+
+    private readonly string _id = "c" + Guid.NewGuid().ToString("N")[..10];
+    private DotNetObjectReference<SopChart>? _ref;
+    private string? _signature;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var config = new
+        {
+            type = Type,
+            labels = Labels,
+            datasets = Datasets.Select(d => new { label = d.Label, data = d.Data, color = d.Color, type = d.Type, pointColors = d.PointColors, dashed = d.Dashed }),
+            horizontal = Horizontal,
+            stacked = Stacked,
+            unit = Unit,
+            max = Max,
+            min = Min,
+            clickable = OnClick.HasDelegate,
+        };
+        var signature = System.Text.Json.JsonSerializer.Serialize(config);
+        if (signature == _signature) return;
+        _signature = signature;
+        _ref ??= DotNetObjectReference.Create(this);
+        try { await JS.InvokeVoidAsync("sop.renderChart", _id, config, _ref); }
+        catch (JSDisconnectedException) { }
+    }
+
+    [JSInvokable]
+    public Task OnChartClick(int datasetIndex, int index) => OnClick.InvokeAsync(new ChartClick(datasetIndex, index));
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("sop.destroyChart", _id); }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+        _ref?.Dispose();
+    }
+}

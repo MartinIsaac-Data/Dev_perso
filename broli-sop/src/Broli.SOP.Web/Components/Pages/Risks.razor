@@ -1,0 +1,279 @@
+@page "/risks"
+@inherits SopPage
+
+<PageTitle>Risks · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.RisksView">
+    <PageHeader Title="Risks &amp; Opportunities" Question="What could hurt service or cash — and who is acting on it?" Period="_d?.Period" />
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            <div class="kpis k4">
+                @Tile("Detected risks", d.DetectedCount.ToString(), "found automatically in the current data", d.DetectedCount > 0 ? "watch" : "good")
+                @Tile("Critical", d.CriticalCount.ToString(), "stockout or ETA after stockout", d.CriticalCount > 0 ? "bad" : "good")
+                @Tile("Open in register", d.OpenRegisterCount.ToString(), "tracked risks & opportunities", "neutral")
+                @Tile("Overdue actions", d.OverdueActions.ToString(), "due date passed, not closed", d.OverdueActions > 0 ? "bad" : "good")
+            </div>
+
+            <div class="grid g-32 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Detected risks by category</h2><span class="hint">click to filter the list</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Horizontal="true" Height="@(Math.Max(140, d.DetectedByCategory.Count * 30 + 40))" Unit="risks"
+                                  Labels="d.DetectedByCategory.Select(p => p.Label).ToList()" AriaLabel="Detected risks per category"
+                                  Datasets="@([new ChartDataset("Risks", d.DetectedByCategory.Select(p => p.Value).ToList(), "--series-1")])"
+                                  OnClick="c => PickCategory(d.DetectedByCategory[c.Index].Key)" />
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Register by status</h2></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Height="@(Math.Max(140, d.DetectedByCategory.Count * 30 + 40))" Unit="items" Labels="d.RegisterByStatus.Select(p => p.Label).ToList()"
+                                  AriaLabel="Register items per status"
+                                  Datasets="@([new ChartDataset("Items", d.RegisterByStatus.Select(p => p.Value).ToList(), "--series-1",
+                                              PointColors: d.RegisterByStatus.Select(p => StatusColors.For(p.Label)).ToList())])" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb">
+                <div class="card-head">
+                    <h2>Detected risks</h2>
+                    <div class="toolbar"><ExportMenu Dataset="risks" Query="DetectedQuery" /></div>
+                </div>
+                <div class="table-tools">
+                    <input type="search" placeholder="Search product, PO, category…" @bind="_search" @bind:event="oninput" @bind:after="() => _page = 1" />
+                    <select class="btn sm" @bind="_category" @bind:after="() => _page = 1" aria-label="Category">
+                        <option value="">All categories</option>
+                        @foreach (var c in d.DetectedByCategory) { <option value="@c.Key">@c.Label (@c.Value)</option> }
+                    </select>
+                    <select class="btn sm" @bind="_severity" @bind:after="() => _page = 1" aria-label="Severity">
+                        <option value="">All severities</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option>
+                    </select>
+                </div>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Severity</th><th>Category</th><th>Product</th><th>Risk</th><th>Suggested action</th><th>Due by</th>@if (_canEdit) {<th></th>}</tr></thead>
+                        <tbody>
+                            @foreach (var r in DetectedPage)
+                            {
+                                <tr class="click" @onclick="@(() => Go($"products/{Uri.EscapeDataString(r.CArtSap)}"))">
+                                    <td><StatusBadge Status="@r.Severity" /></td>
+                                    <td>@r.Category</td>
+                                    <td><b>@r.Product</b><span class="sub">@r.CArtSap @(r.Reference is null ? "" : "· PO " + r.Reference)</span></td>
+                                    <td>@r.Title<span class="sub">@r.Detail</span></td>
+                                    <td>@r.SuggestedAction</td>
+                                    <td class="nowrap">@Fmt.Date(r.DueBy)</td>
+                                    @if (_canEdit) { <td><button class="btn sm" title="Add to the register with an owner and a due date" @onclick="() => Track(r)" @onclick:stopPropagation>Track</button></td> }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (!DetectedFiltered.Any()) { <div class="empty">✔ No risk matches.</div> }
+                </div>
+                <div class="pager">
+                    <span>@DetectedFiltered.Count() risks</span>
+                    <button class="btn sm" disabled="@(_page <= 1)" @onclick="() => _page--">‹ Prev</button>
+                    <span>Page @_page / @Math.Max(1, (int)Math.Ceiling(DetectedFiltered.Count() / 15.0))</span>
+                    <button class="btn sm" disabled="@(_page * 15 >= DetectedFiltered.Count())" @onclick="() => _page++">Next ›</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-head">
+                    <h2>Risk &amp; opportunity register</h2>
+                    <div class="toolbar">
+                        @if (_canEdit) { <button class="btn sm primary" @onclick="New">+ New risk / opportunity</button> }
+                        <ExportMenu Dataset="risk-register" Query="_rq" UseFilter="false" />
+                    </div>
+                </div>
+                <ViewTabs Current="@(_rq.View ?? "")" OnSelect="SetRegisterView" Items="@([("", "All"), ("open", "Open"), ("overdue", "Overdue"), ("opportunities", "Opportunities"), ("closed", "Closed")])" />
+                <div class="table-tools">
+                    <input type="search" placeholder="Search ID, description, owner…" @bind="_rq.Search" @bind:event="oninput" @bind:after="LoadRegister" />
+                </div>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr>
+                                <Th Query="_rq" Field="Code" OnChanged="LoadRegister">Risk ID</Th>
+                                <Th Query="_rq" Field="Category" OnChanged="LoadRegister">Category</Th>
+                                <Th Query="_rq" Field="Description" OnChanged="LoadRegister">Description</Th>
+                                <Th Query="_rq" Field="Product" OnChanged="LoadRegister">Product</Th>
+                                <Th Query="_rq" Field="Score" Numeric OnChanged="LoadRegister">Impact × P</Th>
+                                <Th Query="_rq" Field="Owner" OnChanged="LoadRegister">Owner</Th>
+                                <th>Action</th>
+                                <Th Query="_rq" Field="DueDate" OnChanged="LoadRegister">Due</Th>
+                                <Th Query="_rq" Field="Status" OnChanged="LoadRegister">Status</Th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _register?.Items ?? [])
+                            {
+                                <tr class="@(_canEdit ? "click" : "")" @onclick="() => EditItem(r)">
+                                    <td class="code">@r.Code</td>
+                                    <td>@r.Category@if (r.IsOpportunity) {<span class="sub" style="color:var(--good-ink)">Opportunity</span>}</td>
+                                    <td>@r.Description</td>
+                                    <td>@(r.Product ?? Fmt.Empty)<span class="sub">@r.CArtSap</span></td>
+                                    <td class="num"><b>@r.Score</b><span class="sub">@r.Impact · @r.Probability%</span></td>
+                                    <td>@r.Owner</td>
+                                    <td>@r.Action</td>
+                                    <td class="nowrap">@Fmt.Date(r.DueDate)@if (r.IsOverdue) {<span class="sub" style="color:var(--critical-ink)">▲ overdue</span>}</td>
+                                    <td><StatusBadge Status="@r.Status" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_register is { Total: 0 }) { <div class="empty">The register is empty for this view.</div> }
+                </div>
+                <Pager Query="_rq" Total="@(_register?.Total ?? 0)" OnChanged="LoadRegister" />
+            </div>
+        }
+    </LoadState>
+
+    @if (_form is not null)
+    {
+        <div class="modal-back" @onclick="() => _form = null">
+            <div class="modal" @onclick:stopPropagation role="dialog" aria-modal="true" aria-label="Risk">
+                <div class="modal-head"><h2>@(_editId is null ? "New risk / opportunity" : "Edit " + _editCode)</h2><button class="icon-btn" @onclick="() => _form = null">✕</button></div>
+                <div class="modal-body">
+                    @if (_formError is not null) { <div class="alert error">@_formError</div> }
+                    <div class="form">
+                        <div class="field"><label>Category</label>
+                            <select @bind="_form.Category">@foreach (var c in Categories) { <option value="@c">@c</option> }</select></div>
+                        <div class="field"><label>Type</label>
+                            <select @bind="_form.IsOpportunity"><option value="False">Risk</option><option value="True">Opportunity</option></select></div>
+                        <div class="field full"><label>Description</label><textarea @bind="_form.Description" maxlength="1000"></textarea></div>
+                        <div class="field"><label>CArtSAP (optional)</label><input @bind="_form.CArtSap" /></div>
+                        <div class="field"><label>Supplier code (optional)</label><input @bind="_form.SupplierCode" /></div>
+                        <div class="field"><label>Impact</label>
+                            <select @bind="_form.Impact"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>
+                        <div class="field"><label>Probability (%)</label><input type="number" min="0" max="100" @bind="_form.Probability" /></div>
+                        <div class="field"><label>Owner</label><input @bind="_form.Owner" /></div>
+                        <div class="field"><label>Due date</label><input type="date" @bind="_form.DueDate" /></div>
+                        <div class="field full"><label>Action</label><textarea @bind="_form.Action" maxlength="1000"></textarea></div>
+                        <div class="field"><label>Status</label>
+                            <select @bind="_form.Status"><option>Open</option><option value="InProgress">In Progress</option><option>Closed</option></select></div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button class="btn" @onclick="() => _form = null">Cancel</button>
+                    <button class="btn primary" @onclick="Save" disabled="@_saving">Save</button>
+                </div>
+            </div>
+        </div>
+    }
+</RequirePermission>
+
+@code {
+    private static readonly string[] Categories = ["Stockout", "Overstock", "Supply Delay", "Port Delay", "Customs", "Forecast Risk", "Supplier Risk", "Production Risk", "Demand Increase", "Excess Stock"];
+
+    private RiskDashboard? _d;
+    private PagedResult<RiskItemDto>? _register;
+    private readonly TableQuery _rq = new() { Sort = "Score", Desc = true };
+    private string _search = "", _category = "", _severity = "";
+    private int _page = 1;
+    private bool _canEdit => Session.Can(Permissions.RisksEdit);
+
+    private sealed class RiskForm
+    {
+        public string Category { get; set; } = "Stockout";
+        public bool IsOpportunity { get; set; }
+        public string Description { get; set; } = "";
+        public string? CArtSap { get; set; }
+        public string? SupplierCode { get; set; }
+        public string Impact { get; set; } = "Medium";
+        public int Probability { get; set; } = 50;
+        public string Owner { get; set; } = "";
+        public string? Action { get; set; }
+        public DateOnly? DueDate { get; set; }
+        public string Status { get; set; } = "Open";
+    }
+    private RiskForm? _form;
+    private int? _editId;
+    private string? _editCode, _formError;
+    private bool _saving;
+
+    private TableQuery DetectedQuery => new() { Search = _search, View = _category.Length > 0 ? _category : _severity.Length > 0 ? _severity : null };
+
+    private IEnumerable<DetectedRisk> DetectedFiltered => (_d?.Detected ?? [])
+        .Where(r => _category.Length == 0 || r.Category == _category)
+        .Where(r => _severity.Length == 0 || r.Severity == _severity)
+        .Where(r => _search.Length == 0 || $"{r.Category} {r.CArtSap} {r.Product} {r.Title} {r.Detail} {r.Reference}".Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<DetectedRisk> DetectedPage => DetectedFiltered.Skip((_page - 1) * 15).Take(15);
+
+    protected override async Task LoadAsync(CancellationToken ct)
+    {
+        var dash = Api.GetAsync<RiskDashboard>("api/risks", Filter, ct: ct);
+        var reg = Api.GetAsync<PagedResult<RiskItemDto>>("api/risks/register", null, _rq, ct);
+        _d = await dash;
+        _register = await reg;
+        _page = 1;
+    }
+
+    private async Task LoadRegister()
+    {
+        try { _register = await Api.GetAsync<PagedResult<RiskItemDto>>("api/risks/register", null, _rq); }
+        catch (ApiException ex) { Console.Error.WriteLine(ex.Message); }
+    }
+
+    private Task SetRegisterView(string v) { _rq.View = v.Length == 0 ? null : v; _rq.Page = 1; return LoadRegister(); }
+
+    private void PickCategory(string? key) { _category = key ?? string.Empty; _page = 1; }
+
+    private void New() { _editId = null; _form = new RiskForm { DueDate = DateOnly.FromDateTime(DateTime.Today.AddDays(14)), Owner = Session.User?.DisplayName ?? "" }; _formError = null; }
+
+    private void Track(DetectedRisk r)
+    {
+        _editId = null;
+        _formError = null;
+        _form = new RiskForm
+        {
+            Category = Categories.Contains(r.Category) ? r.Category : "Stockout",
+            Description = $"{r.Product}: {r.Title}. {r.Detail}",
+            CArtSap = r.CArtSap,
+            Impact = r.Severity == "Critical" ? "Critical" : r.Severity == "High" ? "High" : "Medium",
+            Probability = r.Severity == "Critical" ? 80 : 50,
+            Owner = Session.User?.DisplayName ?? "",
+            Action = r.SuggestedAction,
+            DueDate = r.DueBy ?? DateOnly.FromDateTime(DateTime.Today.AddDays(7)),
+        };
+    }
+
+    private void EditItem(RiskItemDto r)
+    {
+        if (!_canEdit) return;
+        _editId = r.Id;
+        _editCode = r.Code;
+        _formError = null;
+        _form = new RiskForm
+        {
+            Category = r.Category, IsOpportunity = r.IsOpportunity, Description = r.Description, CArtSap = r.CArtSap, SupplierCode = r.SupplierCode,
+            Impact = r.Impact, Probability = r.Probability, Owner = r.Owner, Action = r.Action, DueDate = r.DueDate, Status = r.Status.Replace(" ", ""),
+        };
+    }
+
+    private async Task Save()
+    {
+        if (_form is null) return;
+        _saving = true;
+        _formError = null;
+        var f = _form;
+        var body = new RiskItemUpsert(f.Category, f.IsOpportunity, f.Description, f.CArtSap, f.SupplierCode, f.Impact, f.Probability, f.Owner, f.Action, f.DueDate, f.Status);
+        try
+        {
+            if (_editId is { } id) await Api.PutAsync<RiskItemDto>($"api/risks/register/{id}", body);
+            else await Api.PostAsync<RiskItemDto>("api/risks/register", body);
+            _form = null;
+            await ReloadAsync();
+        }
+        catch (ApiException ex) { _formError = ex.Full; }
+        finally { _saving = false; }
+    }
+
+    private static RenderFragment Tile(string title, string value, string sub, string status) => __builder =>
+    {
+        <div class="kpi @status"><div class="k-title"><span>@title</span></div><div class="k-value">@value</div><div class="k-sub">@sub</div></div>
+    };
+}

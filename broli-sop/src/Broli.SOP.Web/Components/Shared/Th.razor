@@ -1,0 +1,22 @@
+@* Sortable table header bound to a TableQuery. *@
+<th class="sortable @(Numeric ? "num" : "")" @onclick="Sort" aria-sort="@AriaSort">
+    @ChildContent@if (Query.Sort == Field) {<span class="arrow">@(Query.Desc ? "↓" : "↑")</span>}
+</th>
+
+@code {
+    [Parameter, EditorRequired] public TableQuery Query { get; set; } = default!;
+    [Parameter, EditorRequired] public string Field { get; set; } = "";
+    [Parameter] public bool Numeric { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string AriaSort => Query.Sort != Field ? "none" : Query.Desc ? "descending" : "ascending";
+
+    private async Task Sort()
+    {
+        if (Query.Sort == Field) Query.Desc = !Query.Desc;
+        else { Query.Sort = Field; Query.Desc = Numeric; }
+        Query.Page = 1;
+        await OnChanged.InvokeAsync();
+    }
+}

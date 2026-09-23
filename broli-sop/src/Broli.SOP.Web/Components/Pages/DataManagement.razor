@@ -1,0 +1,242 @@
+@page "/data"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject FilterState Filters
+
+<PageTitle>Data Management · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.DataImport">
+    <PageHeader Title="Data Management" Question="Load the monthly Excel files safely — nothing invalid is ever imported." />
+
+    @if (_status is { } st)
+    {
+        <div class="card mb">
+            <div class="card-head"><h2>Current data</h2>
+                @if (st.HasDemoData) { <button class="btn sm danger" @onclick="() => _confirmPurge = true">Remove DEMO data</button> }
+            </div>
+            <div class="card-body">
+                @if (st.HasDemoData)
+                {
+                    <div class="alert warn">◆ <div><b>DEMO data is loaded.</b> It is removed automatically when you commit the first real SUPPLIER MASTER or PRODUCT MASTER file, so demo figures never mix with real ones. Recommended order: Supplier master → Product master → Inventory, Sales, Forecast, Supply.</div></div>
+                }
+                <div class="facts" style="border:1px solid var(--border);border-radius:8px">
+                    @foreach (var (k, v) in st.RowCounts) { <div><span>@k</span><b>@v.ToString("N0")</b></div> }
+                    <div><span>Latest stock month</span><b>@(st.LatestStockMonth?.ToString("MMM yyyy") ?? Fmt.Empty)</b></div>
+                    <div><span>Last import</span><b>@Fmt.DateTime(st.LastImportUtc)</b></div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="grid g-32 mb">
+        <div class="card">
+            <div class="card-head"><h2>Import an Excel file</h2></div>
+            <div class="card-body">
+                <div class="steps">
+                    <span class="@Step(1)">1 · Choose type</span><span class="@Step(2)">2 · Upload</span><span class="@Step(3)">3 · Validation &amp; preview</span><span class="@Step(4)">4 · Import</span>
+                </div>
+                @if (_error is not null) { <div class="alert error" role="alert">✖ <div>@_error</div></div> }
+                @if (_result is { } res)
+                {
+                    <div class="alert ok">✔ <div><b>Import complete.</b> @res.Inserted rows inserted, @res.Updated updated, @res.Warnings warnings.@(res.PurgedDemoData ? " DEMO data was removed." : "") The dashboards now use this data.</div></div>
+                }
+                <div class="form" style="margin-bottom:12px">
+                    <div class="field">
+                        <label for="type">File type</label>
+                        <select id="type" @bind="_type" @bind:after="ResetPreview">
+                            <option value="">— select —</option>
+                            @foreach (var t in _templates) { <option value="@t.Type">@t.Title</option> }
+                        </select>
+                        @if (Selected is { } sel) { <div class="help">@sel.Description</div> }
+                    </div>
+                    <div class="field">
+                        <label>Excel workbook (.xlsx, max 25 MB)</label>
+                        <InputFile OnChange="Upload" accept=".xlsx" disabled="@(string.IsNullOrEmpty(_type) || _busy)" />
+                        @if (_busy) { <div class="help">Reading and validating…</div> }
+                    </div>
+                </div>
+
+                @if (_preview is { } p)
+                {
+                    <div class="kpis k4" style="margin-top:8px">
+                        <div class="kpi neutral"><div class="k-title">Rows read</div><div class="k-value">@p.RowCount.ToString("N0")</div><div class="k-sub">@p.FileName</div></div>
+                        <div class="kpi @(p.ValidRowCount == p.RowCount ? "good" : "watch")"><div class="k-title">Valid rows</div><div class="k-value">@p.ValidRowCount.ToString("N0")</div></div>
+                        <div class="kpi @(p.ErrorCount > 0 ? "bad" : "good")"><div class="k-title">Errors</div><div class="k-value">@p.ErrorCount</div><div class="k-sub">@(p.ErrorCount > 0 ? "import blocked" : "none")</div></div>
+                        <div class="kpi @(p.WarningCount > 0 ? "watch" : "good")"><div class="k-title">Warnings</div><div class="k-value">@p.WarningCount</div><div class="k-sub">allowed, please review</div></div>
+                    </div>
+                    @if (p.WillPurgeDemoData) { <div class="alert warn">◆ Committing this file will first remove all DEMO data.</div> }
+                    @if (p.Issues.Count > 0)
+                    {
+                        <h3 style="margin:10px 0 6px">Issues</h3>
+                        <div class="table-wrap" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+                            <table class="data">
+                                <thead><tr><th>Severity</th><th class="num">Excel row</th><th>Column</th><th>Message</th></tr></thead>
+                                <tbody>
+                                    @foreach (var i in p.Issues.Take(300))
+                                    {
+                                        <tr><td><StatusBadge Status="@(i.Severity == "Error" ? "Critical" : "Watch")" Text="@i.Severity" /></td>
+                                            <td class="num">@(i.Row == 0 ? "file" : i.Row.ToString())</td><td>@i.Column</td><td>@i.Message</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (p.Issues.Count > 300) { <p class="muted">Showing 300 of @p.Issues.Count issues.</p> }
+                    }
+                    @if (p.SampleRows.Count > 0)
+                    {
+                        <h3 style="margin:14px 0 6px">Preview (first @p.SampleRows.Count rows)</h3>
+                        <div class="table-wrap" style="max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+                            <table class="data">
+                                <thead><tr>@foreach (var c in p.Columns) { <th>@c</th> }</tr></thead>
+                                <tbody>@foreach (var row in p.SampleRows) { <tr>@foreach (var c in p.Columns) { <td>@(row.TryGetValue(c, out var v) ? v : "")</td> }</tr> }</tbody>
+                            </table>
+                        </div>
+                    }
+                    <div class="toolbar" style="margin-top:14px">
+                        <button class="btn primary" disabled="@(!p.CanCommit || _busy)" @onclick="Commit">
+                            @(p.CanCommit ? $"Import {p.ValidRowCount:N0} rows" : "Fix the errors in Excel, then upload again")
+                        </button>
+                        <button class="btn" @onclick="ResetPreview">Cancel</button>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-head"><h2>Standard templates</h2><span class="hint">dark headers = required</span></div>
+            <div class="card-body flush">
+                @foreach (var t in _templates)
+                {
+                    <div class="action-item">
+                        <div style="flex:1"><b>@t.Title</b><p>@t.Description</p><p class="muted" style="font-size:12px">Required: @string.Join(", ", t.RequiredColumns)</p></div>
+                        <button class="btn sm" @onclick="() => DownloadTemplate(t.Type)">⤓ .xlsx</button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head"><h2>Import history</h2></div>
+        <div class="card-body flush table-wrap">
+            <table class="data">
+                <thead><tr><th>Date</th><th>Type</th><th>File</th><th>By</th><th class="num">Rows</th><th class="num">Inserted</th><th class="num">Updated</th><th class="num">Warnings</th></tr></thead>
+                <tbody>
+                    @foreach (var b in _history)
+                    {
+                        <tr><td class="nowrap">@Fmt.DateTime(b.UploadedAtUtc)</td><td>@b.Type</td><td>@b.FileName</td><td>@b.UploadedBy</td>
+                            <td class="num">@b.RowCount.ToString("N0")</td><td class="num">@b.Inserted.ToString("N0")</td><td class="num">@b.Updated.ToString("N0")</td><td class="num">@b.Warnings</td></tr>
+                    }
+                </tbody>
+            </table>
+            @if (_history.Count == 0) { <div class="empty">No file imported yet.</div> }
+        </div>
+    </div>
+
+    @if (_confirmPurge)
+    {
+        <div class="modal-back" @onclick="() => _confirmPurge = false">
+            <div class="modal" style="width:min(480px,100%)" @onclick:stopPropagation role="alertdialog" aria-modal="true">
+                <div class="modal-head"><h2>Remove all DEMO data?</h2></div>
+                <div class="modal-body">Every row flagged DEMO (products, suppliers, facts, risks, demo users) is deleted. Real imported data is kept. This cannot be undone.</div>
+                <div class="modal-foot"><button class="btn" @onclick="() => _confirmPurge = false">Cancel</button><button class="btn primary" @onclick="Purge">Remove DEMO data</button></div>
+            </div>
+        </div>
+    }
+</RequirePermission>
+
+@code {
+    private const long MaxBytes = 25 * 1024 * 1024;
+    private List<ImportTemplateInfo> _templates = [];
+    private List<ImportBatchDto> _history = [];
+    private DataStatus? _status;
+    private string _type = "";
+    private ImportPreview? _preview;
+    private ImportResult? _result;
+    private string? _error;
+    private bool _busy, _confirmPurge;
+
+    private ImportTemplateInfo? Selected => _templates.FirstOrDefault(t => t.Type == _type);
+    private string Step(int n)
+    {
+        var current = _result is not null ? 5 : _preview is not null ? 3 : !string.IsNullOrEmpty(_type) ? 2 : 1;
+        return n < current ? "done" : n == current ? "on" : "";
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _templates = (await Api.GetAsync<List<ImportTemplateInfo>>("api/imports/templates")).ToList();
+            _history = (await Api.GetAsync<List<ImportBatchDto>>("api/imports/history")).ToList();
+            _status = await Api.GetAsync<DataStatus>("api/data/status");
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+
+    private void ResetPreview() { _preview = null; _result = null; _error = null; }
+
+    private async Task Upload(InputFileChangeEventArgs e)
+    {
+        ResetPreview();
+        var file = e.File;
+        if (file.Size > MaxBytes) { _error = "The file is larger than 25 MB."; return; }
+        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)) { _error = "Only .xlsx workbooks are accepted."; return; }
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            buffer.Position = 0;
+            _preview = await Api.UploadAsync<ImportPreview>($"api/imports/preview/{_type}", buffer, file.Name);
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+        catch (IOException ex) { _error = "Upload failed: " + ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Commit()
+    {
+        if (_preview is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            _result = await Api.PostAsync<ImportResult>($"api/imports/{_preview.Id}/commit", new { });
+            _preview = null;
+            Filters.Options = null;
+            Filters.Options = await Api.GetAsync<FilterOptions>("api/filters/options");
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+        finally { _busy = false; }
+    }
+
+    private async Task Purge()
+    {
+        _confirmPurge = false;
+        _busy = true;
+        try
+        {
+            await Api.SendAsync(HttpMethod.Post, "api/imports/purge-demo");
+            Filters.Options = await Api.GetAsync<FilterOptions>("api/filters/options");
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+        finally { _busy = false; }
+    }
+
+    private async Task DownloadTemplate(string type)
+    {
+        try
+        {
+            var (content, name) = await Api.DownloadAsync($"api/imports/templates/{type}");
+            using var stream = new MemoryStream(content);
+            using var streamRef = new DotNetStreamReference(stream);
+            await JS.InvokeVoidAsync("sop.download", name, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", streamRef);
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+}

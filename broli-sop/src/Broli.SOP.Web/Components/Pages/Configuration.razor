@@ -1,0 +1,119 @@
+@page "/admin/config"
+@inject ApiClient Api
+@inject AuthSession Session
+
+<PageTitle>Configuration · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.ConfigEdit">
+    <PageHeader Title="Configuration" Question="Which business rules drive coverage, risks and KPIs?">
+        <Actions><button class="btn primary" @onclick="Save" disabled="@(_s is null || _saving)">Save configuration</button></Actions>
+    </PageHeader>
+    @if (_error is not null) { <div class="alert error" role="alert">✖ <div>@_error</div></div> }
+    @if (_ok) { <div class="alert ok">✔ Saved. All dashboards are recalculated with the new parameters; the change is in the audit log.</div> }
+
+    @if (_s is { } s)
+    {
+        <div class="grid g-2">
+            <div class="card">
+                <div class="card-head"><h2>Coverage</h2><span class="hint">Coverage = available stock ÷ average monthly consumption</span></div>
+                <div class="card-body form">
+                    <div class="field"><label>Consumption basis</label>
+                        <select @bind="s.Coverage.Basis">
+                            <option value="@ConsumptionBasis.Forecast">Forecast (next N months)</option>
+                            <option value="@ConsumptionBasis.History">History (last N months)</option>
+                            <option value="@ConsumptionBasis.MaxOfBoth">Max of forecast and history</option>
+                        </select></div>
+                    <div class="field"><label>Months averaged (N)</label><input type="number" min="1" max="24" @bind="s.Coverage.AverageMonths" /></div>
+                    <div class="field"><label>Critical below (months)</label><input type="number" step="0.1" @bind="s.Coverage.CriticalBelowMonths" /></div>
+                    <div class="field"><label>Risk below (months)</label><input type="number" step="0.1" @bind="s.Coverage.RiskBelowMonths" /></div>
+                    <div class="field"><label>Watch below (months)</label><input type="number" step="0.1" @bind="s.Coverage.WatchBelowMonths" /></div>
+                    <div class="field"><label>Excess above (months)</label><input type="number" step="0.1" @bind="s.Coverage.ExcessAboveMonths" /></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="s.Coverage.IncludeInTransit" /> Count stock in transit as available</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="s.Coverage.IncludeOpenOrders" /> Count all open orders as available</label></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>Forecast &amp; service</h2></div>
+                <div class="card-body form">
+                    <div class="field"><label>On-track tolerance (± %)</label><input type="number" step="1" @bind="s.Forecast.OnTrackTolerancePct" /><div class="help">|Variance %| within this = On Track.</div></div>
+                    <div class="field"><label>Forecast horizon (months)</label><input type="number" min="1" max="24" @bind="s.Forecast.HorizonMonths" /></div>
+                    <div class="field"><label>Accuracy target (%)</label><input type="number" @bind="s.Forecast.AccuracyTargetPct" /></div>
+                    <div class="field"><label>Service level target (%)</label><input type="number" @bind="s.Forecast.ServiceLevelTargetPct" /></div>
+                    <div class="field"><label>Demand increase alert (%)</label><input type="number" @bind="s.Forecast.DemandIncreaseThresholdPct" /></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>Supply &amp; risk engine</h2></div>
+                <div class="card-body form">
+                    <div class="field"><label>ETA watch window (days)</label><input type="number" @bind="s.Supply.WatchWindowDays" /><div class="help">ETA within this many days of the required / stockout date = Watch.</div></div>
+                    <div class="field"><label>On-time tolerance (days)</label><input type="number" @bind="s.Supply.OnTimeToleranceDays" /></div>
+                    <div class="field"><label>In-full tolerance (%)</label><input type="number" @bind="s.Supply.InFullTolerancePct" /></div>
+                    <div class="field"><label>OTIF target (%)</label><input type="number" @bind="s.Supply.OtifTargetPct" /></div>
+                    <div class="field full"><label>Transit days by country (overrides)</label>
+                        <textarea @bind="_transit" placeholder="TR=30&#10;CN=45"></textarea><div class="help">One ISO code per line: CODE=days. Default transit times come from the country reference data.</div></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>Safety stock, TC &amp; general</h2></div>
+                <div class="card-body form">
+                    <div class="field"><label>Default safety stock (months of consumption)</label><input type="number" step="0.1" @bind="s.SafetyStock.DefaultMonths" /></div>
+                    <div class="field"><label>Kg per TC (default)</label><input type="number" step="100" @bind="s.Tc.DefaultKgPerTc" /><div class="help">Used for KG items without a product TC conversion.</div></div>
+                    <div class="field full"><label>Safety stock by product family (overrides)</label>
+                        <textarea @bind="_safety" placeholder="FILMS=1.5&#10;DURUM=1"></textarea><div class="help">One family code per line: CODE=months.</div></div>
+                    <div class="field"><label>Currency</label><input maxlength="5" @bind="s.General.Currency" /></div>
+                    <div class="field"><label>Fiscal year starts in month</label><input type="number" min="1" max="12" @bind="s.General.FiscalYearStartMonth" /></div>
+                    <div class="field full"><label>Departments</label><input @bind="_departments" /><div class="help">Comma-separated.</div></div>
+                </div>
+            </div>
+        </div>
+    }
+</RequirePermission>
+
+@code {
+    private SettingsDto? _s;
+    private string _transit = "", _safety = "", _departments = "";
+    private string? _error;
+    private bool _ok, _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _s = await Api.GetAsync<SettingsDto>("api/settings");
+            _transit = string.Join("\n", _s.Supply.TransitDaysByCountry.Select(kv => $"{kv.Key}={kv.Value}"));
+            _safety = string.Join("\n", _s.SafetyStock.MonthsByCategory.Select(kv => $"{kv.Key}={kv.Value}"));
+            _departments = string.Join(", ", _s.General.Departments);
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+
+    private async Task Save()
+    {
+        if (_s is null) return;
+        _error = null; _ok = false; _saving = true;
+        try
+        {
+            _s.Supply.TransitDaysByCountry = ParseMap(_transit, v => int.TryParse(v, out var d) ? d : (int?)null);
+            _s.SafetyStock.MonthsByCategory = ParseMap(_safety, v => double.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (double?)null);
+            _s.General.Departments = _departments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            await Api.SendAsync(HttpMethod.Put, "api/settings", _s);
+            _ok = true;
+        }
+        catch (FormatException ex) { _error = ex.Message; }
+        catch (ApiException ex) { _error = ex.Full; }
+        finally { _saving = false; }
+    }
+
+    private static Dictionary<string, T> ParseMap<T>(string text, Func<string, T?> parse) where T : struct
+    {
+        var map = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = line.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length != 2 || parts[0].Length == 0 || parse(parts[1].Replace(',', '.')) is not { } v)
+                throw new FormatException($"Invalid line '{line}'. Expected CODE=value.");
+            map[parts[0].ToUpperInvariant()] = v;
+        }
+        return map;
+    }
+}

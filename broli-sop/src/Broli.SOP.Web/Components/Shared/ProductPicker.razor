@@ -1,0 +1,43 @@
+@* Product filter: thousands of SKUs, so it is a type-ahead on the search API rather than a list. *@
+@inject ApiClient Api
+@inject FilterState Filters
+
+<div class="fsel">
+    <button type="button" class="@(Filters.Filter.Products.Count > 0 ? "on" : "")" @onclick="() => _open = !_open">
+        Product @if (Filters.Filter.Products.Count > 0) { <span class="count">@Filters.Filter.Products.Count</span> } <span class="caret">▼</span>
+    </button>
+    @if (_open)
+    {
+        <div class="backdrop" @onclick="() => _open = false"></div>
+        <div class="fpanel">
+            <input type="search" placeholder="Type a CArtSAP or name…" @bind="_q" @bind:event="oninput" @bind:after="Search" />
+            <div class="opts">
+                @foreach (var r in _results)
+                {
+                    <label><input type="checkbox" checked="@Filters.Filter.Products.Contains(r.Key)" @onchange="() => Pick(r.Key)" /> @r.Title</label>
+                }
+                @if (_results.Count == 0) { <div class="empty" style="padding:10px">Type at least 2 characters</div> }
+            </div>
+            <div class="actions">
+                <button type="button" @onclick="Clear">Clear</button>
+                <button type="button" @onclick="() => _open = false">Done</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _open;
+    private string _q = "";
+    private List<SearchResult> _results = [];
+
+    private async Task Search()
+    {
+        if (_q.Trim().Length < 2) { _results = []; return; }
+        try { _results = (await Api.GetAsync<List<SearchResult>>($"api/search?q={Uri.EscapeDataString(_q.Trim())}")).Where(r => r.Type == "Product").ToList(); }
+        catch (ApiException) { _results = []; }
+    }
+
+    private Task Pick(string key) => Filters.UpdateAsync(f => { if (!f.Products.Remove(key)) f.Products.Add(key); });
+    private Task Clear() => Filters.UpdateAsync(f => f.Products.Clear());
+}

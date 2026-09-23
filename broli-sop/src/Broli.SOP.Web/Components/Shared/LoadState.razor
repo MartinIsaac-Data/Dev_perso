@@ -1,0 +1,21 @@
+@* Wraps page content: skeleton while the first load runs, a clear error with retry, otherwise the content. *@
+@if (Error is not null)
+{
+    <div class="alert error" role="alert"><span>✖</span><div><b>Could not load the data.</b> @Error <button class="link-btn" @onclick="OnRetry">Retry</button></div></div>
+}
+else if (!HasData)
+{
+    <div class="kpis">@for (var i = 0; i < 5; i++) {<div class="kpi skeleton" style="border:0"></div>}</div>
+    <div class="grid g-2"><div class="card skeleton" style="height:300px;border:0"></div><div class="card skeleton" style="height:300px;border:0"></div></div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public bool HasData { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
