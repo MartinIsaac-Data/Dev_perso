@@ -58,8 +58,8 @@
                                 @foreach (var o in d.OpenOrders)
                                 {
                                     <tr>
-                                        <td class="code">@o.PoNumber<span class="sub">ordered @Fmt.Date(o.OrderDate)</span></td>
-                                        <td>@o.Supplier<span class="sub">@o.Country @(o.BillOfLading is null ? "" : "· BL " + o.BillOfLading)</span></td>
+                                        <td class="code"><a href="@($"transit?view=all&search={Uri.EscapeDataString(o.PoNumber)}")" title="Shipment tracking">@o.PoNumber</a><span class="sub">ordered @Fmt.Date(o.OrderDate)</span></td>
+                                        <td><a href="@($"suppliers")" title="Supplier performance">@o.Supplier</a><span class="sub">@o.Country @(o.BillOfLading is null ? "" : "· BL " + o.BillOfLading)</span></td>
                                         <td class="num">@Fmt.Num(o.Quantity) <span class="muted">@o.Unit</span><span class="sub">@Fmt.Num(o.Tc, 1) TC</span></td>
                                         <td class="nowrap">@Fmt.Date(o.Etd)</td>
                                         <td class="nowrap"><b>@Fmt.Date(o.Eta)</b>@if (o.TransitDays is { } t) {<span class="sub">@t d transit</span>}</td>

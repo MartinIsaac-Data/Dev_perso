@@ -59,7 +59,12 @@ public sealed class SopReadRepository(SopDbContext db) : ISopReadRepository
         p.Id, p.CArtSap, p.Description, p.Category!.Code, p.Category.Name, p.Brand != null ? p.Brand.Name : null, p.MaterialType,
         p.BaseUnit, p.QtyPerTc, p.UnitCost, p.SafetyStockQty,
         p.MainSupplier != null ? p.MainSupplier.Code : null, p.MainSupplier != null ? p.MainSupplier.Name : null,
-        p.Format, p.Color, p.IsDemo));
+        p.Format, p.Color, p.IsDemo,
+        p.MainSupplier != null ? p.MainSupplier.ProductionLeadDays : null,
+        p.MainSupplier != null ? p.MainSupplier.TransitDays : null,
+        p.MainSupplier != null ? p.MainSupplier.Country!.Code : null,
+        p.MainSupplier != null ? p.MainSupplier.Country!.Name : null,
+        p.MainSupplier != null ? p.MainSupplier.Country!.DefaultTransitDays : null));
 
     public async Task<IReadOnlyList<MonthlyQty>> GetStockByMonthAsync(ProductScope scope, int fromMonthKey, int toMonthKey, CancellationToken ct)
     {
@@ -143,7 +148,8 @@ public sealed class SopReadRepository(SopDbContext db) : ISopReadRepository
                 l.OriginCountry != null ? l.OriginCountry.Name : l.Supplier.Country!.Name,
                 l.Quantity, l.DeliveredQty, l.Containers, l.OrderDate, l.RequiredDate, l.Etd, l.Eta, l.ActualArrival, l.Status,
                 l.Port, l.Booking, l.BillOfLading, l.CustomsStatus,
-                l.Supplier.TransitDays ?? l.Supplier.Country!.DefaultTransitDays))
+                l.OriginCountry != null ? l.OriginCountry.DefaultTransitDays : l.Supplier.Country!.DefaultTransitDays,
+                l.Supplier.TransitDays))
             .ToListAsync(ct);
     }
 

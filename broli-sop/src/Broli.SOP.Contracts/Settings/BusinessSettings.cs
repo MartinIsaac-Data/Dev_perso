@@ -70,6 +70,10 @@ public class SupplySettings
     public double InFullTolerancePct { get; set; } = 95;
     /// <summary>OTIF target, %.</summary>
     public double OtifTargetPct { get; set; } = 90;
+    /// <summary>Days from arrival at port to availability in our warehouse (clearing + delivery). Imports only.</summary>
+    public int PortToWarehouseDays { get; set; } = 7;
+    /// <summary>A supplier below this on-time delivery rate is flagged as a risk, %.</summary>
+    public double SupplierOnTimeAlertPct { get; set; } = 75;
     public Dictionary<string, int> TransitDaysByCountry { get; set; } = new();
 }
 
@@ -88,6 +92,8 @@ public class GeneralSettings
     public string Currency { get; set; } = "XAF";
     /// <summary>1 = January. The fiscal year is named after the calendar year in which it ends.</summary>
     public int FiscalYearStartMonth { get; set; } = 1;
+    /// <summary>Product-family codes shown on the Films dashboard.</summary>
+    public List<string> FilmCategories { get; set; } = ["FILMS"];
     public List<string> Departments { get; set; } =
         ["Direction", "Supply Chain", "Sales", "Finance", "Production", "Warehouse", "Logistics", "IT"];
 }

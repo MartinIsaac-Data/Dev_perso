@@ -58,6 +58,7 @@ public sealed class AnalyticsSnapshot
     public required IReadOnlyDictionary<(int Product, int Month), double> Stock { get; init; }
     public required IReadOnlyDictionary<(int Product, int Month), double> Receipts { get; init; }
     public required IReadOnlyDictionary<(int Product, int Month), double> Consumption { get; init; }
+    public required IReadOnlyDictionary<(int Product, int Month), double> Production { get; init; }
 
     /// <summary>Demand restricted to the agency filter, covering the trend window, the period and the previous period.</summary>
     public required IReadOnlyList<DemandPoint> Demand { get; init; }

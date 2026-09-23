@@ -30,7 +30,12 @@ public record ProductRef(
     string? MainSupplierName,
     string? Format,
     string? Color,
-    bool IsDemo);
+    bool IsDemo,
+    int? SupplierLeadDays = null,
+    int? SupplierTransitDays = null,
+    string? SupplierCountryCode = null,
+    string? SupplierCountryName = null,
+    int? CountryTransitDays = null);
 
 public readonly record struct MonthlyQty(int ProductId, int MonthKey, double Quantity);
 
@@ -57,7 +62,8 @@ public record SupplyLineData(
     string? Booking,
     string? BillOfLading,
     string? CustomsStatus,
-    int? DefaultTransitDays);
+    int? DefaultTransitDays,
+    int? SupplierTransitDays = null);
 
 /// <summary>Query window for supply lines: all open lines plus lines delivered in [DeliveredFrom, DeliveredTo].</summary>
 public record SupplyWindow(DateOnly DeliveredFrom, DateOnly DeliveredTo);

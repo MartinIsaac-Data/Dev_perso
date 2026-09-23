@@ -218,8 +218,8 @@ table.data td.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
 .pager select { height: 28px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
 .empty { padding: 36px 16px; text-align: center; color: var(--text-muted); }
 .bar-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
-.bar-cell .track { width: 60px; height: 6px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
-.bar-cell .fill { height: 100%; border-radius: 3px; }
+.bar-cell .track { display: block; flex: none; width: 60px; height: 6px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
+.bar-cell .fill { display: block; height: 100%; border-radius: 3px; }
 
 /* ---------- Charts ---------- */
 .chart { position: relative; width: 100%; }
@@ -325,3 +325,9 @@ table.data td.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
 #blazor-error-ui { background: var(--critical-bg); color: var(--critical-ink); bottom: 0; box-shadow: 0 -1px 2px rgba(0,0,0,.2); display: none; left: 0; padding: .6rem 1.25rem .7rem; position: fixed; width: 100%; z-index: 1000; }
 #blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: .75rem; top: .5rem; }
 .backdrop { position: fixed; inset: 0; z-index: 65; background: transparent; }
+/* Dense analytical tables (many numeric columns): wrapping headers, tighter cells. */
+table.data.dense { font-size: 12.5px; }
+table.data.dense th { white-space: normal; padding: 7px 7px; font-size: 11px; line-height: 1.25; vertical-align: bottom; }
+table.data.dense td { padding: 7px 7px; }
+table.data.dense td .badge { padding: 1px 7px 1px 5px; font-size: 11.5px; }
+.flags { display: flex; flex-wrap: wrap; gap: 3px; max-width: 170px; }

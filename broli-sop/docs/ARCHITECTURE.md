@@ -45,8 +45,9 @@ Faits (clé de date entière `yyyymmdd`, sans FK dure vers `DIM_DATE` pour ne ja
 | `FACT_SUPPLY` | ligne de PO (PO × produit) | Qté, livré, TC, dates commande / requise / ETD / ETA / arrivée, statut, port, booking, BL, douane |
 | `FACT_PRODUCTION` | mois × produit fini | Planifié, produit |
 
-`FACT_TRANSIT` et `FACT_MRP` de la spécification sont couverts en Phase 1 par les colonnes d'expédition de `FACT_SUPPLY`
-et par le calcul à la volée ; ils deviendront des vues / tables dédiées en Phase 2.
+`FACT_TRANSIT` et `FACT_MRP` de la spécification sont couverts par les colonnes d'expédition de `FACT_SUPPLY` et par le calcul
+à la volée (`TransitService`, `MrpService`) : une ligne de PO = une expédition. Un fractionnement d'une PO en plusieurs expéditions
+nécessiterait une table `FACT_TRANSIT` dédiée (Phase 3, avec l'intégration ERP).
 
 Opérationnel : `SOP_RISK` (registre), `SEC_USER`, `SEC_ROLE`, `SEC_USER_ROLE`, `SEC_ROLE_PERMISSION`, `SYS_AUDIT_LOG`,
 `SYS_SETTING` (paramètres métier en JSON par section), `SYS_IMPORT_BATCH`. Toutes les lignes DEMO portent `IsDemo = 1`.
@@ -72,6 +73,22 @@ Opérationnel : `SOP_RISK` (registre), `SEC_USER`, `SEC_ROLE`, `SEC_USER_ROLE`, 
 | Risque ETA | ETA > rupture projetée (en ne comptant que les arrivées antérieures) → **Critical** ; ETA dépassée non reçue ou ETA > date requise → **Supply Risk** ; ETA dans la fenêtre de sécurité → **Watch** |
 | TC | `quantité / qté par TC` du produit, sinon `kg / kg par TC` (paramètre) |
 | Agrégats multi-produits | en TC (unités hétérogènes) ; dans l'unité de base si tous les produits filtrés la partagent |
+
+### Phase 2
+
+| Indicateur | Formule |
+|---|---|
+| Besoin net (MRP) | `max(0, Σ forecast(M+1…M+H) + stock de sécurité − (stock + commandes ouvertes + transit))` |
+| Commande recommandée | besoin net arrondi au multiple de TC (si la consommation mensuelle ≥ ½ TC), sinon à l'unité |
+| Délai d'approvisionnement | délai de production fournisseur + transit standard + délai port → entrepôt (import uniquement) |
+| Date de besoin | date de rupture projetée (avec les approvisionnements déjà commandés) ; à défaut, fin d'horizon si le besoin vient du stock de sécurité |
+| Date limite de commande | date de besoin − délai ; en retard si antérieure à aujourd'hui |
+| Transit standard | fournisseur › pays (Configuration) › pays par défaut |
+| Livraison estimée | (arrivée réelle ou ETA) + délai port → entrepôt si passage portuaire |
+| Alerte « Stockout risk » | bande Risk, ou rupture projetée avant `aujourd'hui + max(délai, seuil Risk)` |
+| Alerte « Slow moving » | stock > 0 et consommation des N derniers mois ≤ 5 % du stock |
+| On-time fournisseur | livraisons à la date requise (+ tolérance) ÷ livraisons, sur les 12 derniers mois |
+| Risque fournisseur | Critical si une PO ouverte arrive après la rupture ; High si % à l'heure < seuil d'alerte ou PO en retard ; Medium si < objectif OTIF |
 
 Chaque résultat est un nombre fini ou `null` (affiché « — ») : pas de NaN ni d'Infinity possible.
 

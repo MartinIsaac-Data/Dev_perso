@@ -9,12 +9,16 @@ public sealed class ExportService(
     DemandService demand,
     SupplyService supply,
     RiskService risks,
+    MrpService mrp,
+    MaterialsService materials,
+    TransitService transit,
+    SupplierService suppliers,
     ITabularExporter exporter,
     IAuditLogger audit,
     ICurrentUser user,
     IAnalyticsEngine engine)
 {
-    public static readonly string[] Datasets = ["inventory", "demand", "supply", "risks", "risk-register"];
+    public static readonly string[] Datasets = ["inventory", "demand", "supply", "risks", "risk-register", "mrp", "raw-materials", "films", "finished-goods", "transit", "suppliers"];
 
     public async Task<(byte[] Content, string FileName, string ContentType)?> ExportAsync(
         string dataset, string format, SopFilter filter, TableQuery q, CancellationToken ct)
@@ -99,6 +103,71 @@ public sealed class ExportService(
                      new("Score", "number"), new("Owner"), new("Action"), new("Due Date", "date"), new("Status")],
                     rows.Select(r => new object?[] { r.Code, r.Category, r.IsOpportunity ? "Opportunity" : "Risk", r.Description, r.CArtSap, r.Product, r.Impact,
                         r.Probability, r.Score, r.Owner, r.Action, r.DueDate, r.Status }).ToList());
+            }
+            case "mrp":
+            {
+                var rows = await mrp.GetAllRowsAsync(filter, q, ct);
+                var horizon = rows.FirstOrDefault()?.Forecast.Count ?? 0;
+                var cols = new List<TableColumn> { new("CArtSAP"), new("Description"), new("Category"), new("Material Type"), new("Unit"), new("Supplier"), new("Opening Stock", "number") };
+                cols.AddRange(Enumerable.Range(1, horizon).Select(i => new TableColumn($"Forecast M+{i}", "number")));
+                cols.AddRange([new("Open Order", "number"), new("In Transit", "number"), new("Safety Stock", "number"), new("Projected Stock", "number"),
+                    new("Coverage (months)", "decimal"), new("Coverage Status"), new("Net Requirement", "number"), new("Recommended Order", "number"),
+                    new("Recommended TC", "decimal"), new("Lead Time (days)", "number"), new("Need Date", "date"), new("Order By", "date"), new("Days Late", "number"), new("Risk")]);
+                if (finance) cols.Add(new("Recommended Value", "number"));
+                return new TableData("MRP — Net Requirements", subtitle, cols, rows.Select(r =>
+                {
+                    var v = new List<object?> { r.CArtSap, r.Description, r.Category, r.MaterialType, r.Unit, r.Supplier, r.OpeningStock };
+                    v.AddRange(r.Forecast.Cast<object?>());
+                    v.AddRange([r.OpenOrder, r.InTransit, r.SafetyStock, r.ProjectedStock, r.CoverageMonths, r.CoverageStatus, r.NetRequirement,
+                        r.RecommendedOrder, r.RecommendedTc, r.LeadTimeDays, r.NeedDate, r.OrderByDate, r.DaysLate, r.Risk]);
+                    if (finance) v.Add(r.RecommendedValue);
+                    return v.ToArray();
+                }).ToList());
+            }
+            case "raw-materials" or "films" or "finished-goods":
+            {
+                var rows = await materials.GetAllRowsAsync(dataset, filter, q, ct);
+                var cols = new List<TableColumn>
+                {
+                    new("CArtSAP"), new("Description"), new("Category"), new("Brand"), new("Material Type"), new("Format"), new("Color"), new("Supplier"),
+                    new("Country"), new("Unit"), new("Stock", "number"), new("Stock TC", "decimal"), new("Avg Consumption / month", "number"),
+                    new("Forecast (period)", "number"), new("Actual (period)", "number"), new("Production (period)", "number"), new("Service Level %", "decimal"),
+                    new("Coverage (months)", "decimal"), new("Coverage Status"), new("Open PO", "number"), new("In Transit", "number"), new("Next ETA", "date"),
+                    new("Projected Stockout", "date"), new("Flags"), new("Risk"),
+                };
+                if (finance) { cols.Add(new("Unit Cost", "decimal")); cols.Add(new("Stock Value", "number")); }
+                return new TableData(dataset switch { "films" => "Films", "finished-goods" => "Finished Goods", _ => "Raw Materials & Packaging" }, subtitle, cols,
+                    rows.Select(r =>
+                    {
+                        var v = new List<object?> { r.CArtSap, r.Description, r.Category, r.Brand, r.MaterialType, r.Format, r.Color, r.Supplier, r.Country, r.Unit,
+                            r.Stock, r.StockTc, r.AvgConsumption, r.Forecast, r.Actual, r.Production, r.ServiceLevelPct, r.CoverageMonths, r.CoverageStatus,
+                            r.OpenPo, r.InTransit, r.NextEta, r.StockoutDate, string.Join(", ", r.Flags), r.Risk };
+                        if (finance) { v.Add(r.UnitCost); v.Add(r.StockValue); }
+                        return v.ToArray();
+                    }).ToList());
+            }
+            case "transit":
+            {
+                var rows = await transit.GetAllRowsAsync(filter, q, ct);
+                return new TableData("Logistics & Transit", subtitle,
+                    [new("PO"), new("Supplier"), new("Material"), new("Quantity", "number"), new("Unit"), new("TC", "decimal"), new("Country"), new("Port"),
+                     new("Booking"), new("BL"), new("ETD", "date"), new("ETA", "date"), new("Actual Arrival", "date"), new("Status"), new("Customs Status"),
+                     new("Clearing"), new("Estimated Delivery", "date"), new("Transit (days)", "number"), new("Standard (days)", "number"),
+                     new("Gap (days)", "number"), new("Delay (days)", "number"), new("Risk")],
+                    rows.Select(r => new object?[] { r.PoNumber, r.Supplier, r.Material, r.Quantity, r.Unit, r.Tc, r.Country, r.Port, r.Booking, r.BillOfLading,
+                        r.Etd, r.Eta, r.ActualArrival, r.Status, r.CustomsStatus, r.Clearing, r.EstimatedDelivery, r.TransitDays, r.StandardTransitDays,
+                        r.TransitGapDays, r.DelayDays, r.Risk }).ToList());
+            }
+            case "suppliers":
+            {
+                IEnumerable<SupplierRow> rows = await suppliers.GetRowsAsync(filter, ct);
+                rows = TableHelper.Filter(rows, q, r => $"{r.Code} {r.Name} {r.Country} {r.Risk}");
+                return new TableData("Supplier Performance", subtitle + " · " + SupplierService.Window,
+                    [new("Code"), new("Supplier"), new("Country"), new("Orders", "number"), new("Delivered", "number"), new("On Time %", "decimal"),
+                     new("Avg Delay (days)", "decimal"), new("Partial Deliveries", "number"), new("Open Orders", "number"), new("In Transit TC", "decimal"),
+                     new("Avg Transit (days)", "decimal"), new("Standard Transit (days)", "number"), new("Late Open", "number"), new("Critical Open", "number"), new("Risk")],
+                    rows.Select(r => new object?[] { r.Code, r.Name, r.Country, r.Orders, r.Delivered, r.OnTimePct, r.AvgDelayDays, r.PartialDeliveries,
+                        r.OpenOrders, r.InTransitTc, r.AvgTransitDays, r.StandardTransitDays, r.LateOpen, r.CriticalOpen, r.Risk }).ToList());
             }
             default:
                 return null;

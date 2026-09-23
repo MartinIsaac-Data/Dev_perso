@@ -1,0 +1,125 @@
+@page "/mrp"
+@inherits SopPage
+
+<PageTitle>MRP · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.SupplyView">
+    <PageHeader Title="MRP — Net Requirements" Question="What must we order or produce, how much, and by when?" Period="_d?.Period">
+        <Actions><ExportMenu Dataset="mrp" Query="_q" /></Actions>
+    </PageHeader>
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            <div class="kpis">
+                @Tile("SKUs to replenish", d.SkusWithRequirement.ToString(), null, $"Net requirement over {d.HorizonMonths.Count} months", d.SkusWithRequirement > 0 ? "watch" : "good", "")
+                @Tile("Order within 7 days", d.OrdersToPlaceNow.ToString(), "SKUs", "Order-by date reached or this week", d.OrdersToPlaceNow > 0 ? "watch" : "good", "now")
+                @Tile("Already late", d.OrdersLate.ToString(), "SKUs", "Order-by date passed: expedite or re-plan", d.OrdersLate > 0 ? "bad" : "good", "late")
+                @Tile("Recommended", Fmt.Num(d.RecommendedTc, 1), "TC", d.RecommendedValue is { } v ? $"≈ {Fmt.Num(v)} {d.Currency}" : "Rounded to full containers when relevant", "neutral", "")
+                @Tile("Horizon", $"{d.HorizonMonths.FirstOrDefault()} – {d.HorizonMonths.LastOrDefault()}", null, "Forecast horizon (Configuration)", "neutral", "all")
+            </div>
+
+            <div class="grid g-2 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Forecast vs incoming supply</h2><span class="hint">TC per month · overdue supply in the first month</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Height="250" Labels="d.HorizonMonths" Unit="TC" AriaLabel="Forecast and incoming supply by month"
+                                  Datasets="@([new ChartDataset("Forecast", d.ForecastByMonthTc, "--series-1"), new ChartDataset("Incoming supply", d.IncomingByMonthTc, "--series-3")])" />
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Recommended orders by family</h2><span class="hint">TC</span></div>
+                    <div class="card-body">
+                        @if (d.RequirementByCategoryTc.Count == 0) { <div class="empty">✔ No requirement in the horizon.</div> }
+                        else
+                        {
+                            <SopChart Type="bar" Horizontal="true" Height="@(Math.Max(160, d.RequirementByCategoryTc.Count * 28 + 40))" Unit="TC"
+                                      Labels="d.RequirementByCategoryTc.Select(p => p.Label).ToList()" AriaLabel="Recommended containers by family"
+                                      Datasets="@([new ChartDataset("Recommended", d.RequirementByCategoryTc.Select(p => p.Value).ToList(), "--series-1")])" />
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView" Items="@([("", "To replenish"), ("now", "Order this week"), ("late", "Late"), ("all", "All products")])" />
+                <div class="table-tools">
+                    <input type="search" placeholder="Search CArtSAP, product, family, supplier…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
+                    <span class="muted">Recommended = net requirement (Σ forecast + safety − stock − open − transit) rounded to TC. Order by = need date − lead time.</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="data dense">
+                        <thead>
+                            <tr>
+                                <Th Query="_q" Field="CArtSap" OnChanged="LoadRows">CArtSAP / Description</Th>
+                                <Th Query="_q" Field="OpeningStock" Numeric OnChanged="LoadRows">Stock</Th>
+                                @for (var i = 0; i < d.HorizonMonths.Count; i++) { <th class="num">@d.HorizonMonths[i]<span class="sub">M+@(i + 1)</span></th> }
+                                <Th Query="_q" Field="OpenOrder" Numeric OnChanged="LoadRows">Open / transit</Th>
+                                <Th Query="_q" Field="ProjectedStock" Numeric OnChanged="LoadRows">Projected</Th>
+                                <Th Query="_q" Field="CoverageMonths" Numeric OnChanged="LoadRows">Coverage</Th>
+
+                                <Th Query="_q" Field="RecommendedOrder" Numeric OnChanged="LoadRows">Recommended</Th>
+                                <Th Query="_q" Field="OrderByDate" OnChanged="LoadRows">Order by</Th>
+                                <Th Query="_q" Field="Risk" OnChanged="LoadRows">Risk</Th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _rows?.Items ?? [])
+                            {
+                                <tr class="click" @onclick="@(() => Go($"products/{Uri.EscapeDataString(r.CArtSap)}"))">
+                                    <td style="min-width:170px"><b>@r.Description</b><span class="sub">@r.CArtSap · @r.Category</span></td>
+                                    <td class="num">@Fmt.Num(r.OpeningStock) <span class="muted">@r.Unit</span></td>
+                                    @foreach (var f in r.Forecast) { <td class="num">@Fmt.Num(f)</td> }
+                                    <td class="num">@Fmt.Num(r.OpenOrder + r.InTransit)@if (r.InTransit > 0) {<span class="sub">@Fmt.Num(r.InTransit) in transit</span>}</td>
+                                    <td class="num" style="@(r.ProjectedStock < 0 ? "color:var(--critical-ink);font-weight:600" : "")">@Fmt.Num(r.ProjectedStock)</td>
+                                    <td class="num"><StatusBadge Status="@r.CoverageStatus" Text="@(r.CoverageMonths is null ? r.CoverageStatus : Fmt.Months(r.CoverageMonths))" /></td>
+                                    <td class="num"><b>@(r.RecommendedOrder > 0 ? Fmt.Num(r.RecommendedOrder) : Fmt.Empty)</b><span class="sub">net @Fmt.Num(r.NetRequirement)@(r.RecommendedTc is > 0 ? $" · {Fmt.Num(r.RecommendedTc, 1)} TC" : "")</span></td>
+                                    <td class="nowrap">@Fmt.Date(r.OrderByDate)@if (r.DaysLate is > 0) {<span class="sub" style="color:var(--critical-ink)">▲ @r.DaysLate d late</span>} else if (r.LeadTimeDays is { } lt) {<span class="sub">lead @lt d</span>}</td>
+                                    <td><StatusBadge Status="@r.Risk" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_rows is { Total: 0 }) { <div class="empty">✔ Nothing to order for this view and filter.</div> }
+                </div>
+                <Pager Query="_q" Total="@(_rows?.Total ?? 0)" OnChanged="LoadRows" />
+            </div>
+        }
+    </LoadState>
+</RequirePermission>
+
+@code {
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+    private MrpDashboard? _d;
+    private PagedResult<MrpRow>? _rows;
+    private readonly TableQuery _q = new();
+
+    protected override async Task LoadAsync(CancellationToken ct)
+    {
+        if (_q.View != View) _q.Sort = null;
+        _q.View = View;
+        _q.Page = 1;
+        var dash = Api.GetAsync<MrpDashboard>("api/mrp", Filter, ct: ct);
+        var rows = Api.GetAsync<PagedResult<MrpRow>>("api/mrp/rows", Filter, _q, ct);
+        _d = await dash;
+        _rows = await rows;
+    }
+
+    private async Task LoadRows()
+    {
+        try { _rows = await Api.GetAsync<PagedResult<MrpRow>>("api/mrp/rows", Filter, _q); }
+        catch (ApiException ex) { Console.Error.WriteLine(ex.Message); }
+    }
+
+    private Task SearchChanged() { _q.Page = 1; return LoadRows(); }
+    private void SetView(string v) => Go(v.Length == 0 ? "mrp" : $"mrp?view={v}");
+
+    private RenderFragment Tile(string title, string value, string? unit, string sub, string status, string view) => __builder =>
+    {
+        <button type="button" class="kpi @status" @onclick="() => SetView(view)">
+            <div class="k-title"><span>@title</span><span class="go">›</span></div>
+            <div class="k-value">@value@if (unit is not null) {<span class="u">@unit</span>}</div>
+            <div class="k-sub">@sub</div>
+        </button>
+    };
+}

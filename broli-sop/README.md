@@ -23,11 +23,40 @@ Source de données en Phase 1 : fichiers Excel importés ; Phase 2 : SQL Server 
 | 10 | Risk Dashboard (moteur de détection + registre) | ✅ |
 | + | Import Excel (validation / aperçu / erreurs), export Excel/CSV/impression, configuration, audit log, administration | ✅ |
 
-Les modules Phase 2/3 (MRP, Raw Materials, Films, Finished Goods, Transit, Suppliers, S&OP Actions) apparaissent
-dans le menu avec un badge « P2 » et une page décrivant leur contenu prévu.
+## État d'avancement — Phase 2
 
-**Vérifié :** la solution compile sans avertissement ; 67 tests passent (55 unitaires sur les calculs KPI/couverture/ETA/import,
-12 tests d'intégration de l'API réelle) ; le parcours prioritaire (§42) a été joué dans un navigateur (voir plus bas).
+| Étape | Écran | Question métier | État |
+|---|---|---|---|
+| 11 | **MRP** (`/mrp`) | Que faut-il commander ou produire, combien, et pour quand ? | ✅ |
+| 12 | **Raw Materials** (`/raw-materials`) | Quelle matière première ou quel emballage nécessite une action ? | ✅ |
+| 13 | **Films** (`/films`) | Quels films sont en rupture, en retard, en excédent ou à rotation lente ? | ✅ |
+| 14 | **Finished Goods** (`/finished-goods`) | Peut-on servir la demande par famille, et la production suit-elle ? | ✅ |
+| 15 | **Logistics & Transit** (`/transit`) | Où est chaque conteneur, et quand sera-t-il dans notre entrepôt ? | ✅ |
+| 16 | **Supplier Performance** (`/suppliers`) | Quel fournisseur livre le plus souvent en retard ? | ✅ |
+
+- **MRP** : stock, forecast M+1…M+4 (horizon paramétrable), commandes ouvertes, transit, stock projeté, couverture,
+  besoin net = Σ forecast + stock de sécurité − (stock + commandes + transit), **commande recommandée arrondie au TC**,
+  délai d'approvisionnement (production fournisseur + transit + port → entrepôt), date de besoin, **date limite de commande**
+  et retard éventuel (« Order this week », « Late »).
+- **Raw Materials / Films / Finished Goods** : un seul moteur, trois vues. Alertes automatiques par article :
+  *Shortage* (couverture critique), *Stockout risk* (rupture avant qu'un réapprovisionnement lancé aujourd'hui puisse arriver),
+  *Late supply* (PO en Supply Risk/Critical), *Excess*, *Slow moving* (consommation des N derniers mois < 5 % du stock).
+  Conversion kg → TC paramétrable. Films : regroupement par marque, format, couleur ; familles « film » paramétrables.
+  Finished Goods : stock, forecast, ventes, production, service level, couverture par famille (Spaghetti, Macaroni, Short Pasta, Mayonnaise).
+- **Transit** : PO, fournisseur, matière, quantité, TC, pays, port, booking, BL, ETD, ETA, arrivée réelle, douane, dédouanement,
+  **livraison estimée** (ETA + délai port → entrepôt), temps de transit réel vs **standard** (fournisseur › pays paramétré › pays par défaut), retard, risque.
+- **Suppliers** : commandes, % à l'heure, retard moyen, livraisons partielles (indicateur qualité, faute de données qualité),
+  commandes ouvertes, en transit, temps de transit moyen vs standard, risque.
+- **Drill-down (§23)** : Dashboard → Raw Materials → fournisseur (ses expéditions) → produit → PO → expédition, vérifié dans le navigateur.
+- Exports Excel/CSV de chaque tableau (lignes filtrées uniquement) ; nouveaux paramètres dans *Configuration*
+  (délai port → entrepôt, seuil d'alerte fournisseur, familles « film », fenêtre de rotation lente).
+- Correctif de sécurité : un export exige désormais aussi la permission de l'écran concerné (un profil Sales ne peut plus exporter la Supply).
+
+Le module S&OP Actions (Phase 3) apparaît dans le menu avec un badge « P3 ».
+
+**Vérifié :** la solution compile sans avertissement ; **85 tests** passent (unitaires sur KPI, couverture, projection, ETA, import,
+MRP, alertes matières, délais, score fournisseur ; intégration de l'API réelle) ; le parcours prioritaire (§42) et la chaîne de
+drill-down (§23) ont été joués dans un navigateur ; aucun tableau ne déborde à 1 440 px de large.
 
 ## Démarrage rapide
 
@@ -83,7 +112,7 @@ Chaque étape répond en 0,2–0,4 s en local (voir *Performance*).
 broli-sop/
 ├── Broli.SOP.sln
 ├── run.ps1 / run.sh
-├── docs/ARCHITECTURE.md            ← modèle de données, formules, décisions
+├── docs/ARCHITECTURE.md            ← modèle de données, formules (Phase 1 et 2), décisions
 ├── src/
 │   ├── Broli.SOP.Domain            Entités (dimensions, faits, opérationnel), enums. Aucune dépendance.
 │   ├── Broli.SOP.Contracts         DTO de l'API, SopFilter, permissions, paramètres métier (partagés API ↔ Web)
@@ -154,6 +183,8 @@ dotnet test
   couverture et bandes configurables, stock de sécurité, excédent, conversion TC, projection de rupture, moteur de risque ETA.
 - `PeriodAndAdvisorTests` — résolution des périodes, recommandations d'action.
 - `ImportValidatorTests` — chaque règle de validation d'import.
+- `Phase2Tests` — besoin net, arrondi TC, date limite de commande, alertes matières, délais standard, score fournisseur,
+  et les 4 modules via l'API (cohérence des compteurs, périmètres, permissions, exports).
 - `ApiTests` / `ImportApiTests` — l'API réelle sur une base SQLite temporaire : 401 / 403, verrouillage après 5 échecs,
   10 KPI finis (jamais NaN/Infinity), scénario Films + Rahma jusqu'à l'action « Expedite », masquage des valeurs pour Sales,
   pagination/tri serveur, recherche, export filtré, audit d'une modification d'ETA, validation de la configuration,
@@ -190,6 +221,8 @@ et l'autorisation repose sur des permissions indépendantes du fournisseur d'ide
 ## Limites connues / prochaines étapes
 
 - Export PDF : via « Print / PDF » du navigateur (feuille de style d'impression dédiée) — pas de génération PDF serveur.
+- MRP : les produits finis n'ont pas de plan de production futur dans le modèle ; leur besoin net est un besoin de production.
+- Qualité fournisseur : pas de données qualité en Phase 1–2 ; les livraisons partielles servent d'indicateur.
 - Commandes ouvertes, transit et port reflètent l'état **actuel** (pas d'historique des statuts) ; la période filtrée
   s'applique au stock, à la demande, aux réceptions et à l'OTIF.
 - La projection mensuelle peut masquer une rupture intra-mois ; la date de rupture affichée provient d'une simulation journalière.

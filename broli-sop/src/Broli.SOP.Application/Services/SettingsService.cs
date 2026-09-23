@@ -52,6 +52,9 @@ public sealed class SettingsService(ISettingsStore store, IAuditLogger audit, ID
         if (s.Supply.InFullTolerancePct is < 0 or > 100 || s.Supply.OtifTargetPct is < 0 or > 100) e.Add("Supply percentages must be 0–100 %.");
         if (s.Supply.TransitDaysByCountry.Values.Any(v => v is < 0 or > 365)) e.Add("Transit days must be 0–365.");
         if (s.Tc.DefaultKgPerTc <= 0) e.Add("Kg per TC must be positive.");
+        if (s.Supply.PortToWarehouseDays is < 0 or > 60) e.Add("Port to warehouse must be 0–60 days.");
+        if (s.Supply.SupplierOnTimeAlertPct is < 0 or > 100) e.Add("Supplier alert must be 0–100 %.");
+        if (s.Coverage.SlowMovingMonths is < 1 or > 24) e.Add("Slow moving window must be 1–24 months.");
         if (string.IsNullOrWhiteSpace(s.General.Currency) || s.General.Currency.Length > 5) e.Add("Currency code is required (max 5 characters).");
         if (s.General.FiscalYearStartMonth is < 1 or > 12) e.Add("Fiscal year start month must be 1–12.");
         if (e.Count > 0) throw new ValidationException(e);

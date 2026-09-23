@@ -115,7 +115,14 @@ public sealed class ExportController(ExportService service) : ControllerBase
     public async Task<IActionResult> Export(string dataset, [FromQuery] SopFilter filter, [FromQuery] TableQuery query,
         [FromQuery] string format = "xlsx", CancellationToken ct = default)
     {
-        if (dataset is "risk-register" && !User.HasClaim(Broli.SOP.Infrastructure.JwtTokenService.PermissionClaim, Permissions.RisksView)) return Forbid();
+        var required = dataset switch
+        {
+            "risk-register" or "risks" => Permissions.RisksView,
+            "supply" or "mrp" or "transit" or "suppliers" => Permissions.SupplyView,
+            "demand" => Permissions.DemandView,
+            _ => Permissions.InventoryView,
+        };
+        if (!User.HasClaim(Broli.SOP.Infrastructure.JwtTokenService.PermissionClaim, required)) return Forbid();
         var file = await service.ExportAsync(dataset, format, filter, query, ct);
         return file is { } f ? File(f.Content, f.ContentType, f.FileName) : NotFound(new ApiError($"Unknown dataset '{dataset}'."));
     }

@@ -49,6 +49,8 @@
                     <div class="field"><label>On-time tolerance (days)</label><input type="number" @bind="s.Supply.OnTimeToleranceDays" /></div>
                     <div class="field"><label>In-full tolerance (%)</label><input type="number" @bind="s.Supply.InFullTolerancePct" /></div>
                     <div class="field"><label>OTIF target (%)</label><input type="number" @bind="s.Supply.OtifTargetPct" /></div>
+                    <div class="field"><label>Port → warehouse (days)</label><input type="number" @bind="s.Supply.PortToWarehouseDays" /><div class="help">Clearing + delivery after arrival at port (estimated delivery, MRP lead time).</div></div>
+                    <div class="field"><label>Supplier on-time alert (%)</label><input type="number" @bind="s.Supply.SupplierOnTimeAlertPct" /></div>
                     <div class="field full"><label>Transit days by country (overrides)</label>
                         <textarea @bind="_transit" placeholder="TR=30&#10;CN=45"></textarea><div class="help">One ISO code per line: CODE=days. Default transit times come from the country reference data.</div></div>
                 </div>
@@ -63,6 +65,8 @@
                     <div class="field"><label>Currency</label><input maxlength="5" @bind="s.General.Currency" /></div>
                     <div class="field"><label>Fiscal year starts in month</label><input type="number" min="1" max="12" @bind="s.General.FiscalYearStartMonth" /></div>
                     <div class="field full"><label>Departments</label><input @bind="_departments" /><div class="help">Comma-separated.</div></div>
+                    <div class="field full"><label>Film families</label><input @bind="_films" /><div class="help">Product-family codes shown on the Films dashboard, comma-separated.</div></div>
+                    <div class="field"><label>Slow moving window (months)</label><input type="number" min="1" max="24" @bind="s.Coverage.SlowMovingMonths" /></div>
                 </div>
             </div>
         </div>
@@ -71,7 +75,7 @@
 
 @code {
     private SettingsDto? _s;
-    private string _transit = "", _safety = "", _departments = "";
+    private string _transit = "", _safety = "", _departments = "", _films = "";
     private string? _error;
     private bool _ok, _saving;
 
@@ -83,6 +87,7 @@
             _transit = string.Join("\n", _s.Supply.TransitDaysByCountry.Select(kv => $"{kv.Key}={kv.Value}"));
             _safety = string.Join("\n", _s.SafetyStock.MonthsByCategory.Select(kv => $"{kv.Key}={kv.Value}"));
             _departments = string.Join(", ", _s.General.Departments);
+            _films = string.Join(", ", _s.General.FilmCategories);
         }
         catch (ApiException ex) { _error = ex.Full; }
     }
@@ -96,6 +101,7 @@
             _s.Supply.TransitDaysByCountry = ParseMap(_transit, v => int.TryParse(v, out var d) ? d : (int?)null);
             _s.SafetyStock.MonthsByCategory = ParseMap(_safety, v => double.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (double?)null);
             _s.General.Departments = _departments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            _s.General.FilmCategories = _films.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(c => c.ToUpperInvariant()).ToList();
             await Api.SendAsync(HttpMethod.Put, "api/settings", _s);
             _ok = true;
         }

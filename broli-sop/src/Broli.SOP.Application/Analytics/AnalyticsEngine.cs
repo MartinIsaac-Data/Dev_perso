@@ -78,7 +78,7 @@ public sealed class AnalyticsEngine(
             ? demandAll.Where(d => d.MonthKey <= demandTo).ToList()
             : await repo.GetDemandAsync(scope, filter.Agencies, demandFrom, demandTo, ct);
         var forecastRows = await repo.GetForecastAsync(scope, DateKeys.AddMonths(asOf, -1), DateKeys.AddMonths(asOf, horizon), ct);
-        var production = await repo.GetProductionAsync(scope, windowStart, asOf, ct);
+        var production = await repo.GetProductionAsync(scope, windowStart, Math.Max(asOf, period.LastMonthKey), ct);
         var lines = await repo.GetSupplyLinesAsync(scope, new SupplyWindow(deliveredFrom, deliveredTo), ct);
 
         var stock = stockRows.ToDictionary(r => (r.ProductId, r.MonthKey), r => r.Quantity);
@@ -94,8 +94,12 @@ public sealed class AnalyticsEngine(
         var forecast = forecastRows.ToDictionary(r => (r.ProductId, r.MonthKey), r => r.Quantity);
 
         var receipts = new Dictionary<(int, int), double>();
+        var producedQty = new Dictionary<(int, int), double>();
         foreach (var p in production)
+        {
             receipts[(p.ProductId, p.MonthKey)] = receipts.GetValueOrDefault((p.ProductId, p.MonthKey)) + p.Quantity;
+            producedQty[(p.ProductId, p.MonthKey)] = producedQty.GetValueOrDefault((p.ProductId, p.MonthKey)) + p.Quantity;
+        }
         foreach (var l in lines.Where(l => l.Status == SupplyStatus.Delivered && l.ActualArrival.HasValue))
         {
             var k = (l.ProductId, DateKeys.MonthKey(l.ActualArrival!.Value));
@@ -209,6 +213,7 @@ public sealed class AnalyticsEngine(
             Stock = stock,
             Receipts = receipts,
             Consumption = consumption,
+            Production = producedQty,
             Demand = demandFiltered,
             Lines = assessed,
             DemandFnFactory = id => DemandFnFor(id, avgByProduct.GetValueOrDefault(id)),

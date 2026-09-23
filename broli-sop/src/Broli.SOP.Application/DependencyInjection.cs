@@ -22,6 +22,10 @@ public static class DependencyInjection
         services.AddScoped<AdminService>();
         services.AddScoped<SettingsService>();
         services.AddScoped<ImportService>();
+        services.AddScoped<MrpService>();
+        services.AddScoped<MaterialsService>();
+        services.AddScoped<TransitService>();
+        services.AddScoped<SupplierService>();
         return services;
     }
 }

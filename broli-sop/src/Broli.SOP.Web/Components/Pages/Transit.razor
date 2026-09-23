@@ -1,0 +1,128 @@
+@page "/transit"
+@inherits SopPage
+
+<PageTitle>Transit · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.SupplyView">
+    <PageHeader Title="Logistics &amp; Transit" Question="Where is every container, and when will it be in our warehouse?" Period="_d?.Period">
+        <Actions><ExportMenu Dataset="transit" Query="_q" /></Actions>
+    </PageHeader>
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            <div class="kpis">
+                @Tile("On the water", d.OnTheWater.ToString(), "shipments", "Shipped, not yet at port", "neutral", "water")
+                @Tile("At port", d.AtPort.ToString(), "shipments", "Awaiting clearance", d.AtPort > 0 ? "watch" : "neutral", "port")
+                @Tile("In customs", d.InCustoms.ToString(), "shipments", "Clearing in progress", d.InCustoms > 0 ? "watch" : "neutral", "customs")
+                @Tile("Arriving ≤ 14 days", Fmt.Num(d.TcArriving14Days, 1), "TC", $"+{d.PortToWarehouseDays} d port → warehouse", "neutral", "arriving")
+                @Tile("Transit time", Fmt.Num(d.AvgTransitDays, 1), "days", $"{(d.AvgGapDays >= 0 ? "+" : "")}{Fmt.Num(d.AvgGapDays, 1)} d vs standard · {d.LateShipments} late", d.LateShipments > 0 ? "watch" : "good", "late")
+            </div>
+
+            <div class="grid g-32 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Transit time by origin — actual vs standard</h2><span class="hint">days · ETD → arrival</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Horizontal="true" Height="@(Math.Max(180, d.Lanes.Count * 30 + 50))" Unit="days" Labels="d.Lanes.Select(l => l.Country).ToList()"
+                                  AriaLabel="Actual and standard transit days by origin country"
+                                  Datasets="@([new ChartDataset("Actual (avg)", d.Lanes.Select(l => l.AvgActualDays).ToList(), "--series-1"),
+                                              new ChartDataset("Standard", d.Lanes.Select(l => (double?)l.StandardDays).ToList(), "--series-2")])" />
+                        <div class="chart-note">Standard = supplier override › country override (Configuration) › country default.</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Open containers by status</h2><span class="hint">TC</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Height="260" Unit="TC" Labels="d.ContainersByStatus.Select(s => s.Label).ToList()" AriaLabel="Open containers by status"
+                                  Datasets="@([new ChartDataset("TC", d.ContainersByStatus.Select(s => s.Value).ToList(), "--series-1")])" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView"
+                          Items="@([("", "In transit & due"), ("water", "On the water"), ("port", "At port"), ("customs", "Customs"), ("arriving", "Arriving ≤ 14 d"), ("late", "Late"), ("delivered", "Delivered in period"), ("all", "All")])" />
+                <div class="table-tools">
+                    <input type="search" placeholder="Search PO, supplier, material, booking, BL…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
+                </div>
+                <div class="table-wrap">
+                    <table class="data dense">
+                        <thead>
+                            <tr>
+                                <Th Query="_q" Field="PoNumber" OnChanged="LoadRows">PO</Th>
+                                <Th Query="_q" Field="Supplier" OnChanged="LoadRows">Supplier</Th>
+                                <Th Query="_q" Field="Material" OnChanged="LoadRows">Material</Th>
+                                <Th Query="_q" Field="Tc" Numeric OnChanged="LoadRows">Qty / TC</Th>
+                                <Th Query="_q" Field="Country" OnChanged="LoadRows">Origin → port</Th>
+                                <Th Query="_q" Field="Etd" OnChanged="LoadRows">ETD</Th>
+                                <Th Query="_q" Field="Eta" OnChanged="LoadRows">ETA</Th>
+                                <Th Query="_q" Field="Status" OnChanged="LoadRows">Status / clearing</Th>
+                                <Th Query="_q" Field="EstimatedDelivery" OnChanged="LoadRows">Est. delivery</Th>
+                                <Th Query="_q" Field="TransitDays" Numeric OnChanged="LoadRows">Transit</Th>
+                                <Th Query="_q" Field="Risk" OnChanged="LoadRows">Risk</Th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _rows?.Items ?? [])
+                            {
+                                <tr class="click" @onclick="@(() => Go($"products/{Uri.EscapeDataString(r.CArtSap)}"))">
+                                    <td class="code">@r.PoNumber<span class="sub">@(r.Booking ?? "")@(r.BillOfLading is null ? "" : " · " + r.BillOfLading)</span></td>
+                                    <td>@r.Supplier</td>
+                                    <td>@r.Material<span class="sub">@r.CArtSap</span></td>
+                                    <td class="num">@Fmt.Num(r.Quantity) <span class="muted">@r.Unit</span><span class="sub">@Fmt.Num(r.Tc, 1) TC</span></td>
+                                    <td>@r.Country<span class="sub">@(r.Port ?? "by road")</span></td>
+                                    <td class="nowrap">@Fmt.Date(r.Etd)</td>
+                                    <td class="nowrap"><b>@Fmt.Date(r.ActualArrival ?? r.Eta)</b>@if (r.ActualArrival is not null) {<span class="sub">arrived</span>} else if (r.DelayDays is > 0) {<span class="sub" style="color:var(--serious-ink)">+@r.DelayDays d vs required</span>}</td>
+                                    <td><span class="badge st-neutral">@r.Status</span><span class="sub">@r.Clearing</span></td>
+                                    <td class="nowrap">@Fmt.Date(r.EstimatedDelivery)</td>
+                                    <td class="num">@(r.TransitDays is { } t ? $"{t} d" : Fmt.Empty)@if (r.TransitGapDays is { } g && g != 0) {<span class="sub" style="color:@(g > 0 ? "var(--serious-ink)" : "var(--good-ink)")">@(g > 0 ? "+" : "")@g vs @r.StandardTransitDays</span>}</td>
+                                    <td><StatusBadge Status="@r.Risk" />@if (r.RiskReason is not null) {<span class="sub">@r.RiskReason</span>}</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_rows is { Total: 0 }) { <div class="empty">No shipment matches this view and filter.</div> }
+                </div>
+                <Pager Query="_q" Total="@(_rows?.Total ?? 0)" OnChanged="LoadRows" />
+            </div>
+        }
+    </LoadState>
+</RequirePermission>
+
+@code {
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+    [SupplyParameterFromQuery(Name = "search")] public string? SearchParam { get; set; }
+    private TransitDashboard? _d;
+    private PagedResult<TransitRow>? _rows;
+    private readonly TableQuery _q = new();
+
+    protected override async Task LoadAsync(CancellationToken ct)
+    {
+        if (_q.View != View) _q.Sort = null;
+        _q.View = View;
+        if (SearchParam is not null && _q.Search is null) _q.Search = SearchParam;
+        _q.Page = 1;
+        var dash = Api.GetAsync<TransitDashboard>("api/transit", Filter, ct: ct);
+        var rows = Api.GetAsync<PagedResult<TransitRow>>("api/transit/rows", Filter, _q, ct);
+        _d = await dash;
+        _rows = await rows;
+    }
+
+    private async Task LoadRows()
+    {
+        try { _rows = await Api.GetAsync<PagedResult<TransitRow>>("api/transit/rows", Filter, _q); }
+        catch (ApiException ex) { Console.Error.WriteLine(ex.Message); }
+    }
+
+    private Task SearchChanged() { _q.Page = 1; return LoadRows(); }
+    private void SetView(string v) => Go(v.Length == 0 ? "transit" : $"transit?view={v}");
+
+    private RenderFragment Tile(string title, string value, string unit, string sub, string status, string view) => __builder =>
+    {
+        <button type="button" class="kpi @status" @onclick="() => SetView(view)">
+            <div class="k-title"><span>@title</span><span class="go">›</span></div>
+            <div class="k-value">@value<span class="u">@unit</span></div>
+            <div class="k-sub">@sub</div>
+        </button>
+    };
+}
