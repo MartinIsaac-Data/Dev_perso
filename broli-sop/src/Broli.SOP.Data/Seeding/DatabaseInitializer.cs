@@ -21,9 +21,21 @@ public sealed class DatabaseInitializer(
     IClock clock,
     ILogger<DatabaseInitializer> logger)
 {
+    /// <summary>Bumped whenever the schema changes. SQLite (dev / demo) databases are checked against it.</summary>
+    public const string SchemaVersion = "3";
+    private const string SchemaKey = "schemaVersion";
+
     public async Task InitializeAsync(CancellationToken ct = default)
     {
-        await db.Database.EnsureCreatedAsync(ct);
+        if (db.Database.IsSqlServer())
+        {
+            // Production path: versioned EF Core migrations (Migrations/SqlServer).
+            await db.Database.MigrateAsync(ct);
+        }
+        else
+        {
+            await EnsureSqliteSchemaAsync(ct);
+        }
 
         await SeedRolesAsync(ct);
         await SeedCountriesAsync(ct);
@@ -41,9 +53,49 @@ public sealed class DatabaseInitializer(
         }
     }
 
+    /// <summary>
+    /// SQLite has no migrations here: the schema is created from the model. An older schema holding only DEMO data is
+    /// rebuilt automatically; one holding real imports is never touched — start-up stops with an explanation instead.
+    /// </summary>
+    private async Task EnsureSqliteSchemaAsync(CancellationToken ct)
+    {
+        if (await db.Database.EnsureCreatedAsync(ct))
+        {
+            await SetSchemaVersionAsync(ct);
+            return;
+        }
+        string? version = null;
+        try { version = await db.Settings.Where(x => x.Key == SchemaKey).Select(x => x.JsonValue).FirstOrDefaultAsync(ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogDebug(ex, "No schema version table"); }
+        if (version == $"\"{SchemaVersion}\"") return;
+
+        var hasRealData = false;
+        try { hasRealData = await db.ImportBatches.AnyAsync(b => b.Status == ImportStatus.Committed, ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogDebug(ex, "Import history unreadable"); }
+        if (hasRealData)
+            throw new InvalidOperationException(
+                $"The SQLite database was created by an older version (schema {version ?? "1-2"}, expected {SchemaVersion}) and contains imported data. " +
+                "Export what you need, then delete the .db file (or move to SQL Server, which uses migrations) and restart.");
+
+        logger.LogWarning("Rebuilding the SQLite demo database for schema version {Version} (it held no imported data).", SchemaVersion);
+        await db.Database.EnsureDeletedAsync(ct);
+        await db.Database.EnsureCreatedAsync(ct);
+        await SetSchemaVersionAsync(ct);
+    }
+
+    private async Task SetSchemaVersionAsync(CancellationToken ct)
+    {
+        db.Settings.Add(new AppSetting { Key = SchemaKey, JsonValue = $"\"{SchemaVersion}\"", UpdatedAtUtc = clock.UtcNow, UpdatedBy = "system" });
+        await db.SaveChangesAsync(ct);
+    }
+
     private async Task SeedRolesAsync(CancellationToken ct)
     {
-        if (await db.Roles.AnyAsync(ct)) return;
+        if (await db.Roles.AnyAsync(ct))
+        {
+            await SyncSystemRolePermissionsAsync(ct);
+            return;
+        }
         var descriptions = new Dictionary<string, string>
         {
             ["ADMIN"] = "Users, data, parameters and configuration",
@@ -65,6 +117,31 @@ public sealed class DatabaseInitializer(
                 Permissions = permissions.Select(p => new RolePermission { Permission = p }).ToList(),
             });
         }
+        await db.SaveChangesAsync(ct);
+        await SyncSystemRolePermissionsAsync(ct);
+    }
+
+    /// <summary>
+    /// New permissions introduced by an upgrade are granted to the system roles that have them by default,
+    /// once (recorded in settings) — later removals by an administrator are respected.
+    /// </summary>
+    private async Task SyncSystemRolePermissionsAsync(CancellationToken ct)
+    {
+        const string key = "permissionsSynced";
+        var synced = await db.Settings.Where(x => x.Key == key).Select(x => x.JsonValue).FirstOrDefaultAsync(ct);
+        var known = synced is null ? [] : System.Text.Json.JsonSerializer.Deserialize<List<string>>(synced) ?? [];
+        var all = Permissions.All.Select(p => p.Code).ToList();
+        var fresh = all.Except(known).ToList();
+        if (fresh.Count == 0) return;
+        var roles = await db.Roles.Include(r => r.Permissions).Where(r => r.IsSystem).ToListAsync(ct);
+        foreach (var role in roles)
+            foreach (var p in fresh.Where(p => Permissions.DefaultRoles.TryGetValue(role.Name, out var d) && d.Contains(p) && role.Permissions.All(x => x.Permission != p)))
+                role.Permissions.Add(new RolePermission { Permission = p });
+        var row = await db.Settings.FirstOrDefaultAsync(x => x.Key == key, ct);
+        if (row is null) db.Settings.Add(row = new AppSetting { Key = key });
+        row.JsonValue = System.Text.Json.JsonSerializer.Serialize(all);
+        row.UpdatedAtUtc = clock.UtcNow;
+        row.UpdatedBy = "system";
         await db.SaveChangesAsync(ct);
     }
 
@@ -106,6 +183,7 @@ public sealed class DatabaseInitializer(
             (SupplySettings.Key, new SupplySettings()),
             (TcSettings.Key, new TcSettings()),
             (GeneralSettings.Key, new GeneralSettings()),
+            (AlertSettings.Key, new AlertSettings()),
         };
         var existing = await db.Settings.Select(s => s.Key).ToListAsync(ct);
         foreach (var (key, value) in defaults.Where(d => !existing.Contains(d.Key)))

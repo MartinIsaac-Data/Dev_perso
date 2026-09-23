@@ -15,6 +15,28 @@ public interface ICurrentUser
     string Username { get; }
     bool IsAuthenticated { get; }
     bool Has(string permission);
+    /// <summary>Agency codes the user is restricted to; empty = no restriction.</summary>
+    IReadOnlyList<string> ScopeAgencies => [];
+    /// <summary>Product-family codes the user is restricted to; empty = no restriction.</summary>
+    IReadOnlyList<string> ScopeCategories => [];
+}
+
+/// <summary>
+/// Identity for work that runs outside an HTTP request (scheduled refresh, alert engine).
+/// Inside <see cref="Run"/>, <see cref="ICurrentUser"/> resolves to this system actor with full rights and no data scope.
+/// </summary>
+public static class SystemActor
+{
+    private static readonly AsyncLocal<string?> Current = new();
+    public static string? Name => Current.Value;
+
+    public static async Task<T> Run<T>(string name, Func<Task<T>> work)
+    {
+        var previous = Current.Value;
+        Current.Value = name;
+        try { return await work(); }
+        finally { Current.Value = previous; }
+    }
 }
 
 public interface IAuditLogger
@@ -45,7 +67,17 @@ public record IssuedToken(string Token, DateTime ExpiresAtUtc);
 
 public interface ITokenService
 {
-    IssuedToken Issue(string username, string displayName, IReadOnlyCollection<string> roles, IReadOnlyCollection<string> permissions);
+    IssuedToken Issue(string username, string displayName, IReadOnlyCollection<string> roles, IReadOnlyCollection<string> permissions,
+        IReadOnlyCollection<string>? scopeAgencies = null, IReadOnlyCollection<string>? scopeCategories = null);
+}
+
+public record EmailMessage(IReadOnlyList<string> To, string Subject, string Body);
+
+/// <summary>Outbound e-mail. Disabled unless SMTP is configured on the server.</summary>
+public interface IEmailSender
+{
+    bool IsConfigured { get; }
+    Task SendAsync(EmailMessage message, CancellationToken ct = default);
 }
 
 /// <summary>One worksheet read as raw cells; the header row is already located.</summary>

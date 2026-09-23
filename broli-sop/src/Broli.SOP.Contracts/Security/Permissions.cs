@@ -20,6 +20,9 @@ public static class Permissions
     public const string ConfigEdit = "config.edit";
     public const string UsersManage = "users.manage";
     public const string AuditView = "audit.view";
+    public const string ActionsView = "actions.view";
+    /// <summary>Create and update S&amp;OP actions and decisions.</summary>
+    public const string ActionsEdit = "actions.edit";
 
     public static readonly IReadOnlyList<(string Code, string Description)> All =
     [
@@ -36,18 +39,20 @@ public static class Permissions
         (ConfigEdit, "Edit business configuration"),
         (UsersManage, "Manage users, roles and permissions"),
         (AuditView, "Read the audit log"),
+        (ActionsView, "S&OP action plan and meeting view"),
+        (ActionsEdit, "Create and update S&OP actions"),
     ];
 
     /// <summary>Default permission bundles used when the database is first created.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> DefaultRoles = new Dictionary<string, string[]>
     {
         ["ADMIN"] = All.Select(p => p.Code).ToArray(),
-        ["MANAGEMENT"] = [ExecutiveView, DemandView, InventoryView, SupplyView, RisksView, RisksEdit, FinanceView, DataExport, AuditView],
-        ["SUPPLY"] = [ExecutiveView, DemandView, InventoryView, SupplyView, SupplyEdit, RisksView, RisksEdit, DataExport],
-        ["SALES"] = [ExecutiveView, DemandView, InventoryView, RisksView, DataExport],
-        ["FINANCE"] = [ExecutiveView, DemandView, InventoryView, SupplyView, RisksView, FinanceView, DataExport],
-        ["WAREHOUSE"] = [InventoryView, SupplyView, RisksView, DataExport],
-        ["LOGISTICS"] = [SupplyView, InventoryView, RisksView, SupplyEdit, DataExport],
-        ["PRODUCTION"] = [DemandView, InventoryView, SupplyView, RisksView, DataExport],
+        ["MANAGEMENT"] = [ExecutiveView, DemandView, InventoryView, SupplyView, RisksView, RisksEdit, FinanceView, DataExport, AuditView, ActionsView, ActionsEdit],
+        ["SUPPLY"] = [ExecutiveView, DemandView, InventoryView, SupplyView, SupplyEdit, RisksView, RisksEdit, DataExport, ActionsView, ActionsEdit],
+        ["SALES"] = [ExecutiveView, DemandView, InventoryView, RisksView, DataExport, ActionsView, ActionsEdit],
+        ["FINANCE"] = [ExecutiveView, DemandView, InventoryView, SupplyView, RisksView, FinanceView, DataExport, ActionsView],
+        ["WAREHOUSE"] = [InventoryView, SupplyView, RisksView, DataExport, ActionsView],
+        ["LOGISTICS"] = [SupplyView, InventoryView, RisksView, SupplyEdit, DataExport, ActionsView, ActionsEdit],
+        ["PRODUCTION"] = [DemandView, InventoryView, SupplyView, RisksView, DataExport, ActionsView, ActionsEdit],
     };
 }

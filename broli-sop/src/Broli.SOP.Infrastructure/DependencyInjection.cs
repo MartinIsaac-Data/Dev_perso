@@ -14,8 +14,8 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<IExcelReader, ExcelReader>();
         services.AddSingleton<ITabularExporter, TabularExporter>();
-        services.AddSingleton<INotificationPublisher, LoggingNotificationPublisher>();
         services.AddScoped<IAuditLogger, AuditLogger>();
+        services.AddSingleton<IEmailSender, SmtpEmailSender>();
         return services;
     }
 }

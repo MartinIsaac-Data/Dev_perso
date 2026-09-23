@@ -49,9 +49,7 @@ public sealed class ImportService(
             throw new Services.ValidationException([$"The file could not be read as an Excel workbook (.xlsx): {ex.Message}"]);
         }
 
-        var lookups = await repository.GetLookupsAsync(ct);
-        var outcome = ImportValidator.Validate(def, sheet, lookups);
-        var purge = lookups.HasDemoData && def.Type is ImportType.ProductMaster or ImportType.SupplierMaster;
+        var (outcome, purge) = await ValidateAsync(def, sheet, ct);
         var staged = new Staged(Guid.NewGuid(), def, fileName, username, outcome, purge);
         cache.Set(Key(staged.Id), staged, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = StagingDuration, Size = 1 });
 
@@ -61,6 +59,13 @@ public sealed class ImportService(
         return new ImportPreview(staged.Id, def.Slug, fileName, outcome.RowCount, outcome.ValidRows.Count, outcome.Columns, outcome.Samples,
             outcome.Issues.OrderByDescending(i => i.Severity == "Error").ThenBy(i => i.Row).ToList(),
             outcome.ErrorCount, outcome.WarningCount, CanCommit(outcome), purge);
+    }
+
+    /// <summary>Validates a sheet against current reference data. Shared by manual uploads and automated sources.</summary>
+    public async Task<(ValidationOutcome Outcome, bool PurgeDemo)> ValidateAsync(ImportDefinition def, RawSheet sheet, CancellationToken ct)
+    {
+        var lookups = await repository.GetLookupsAsync(ct);
+        return (ImportValidator.Validate(def, sheet, lookups), lookups.HasDemoData && def.Type is ImportType.ProductMaster or ImportType.SupplierMaster);
     }
 
     public async Task<ImportResult> CommitAsync(Guid id, string username, CancellationToken ct)
@@ -86,7 +91,7 @@ public sealed class ImportService(
 
     public async Task<IReadOnlyList<ImportBatchDto>> GetHistoryAsync(CancellationToken ct) =>
         (await repository.ListBatchesAsync(50, ct)).Select(b => new ImportBatchDto(b.Id, ImportDefinitions.Get(b.Type).Title, b.FileName,
-            b.UploadedBy, b.UploadedAtUtc, b.RowCount, b.InsertedCount, b.UpdatedCount, b.WarningCount, b.Status.ToString())).ToList();
+            b.UploadedBy, b.UploadedAtUtc, b.RowCount, b.InsertedCount, b.UpdatedCount, b.WarningCount, b.Status.ToString(), b.Source, b.ErrorCount, b.Message)).ToList();
 
     public async Task<int> PurgeDemoAsync(CancellationToken ct)
     {
@@ -96,7 +101,7 @@ public sealed class ImportService(
         return removed;
     }
 
-    private static bool CanCommit(ValidationOutcome o) => o.ErrorCount == 0 && o.ValidRows.Count > 0;
+    internal static bool CanCommit(ValidationOutcome o) => o.ErrorCount == 0 && o.ValidRows.Count > 0;
 
     private static string Key(Guid id) => $"import:{id}";
 }

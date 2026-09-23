@@ -7,7 +7,9 @@ public record UserInfo(
     string DisplayName,
     string? Department,
     IReadOnlyList<string> Roles,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions,
+    IReadOnlyList<string>? ScopeAgencies = null,
+    IReadOnlyList<string>? ScopeCategories = null);
 
 public record LoginResponse(string Token, DateTime ExpiresAtUtc, UserInfo User);
 

@@ -35,15 +35,16 @@ else if (Session.IsAuthenticated)
                 @NavItem("films", "◫", "Films", Permissions.InventoryView)
                 @NavItem("transit", "⛴", "Transit", Permissions.SupplyView)
                 @NavItem("suppliers", "⚙", "Suppliers", Permissions.SupplyView)
-                <div class="nav-section">Phase 3</div>
-                @Planned("S&OP Actions", "☑")
+                <div class="nav-section">S&amp;OP process</div>
+                @NavItem("meeting", "▣", "S&OP Meeting", Permissions.ActionsView)
+                @NavItem("actions", "☑", "S&OP Actions", Permissions.ActionsView)
                 <div class="nav-section">Administration</div>
                 @NavItem("data", "⤓", "Data Management", Permissions.DataImport)
                 @NavItem("admin", "⚿", "Administration", Permissions.UsersManage, NavLinkMatch.All)
                 @NavItem("admin/config", "⚙", "Configuration", Permissions.ConfigEdit)
                 @NavItem("admin/audit", "☰", "Audit Log", Permissions.AuditView)
             </nav>
-            <div class="sidebar-foot">Phase 2 · data via REST API</div>
+            <div class="sidebar-foot">Phase 3 · data via REST API</div>
         </aside>
         <div class="main">
             <header class="topbar">
@@ -51,6 +52,7 @@ else if (Session.IsAuthenticated)
                 <span class="title">Broli S&amp;OP Portal</span>
                 <GlobalSearch />
                 <span class="spacer"></span>
+                <NotificationBell />
                 <button class="icon-btn" title="Meeting / TV mode" @onclick="Ui.ToggleMeeting">@(Ui.MeetingMode ? "⤡ Exit meeting" : "⤢ Meeting")</button>
                 <button class="icon-btn" title="Full screen" @onclick="FullScreen" aria-label="Full screen">⛶</button>
                 <div class="user-chip">
@@ -153,10 +155,6 @@ else if (Session.IsAuthenticated)
         <NavLink href="@href" Match="match"><span class="ico">@icon</span>@label</NavLink>
     };
 
-    private RenderFragment Planned(string label, string icon) => __builder =>
-    {
-        <NavLink href="@($"planned/{Uri.EscapeDataString(label)}")"><span class="ico">@icon</span>@label<span class="badge-phase">P3</span></NavLink>
-    };
 
     public void Dispose()
     {

@@ -32,7 +32,8 @@ public interface ISopReadRepository
     Task<IReadOnlyList<SupplyLineData>> GetSupplyLinesAsync(ProductScope scope, SupplyWindow window, CancellationToken ct);
 
     Task<FilterOptions> GetFilterOptionsAsync(CancellationToken ct);
-    Task<IReadOnlyList<SearchResult>> SearchAsync(string term, int limit, CancellationToken ct);
+    /// <param name="categories">When not empty, products and families outside these codes are excluded.</param>
+    Task<IReadOnlyList<SearchResult>> SearchAsync(string term, int limit, IReadOnlyList<string> categories, CancellationToken ct);
     Task<DataStatus> GetDataStatusAsync(CancellationToken ct);
 }
 
@@ -93,7 +94,11 @@ public interface IImportRepository
 {
     Task<ImportLookups> GetLookupsAsync(CancellationToken ct);
     /// <summary>Writes validated rows atomically; purges DEMO data first when asked.</summary>
-    Task<ImportResult> CommitAsync(ImportType type, string fileName, string username, IReadOnlyList<object> rows, int warningCount, bool purgeDemo, CancellationToken ct);
+    Task<ImportResult> CommitAsync(ImportType type, string fileName, string username, IReadOnlyList<object> rows, int warningCount, bool purgeDemo,
+        CancellationToken ct, string source = "Manual upload");
+    /// <summary>Records an automated run that was not imported (validation errors or a read failure) in the import history.</summary>
+    Task RecordRejectedAsync(ImportType type, string fileName, string source, int rowCount, int errors, int warnings, string message,
+        ImportStatus status, CancellationToken ct);
     Task<IReadOnlyList<ImportBatch>> ListBatchesAsync(int limit, CancellationToken ct);
     Task<int> PurgeDemoDataAsync(CancellationToken ct);
 }

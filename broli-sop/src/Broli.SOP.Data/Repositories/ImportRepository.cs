@@ -33,7 +33,7 @@ public sealed class ImportRepository(SopDbContext db, IClock clock, ILogger<Impo
     }
 
     public async Task<ImportResult> CommitAsync(ImportType type, string fileName, string username, IReadOnlyList<object> rows, int warningCount,
-        bool purgeDemo, CancellationToken ct)
+        bool purgeDemo, CancellationToken ct, string source = "Manual upload")
     {
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
@@ -49,7 +49,7 @@ public sealed class ImportRepository(SopDbContext db, IClock clock, ILogger<Impo
             var batch = new ImportBatch
             {
                 Type = type, FileName = fileName, UploadedBy = username, UploadedAtUtc = clock.UtcNow,
-                RowCount = rows.Count, WarningCount = warningCount, Status = ImportStatus.Committed,
+                RowCount = rows.Count, WarningCount = warningCount, Status = ImportStatus.Committed, Source = source,
             };
             db.ImportBatches.Add(batch);
             await db.SaveChangesAsync(ct);
@@ -298,6 +298,17 @@ public sealed class ImportRepository(SopDbContext db, IClock clock, ILogger<Impo
 
     private static string Title(string code) =>
         System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(code.Replace('_', ' ').ToLowerInvariant());
+
+    public async Task RecordRejectedAsync(ImportType type, string fileName, string source, int rowCount, int errors, int warnings, string message,
+        ImportStatus status, CancellationToken ct)
+    {
+        db.ImportBatches.Add(new ImportBatch
+        {
+            Type = type, FileName = fileName, UploadedBy = "scheduler", UploadedAtUtc = clock.UtcNow, RowCount = rowCount, ErrorCount = errors,
+            WarningCount = warnings, Status = status, Source = source, Message = message.Length > 2000 ? message[..1999] + "…" : message,
+        });
+        await db.SaveChangesAsync(ct);
+    }
 
     public async Task<IReadOnlyList<ImportBatch>> ListBatchesAsync(int limit, CancellationToken ct) =>
         await db.ImportBatches.AsNoTracking().OrderByDescending(b => b.Id).Take(limit).ToListAsync(ct);

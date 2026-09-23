@@ -95,4 +95,29 @@ public enum ImportStatus
     Validated = 1,
     Committed = 2,
     Rejected = 3,
+    Failed = 4,
+}
+
+public enum ActionStatus
+{
+    Open = 1,
+    InProgress = 2,
+    Done = 3,
+    Cancelled = 4,
+}
+
+public enum ActionPriority
+{
+    Low = 1,
+    Medium = 2,
+    High = 3,
+    Critical = 4,
+}
+
+public enum DataSourceKind
+{
+    /// <summary>Excel files dropped in an inbox folder on the server.</summary>
+    ExcelFolder = 1,
+    /// <summary>A table or view in an ERP / staging database (SAP extracts, SQL Server…).</summary>
+    SqlStaging = 2,
 }

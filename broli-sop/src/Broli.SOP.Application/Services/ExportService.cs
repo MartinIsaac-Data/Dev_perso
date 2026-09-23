@@ -13,12 +13,13 @@ public sealed class ExportService(
     MaterialsService materials,
     TransitService transit,
     SupplierService suppliers,
+    ActionService actions,
     ITabularExporter exporter,
     IAuditLogger audit,
     ICurrentUser user,
     IAnalyticsEngine engine)
 {
-    public static readonly string[] Datasets = ["inventory", "demand", "supply", "risks", "risk-register", "mrp", "raw-materials", "films", "finished-goods", "transit", "suppliers"];
+    public static readonly string[] Datasets = ["inventory", "demand", "supply", "risks", "risk-register", "mrp", "raw-materials", "films", "finished-goods", "transit", "suppliers", "actions"];
 
     public async Task<(byte[] Content, string FileName, string ContentType)?> ExportAsync(
         string dataset, string format, SopFilter filter, TableQuery q, CancellationToken ct)
@@ -168,6 +169,15 @@ public sealed class ExportService(
                      new("Avg Transit (days)", "decimal"), new("Standard Transit (days)", "number"), new("Late Open", "number"), new("Critical Open", "number"), new("Risk")],
                     rows.Select(r => new object?[] { r.Code, r.Name, r.Country, r.Orders, r.Delivered, r.OnTimePct, r.AvgDelayDays, r.PartialDeliveries,
                         r.OpenOrders, r.InTransitTc, r.AvgTransitDays, r.StandardTransitDays, r.LateOpen, r.CriticalOpen, r.Risk }).ToList());
+            }
+            case "actions":
+            {
+                var rows = await actions.ListAllAsync(new ActionQuery { Search = q.Search, View = q.View, Sort = q.Sort, Desc = q.Desc }, ct);
+                return new TableData("S&OP Action Plan", subtitle,
+                    [new("Action ID"), new("Date", "date"), new("Topic"), new("Description"), new("Owner"), new("Department"), new("Due Date", "date"),
+                     new("Priority"), new("Status"), new("Decision"), new("Risk"), new("CArtSAP"), new("Comment")],
+                    rows.Select(a => new object?[] { a.Code, a.Date, a.Topic, a.Description, a.Owner, a.Department, a.DueDate, a.Priority,
+                        a.Status + (a.IsOverdue ? " (overdue)" : ""), a.IsDecision ? "Yes" : "No", a.RiskCode, a.CArtSap, a.Comment }).ToList());
             }
             default:
                 return null;

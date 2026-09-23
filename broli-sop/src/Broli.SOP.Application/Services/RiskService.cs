@@ -11,7 +11,7 @@ public sealed class RiskService(
     {
         var s = await engine.GetSnapshotAsync(filter, ct);
         var detected = RiskDetector.Detect(s, s.FilterLines(filter));
-        var register = await repository.ListAsync(ct);
+        var register = await VisibleAsync(ct);
         var today = clock.Today;
 
         return new RiskDashboard(
@@ -47,7 +47,7 @@ public sealed class RiskService(
     private async Task<IEnumerable<RiskItemDto>> RegisterRowsAsync(TableQuery q, CancellationToken ct)
     {
         var today = clock.Today;
-        var rows = (await repository.ListAsync(ct)).Select(r => r.ToDto(today));
+        var rows = (await VisibleAsync(ct)).Select(r => r.ToDto(today));
         return q.View?.ToLowerInvariant() switch
         {
             "open" => rows.Where(r => r.Status != "Closed"),
@@ -57,6 +57,10 @@ public sealed class RiskService(
             _ => rows,
         };
     }
+
+    /// <summary>Register items about products outside the user's data scope are hidden.</summary>
+    private async Task<IEnumerable<RiskItem>> VisibleAsync(CancellationToken ct) =>
+        (await repository.ListAsync(ct)).Where(r => r.Product is null || DataScope.AllowsCategory(user, r.Product.Category?.Code)).ToList();
 
     private static string Search(RiskItemDto r) => $"{r.Code} {r.Category} {r.Description} {r.CArtSap} {r.Product} {r.Owner} {r.Action}";
 

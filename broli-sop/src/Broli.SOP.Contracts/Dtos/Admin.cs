@@ -12,7 +12,9 @@ public record UserDto(
     bool IsDemo,
     IReadOnlyList<string> Roles,
     DateTime? LastLoginUtc,
-    bool IsLockedOut);
+    bool IsLockedOut,
+    IReadOnlyList<string> ScopeAgencies,
+    IReadOnlyList<string> ScopeCategories);
 
 public record UserUpsert(
     string Username,
@@ -21,7 +23,9 @@ public record UserUpsert(
     string? Department,
     bool IsActive,
     IReadOnlyList<string> Roles,
-    string? Password);
+    string? Password,
+    IReadOnlyList<string>? ScopeAgencies = null,
+    IReadOnlyList<string>? ScopeCategories = null);
 
 public record PermissionDto(string Code, string Description);
 
@@ -45,4 +49,5 @@ public record SettingsDto(
     ForecastSettings Forecast,
     SupplySettings Supply,
     TcSettings Tc,
-    GeneralSettings General);
+    GeneralSettings General,
+    AlertSettings? Alerts = null);

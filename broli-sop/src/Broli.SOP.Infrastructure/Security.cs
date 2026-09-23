@@ -42,8 +42,11 @@ public sealed class JwtOptions
 public sealed class JwtTokenService(JwtOptions options, IClock clock) : ITokenService
 {
     public const string PermissionClaim = "perm";
+    public const string ScopeAgencyClaim = "scope_agency";
+    public const string ScopeCategoryClaim = "scope_category";
 
-    public IssuedToken Issue(string username, string displayName, IReadOnlyCollection<string> roles, IReadOnlyCollection<string> permissions)
+    public IssuedToken Issue(string username, string displayName, IReadOnlyCollection<string> roles, IReadOnlyCollection<string> permissions,
+        IReadOnlyCollection<string>? scopeAgencies = null, IReadOnlyCollection<string>? scopeCategories = null)
     {
         var now = clock.UtcNow;
         var expires = now.AddMinutes(options.LifetimeMinutes);
@@ -56,6 +59,8 @@ public sealed class JwtTokenService(JwtOptions options, IClock clock) : ITokenSe
         };
         claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
         claims.AddRange(permissions.Select(p => new Claim(PermissionClaim, p)));
+        claims.AddRange((scopeAgencies ?? []).Select(a => new Claim(ScopeAgencyClaim, a)));
+        claims.AddRange((scopeCategories ?? []).Select(c => new Claim(ScopeCategoryClaim, c)));
 
         var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Key)), SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(options.Issuer, options.Audience, claims, now, expires, credentials);

@@ -54,7 +54,7 @@ public sealed class AuthService(
         await users.SaveChangesAsync(ct);
 
         var info = await GetUserInfoAsync(user, ct);
-        var token = tokens.Issue(user.Username, user.DisplayName, info.Roles, info.Permissions);
+        var token = tokens.Issue(user.Username, user.DisplayName, info.Roles, info.Permissions, info.ScopeAgencies, info.ScopeCategories);
         await audit.LogAsync("Login", "Security", user.Username, null, null, ct);
         return new LoginResponse(token.Token, token.ExpiresAtUtc, info);
     }
@@ -69,7 +69,7 @@ public sealed class AuthService(
     {
         var permissions = await users.GetPermissionsAsync(user.Id, ct);
         var roles = user.Roles.Select(r => r.Role?.Name).OfType<string>().Order().ToList();
-        return new UserInfo(user.Username, user.DisplayName, user.Department, roles, permissions);
+        return new UserInfo(user.Username, user.DisplayName, user.Department, roles, permissions, Split(user.ScopeAgencies), Split(user.ScopeCategories));
     }
 
     public async Task ChangePasswordAsync(string username, ChangePasswordRequest request, CancellationToken ct)
@@ -80,6 +80,15 @@ public sealed class AuthService(
         user.PasswordHash = hasher.Hash(request.NewPassword);
         await users.SaveChangesAsync(ct);
         await audit.LogAsync("Changed password", "Security", user.Username, null, null, ct);
+    }
+
+    public static IReadOnlyList<string> Split(string? csv) =>
+        string.IsNullOrWhiteSpace(csv) ? [] : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    public static string? Join(IEnumerable<string>? values)
+    {
+        var list = values?.Select(v => v.Trim()).Where(v => v.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return list is { Count: > 0 } ? string.Join(",", list) : null;
     }
 
     public static void ValidatePassword(string? password)

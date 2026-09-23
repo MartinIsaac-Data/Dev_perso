@@ -19,6 +19,7 @@ public sealed class AnalyticsEngine(
     IClock clock,
     IDataVersion version,
     IMemoryCache cache,
+    ICurrentUser user,
     ILogger<AnalyticsEngine> logger) : IAnalyticsEngine
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
@@ -26,6 +27,8 @@ public sealed class AnalyticsEngine(
 
     public async Task<AnalyticsSnapshot> GetSnapshotAsync(SopFilter filter, CancellationToken ct)
     {
+        // Row-level security first: the scoped filter is also the cache key, so users never share out-of-scope data.
+        filter = DataScope.Apply(filter, user);
         var key = $"snapshot:{version.Current}:{clock.Today:yyyyMMdd}:{filter.ToQueryString()}";
         if (cache.TryGetValue(key, out AnalyticsSnapshot? cached) && cached is not null) return cached;
 

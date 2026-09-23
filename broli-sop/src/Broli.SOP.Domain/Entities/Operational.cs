@@ -41,6 +41,10 @@ public class AppUser
     public DateTime? LockoutEndUtc { get; set; }
     public DateTime? LastLoginUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+    /// <summary>Data scope: agency codes this user may see (empty = all). Enforced by the API.</summary>
+    public string? ScopeAgencies { get; set; }
+    /// <summary>Data scope: product-family codes this user may see (empty = all). Enforced by the API.</summary>
+    public string? ScopeCategories { get; set; }
     public List<UserRole> Roles { get; set; } = [];
 }
 
@@ -101,5 +105,77 @@ public class ImportBatch
     public int InsertedCount { get; set; }
     public int UpdatedCount { get; set; }
     public int WarningCount { get; set; }
+    public int ErrorCount { get; set; }
     public ImportStatus Status { get; set; }
+    /// <summary>"Manual upload", or the name of the data source for automated refreshes.</summary>
+    public string Source { get; set; } = "Manual upload";
+    /// <summary>Summary of errors for rejected / failed automated runs.</summary>
+    public string? Message { get; set; }
+}
+
+/// <summary>An S&amp;OP action or decision, owned by a person with a due date.</summary>
+public class SopAction : IDemoTagged
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = "";
+    public DateOnly Date { get; set; }
+    public string Topic { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Owner { get; set; } = "";
+    public string Department { get; set; } = "";
+    public DateOnly? DueDate { get; set; }
+    public ActionPriority Priority { get; set; } = ActionPriority.Medium;
+    public ActionStatus Status { get; set; } = ActionStatus.Open;
+    public string? Comment { get; set; }
+    /// <summary>A decision the S&amp;OP meeting must take (shown in the meeting view).</summary>
+    public bool IsDecision { get; set; }
+    public int? RiskItemId { get; set; }
+    public RiskItem? RiskItem { get; set; }
+    public string? CArtSap { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public string CreatedBy { get; set; } = "";
+    public DateTime? UpdatedAtUtc { get; set; }
+    public string? UpdatedBy { get; set; }
+    public bool IsDemo { get; set; }
+}
+
+/// <summary>An in-app notification for one user.</summary>
+public class Notification
+{
+    public long Id { get; set; }
+    public int UserId { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public string Kind { get; set; } = "";
+    public string Severity { get; set; } = "info";
+    public string Title { get; set; } = "";
+    public string Message { get; set; } = "";
+    public string? Link { get; set; }
+    public DateTime? ReadAtUtc { get; set; }
+    public bool EmailSent { get; set; }
+}
+
+/// <summary>Remembers when an alert was last raised so the same alert is not repeated every run.</summary>
+public class AlertState
+{
+    public string Key { get; set; } = "";
+    public DateTime LastRaisedUtc { get; set; }
+}
+
+/// <summary>An automated data source feeding the standard import pipeline.</summary>
+public class DataSource
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public DataSourceKind Kind { get; set; }
+    public ImportType ImportType { get; set; }
+    /// <summary>ExcelFolder: sub-folder of the configured inbox root. SqlStaging: table or view name.</summary>
+    public string Location { get; set; } = "";
+    /// <summary>SqlStaging only: name of the connection string in configuration (never the credentials themselves).</summary>
+    public string? ConnectionName { get; set; }
+    /// <summary>Daily run time "HH:mm" (server local time); null = manual only.</summary>
+    public string? DailyAt { get; set; }
+    public bool Enabled { get; set; } = true;
+    public DateTime? LastRunUtc { get; set; }
+    public string? LastStatus { get; set; }
+    public string? LastMessage { get; set; }
 }

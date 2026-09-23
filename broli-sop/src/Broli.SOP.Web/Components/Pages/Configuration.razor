@@ -14,6 +14,22 @@
     @if (_s is { } s)
     {
         <div class="grid g-2">
+            <div class="card" style="grid-column:1 / -1">
+                <div class="card-head"><h2>Alerts &amp; notifications</h2>
+                    <button class="btn sm" @onclick="RunAlerts" disabled="@_saving">Run alerts now</button></div>
+                <div class="card-body form">
+                    @{ var a = s.Alerts!; }
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.StockoutRisk" /> Stockout risk detected (Critical coverage) → Inventory viewers</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.CoverageBelowThreshold" /> Coverage below the Risk threshold → Inventory viewers</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.EtaDelay" /> ETA delay (Supply Risk / Critical) → Supply viewers</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.OpenPoOverdue" /> Open PO overdue (ETA passed) → Supply viewers</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.ActionsOverdue" /> Overdue S&amp;OP actions → their owner</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.RefreshFailures" /> Automated refresh failures → data administrators</label></div>
+                    <div class="field"><label>Do not repeat the same alert for (days)</label><input type="number" min="0" max="90" @bind="a.RepeatAfterDays" /></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.SendEmail" /> Also send e-mail</label><div class="help">Requires SMTP on the server (Smtp:Host, Smtp:From). In-app notifications always work.</div></div>
+                    @if (_alertResult is { } ar) { <div class="field full"><div class="alert ok">✔ @ar.Alerts new alert(s), @ar.Notifications notification(s), @ar.Emails e-mail(s).</div></div> }
+                </div>
+            </div>
             <div class="card">
                 <div class="card-head"><h2>Coverage</h2><span class="hint">Coverage = available stock ÷ average monthly consumption</span></div>
                 <div class="card-body form">
@@ -78,12 +94,22 @@
     private string _transit = "", _safety = "", _departments = "", _films = "";
     private string? _error;
     private bool _ok, _saving;
+    private AlertRunResult? _alertResult;
+
+    private async Task RunAlerts()
+    {
+        _error = null; _saving = true;
+        try { _alertResult = await Api.PostAsync<AlertRunResult>("api/alerts/run", new { }); }
+        catch (ApiException ex) { _error = ex.Full; }
+        finally { _saving = false; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _s = await Api.GetAsync<SettingsDto>("api/settings");
+            _s = _s with { Alerts = _s.Alerts ?? new AlertSettings() };
             _transit = string.Join("\n", _s.Supply.TransitDaysByCountry.Select(kv => $"{kv.Key}={kv.Value}"));
             _safety = string.Join("\n", _s.SafetyStock.MonthsByCategory.Select(kv => $"{kv.Key}={kv.Value}"));
             _departments = string.Join(", ", _s.General.Departments);

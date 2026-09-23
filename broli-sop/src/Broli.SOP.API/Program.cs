@@ -30,6 +30,8 @@ builder.Services
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+builder.Services.AddSingleton<RefreshScheduler>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RefreshScheduler>());
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>

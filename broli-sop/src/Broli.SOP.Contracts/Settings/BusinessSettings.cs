@@ -98,6 +98,23 @@ public class GeneralSettings
         ["Direction", "Supply Chain", "Sales", "Finance", "Production", "Warehouse", "Logistics", "IT"];
 }
 
+/// <summary>Automatic alerts: which rules run and who receives them (by permission).</summary>
+public class AlertSettings
+{
+    public const string Key = "alerts";
+
+    public bool StockoutRisk { get; set; } = true;
+    public bool EtaDelay { get; set; } = true;
+    public bool CoverageBelowThreshold { get; set; } = true;
+    public bool OpenPoOverdue { get; set; } = true;
+    public bool ActionsOverdue { get; set; } = true;
+    public bool RefreshFailures { get; set; } = true;
+    /// <summary>The same alert on the same object is not repeated within this many days.</summary>
+    public int RepeatAfterDays { get; set; } = 3;
+    /// <summary>Send e-mail as well (requires SMTP configuration on the server).</summary>
+    public bool SendEmail { get; set; }
+}
+
 /// <summary>A consistent snapshot of every business parameter, loaded once per computation.</summary>
 public record SopSettings(
     CoverageSettings Coverage,
@@ -105,7 +122,9 @@ public record SopSettings(
     ForecastSettings Forecast,
     SupplySettings Supply,
     TcSettings Tc,
-    GeneralSettings General)
+    GeneralSettings General,
+    AlertSettings? Alerts = null)
 {
-    public static SopSettings Defaults() => new(new(), new(), new(), new(), new(), new());
+    public AlertSettings AlertRules => Alerts ?? new AlertSettings();
+    public static SopSettings Defaults() => new(new(), new(), new(), new(), new(), new(), new());
 }

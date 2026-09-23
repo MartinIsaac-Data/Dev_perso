@@ -11,7 +11,7 @@ public sealed class SupplyRepository(SopDbContext db) : ISupplyRepository
 
 public sealed class RiskRepository(SopDbContext db) : IRiskRepository
 {
-    private IQueryable<RiskItem> Items => db.RiskItems.Include(r => r.Product).Include(r => r.Supplier);
+    private IQueryable<RiskItem> Items => db.RiskItems.Include(r => r.Product).ThenInclude(p => p!.Category).Include(r => r.Supplier);
 
     public async Task<IReadOnlyList<RiskItem>> ListAsync(CancellationToken ct) =>
         await Items.AsNoTracking().OrderBy(r => r.Code).ToListAsync(ct);
@@ -120,7 +120,8 @@ public sealed class SettingsStore(SopDbContext db, IMemoryCache cache, IDataVers
             Read<ForecastSettings>(ForecastSettings.Key),
             Read<SupplySettings>(SupplySettings.Key),
             Read<TcSettings>(TcSettings.Key),
-            Read<GeneralSettings>(GeneralSettings.Key));
+            Read<GeneralSettings>(GeneralSettings.Key),
+            Read<AlertSettings>(AlertSettings.Key));
         cache.Set(key, settings, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30), Size = 1 });
         return settings;
     }
@@ -133,6 +134,7 @@ public sealed class SettingsStore(SopDbContext db, IMemoryCache cache, IDataVers
         await UpsertAsync(SupplySettings.Key, s.Supply, username, ct);
         await UpsertAsync(TcSettings.Key, s.Tc, username, ct);
         await UpsertAsync(GeneralSettings.Key, s.General, username, ct);
+        await UpsertAsync(AlertSettings.Key, s.AlertRules, username, ct);
         await db.SaveChangesAsync(ct);
     }
 

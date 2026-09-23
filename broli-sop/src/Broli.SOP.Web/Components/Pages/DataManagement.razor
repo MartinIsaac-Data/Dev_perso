@@ -115,15 +115,56 @@
         </div>
     </div>
 
+    <div class="card mb">
+        <div class="card-head">
+            <h2>Automated sources (ERP / inbox)</h2>
+            <div class="toolbar">
+                <button class="btn sm" @onclick="RunAll" disabled="@(_busy || _sources.Count == 0)">⟳ Refresh all now</button>
+                <button class="btn sm primary" @onclick="NewSource">+ Add source</button>
+            </div>
+        </div>
+        <div class="card-body" style="padding-bottom:4px">
+            <p class="muted" style="margin:0 0 8px">Sources feed the same validation as manual uploads: a source with an error is rejected as a whole and reported to data administrators.
+                Scheduler @(_info?.SchedulerEnabled == true ? "on" : "off") · inbox @(_info?.InboxRoot ?? "not configured") · ERP connections: @(_info is { ConnectionNames.Count: > 0 } inf ? string.Join(", ", inf.ConnectionNames) : "none configured").</p>
+            @if (_runResults.Count > 0)
+            {
+                <div class="alert @(_runResults.Any(r => r.Status is "Rejected" or "Failed") ? "warn" : "ok")">
+                    <div>@foreach (var r in _runResults) { <div><b>@r.Source</b> — @r.Status: @r.Message</div> }</div>
+                </div>
+            }
+        </div>
+        <div class="card-body flush table-wrap">
+            <table class="data">
+                <thead><tr><th>Source</th><th>Type</th><th>From</th><th>Schedule</th><th>Last run</th><th>Result</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var s in _sources)
+                    {
+                        <tr>
+                            <td><b>@s.Name</b>@if (!s.Enabled) {<span class="sub">disabled</span>}</td>
+                            <td>@(_templates.FirstOrDefault(t => t.Type == s.ImportType)?.Title ?? s.ImportType)</td>
+                            <td class="code">@(s.Kind == "SqlStaging" ? $"{s.ConnectionName} : {s.Location}" : $"inbox/{s.Location}/*.xlsx")</td>
+                            <td>@(s.DailyAt is null ? "manual" : "daily " + s.DailyAt)</td>
+                            <td class="nowrap">@Fmt.DateTime(s.LastRunUtc)</td>
+                            <td>@if (s.LastStatus is { } last) {<StatusBadge Status="@(last == "Imported" ? "OK" : last == "No data" ? "neutral" : "Critical")" Text="@last" />}<span class="sub">@s.LastMessage</span></td>
+                            <td class="nowrap"><button class="btn sm" @onclick="() => RunSource(s)" disabled="@_busy">Run now</button> <button class="btn sm" @onclick="() => EditSource(s)">Edit</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_sources.Count == 0) { <div class="empty">No automated source yet. Manual uploads above keep working.</div> }
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-head"><h2>Import history</h2></div>
         <div class="card-body flush table-wrap">
             <table class="data">
-                <thead><tr><th>Date</th><th>Type</th><th>File</th><th>By</th><th class="num">Rows</th><th class="num">Inserted</th><th class="num">Updated</th><th class="num">Warnings</th></tr></thead>
+                <thead><tr><th>Date</th><th>Type</th><th>File / source</th><th>By</th><th>Status</th><th class="num">Rows</th><th class="num">Inserted</th><th class="num">Updated</th><th class="num">Warnings</th></tr></thead>
                 <tbody>
                     @foreach (var b in _history)
                     {
-                        <tr><td class="nowrap">@Fmt.DateTime(b.UploadedAtUtc)</td><td>@b.Type</td><td>@b.FileName</td><td>@b.UploadedBy</td>
+                        <tr><td class="nowrap">@Fmt.DateTime(b.UploadedAtUtc)</td><td>@b.Type</td><td>@b.FileName<span class="sub">@b.Source</span></td><td>@b.UploadedBy</td>
+                            <td><StatusBadge Status="@(b.Status == "Committed" ? "OK" : "Critical")" Text="@(b.Status == "Committed" ? "Imported" : b.Status)" />@if (b.Message is not null) {<span class="sub" style="white-space:pre-line;max-width:320px;display:block">@b.Message</span>}</td>
                             <td class="num">@b.RowCount.ToString("N0")</td><td class="num">@b.Inserted.ToString("N0")</td><td class="num">@b.Updated.ToString("N0")</td><td class="num">@b.Warnings</td></tr>
                     }
                 </tbody>
@@ -131,6 +172,43 @@
             @if (_history.Count == 0) { <div class="empty">No file imported yet.</div> }
         </div>
     </div>
+
+    @if (_source is not null)
+    {
+        <div class="modal-back" @onclick="() => _source = null">
+            <div class="modal" @onclick:stopPropagation role="dialog" aria-modal="true" aria-label="Data source">
+                <div class="modal-head"><h2>@(_sourceId is null ? "New automated source" : "Edit " + _source.Name)</h2><button class="icon-btn" @onclick="() => _source = null">✕</button></div>
+                <div class="modal-body">
+                    @if (_sourceError is not null) { <div class="alert error">@_sourceError</div> }
+                    <div class="form">
+                        <div class="field"><label>Name</label><input @bind="_source.Name" maxlength="100" /></div>
+                        <div class="field"><label>Data</label><select @bind="_source.ImportType">@foreach (var t in _templates) { <option value="@t.Type">@t.Title</option> }</select></div>
+                        <div class="field"><label>Kind</label>
+                            <select @bind="_source.Kind"><option value="SqlStaging">ERP / SQL staging table or view</option><option value="ExcelFolder">Excel files dropped in an inbox folder</option></select></div>
+                        @if (_source.Kind == "SqlStaging")
+                        {
+                            <div class="field"><label>Connection</label>
+                                <select @bind="_source.ConnectionName"><option value="">— choose —</option>@foreach (var c in _info?.ConnectionNames ?? []) { <option>@c</option> }</select>
+                                <div class="help">Connection strings are defined on the server (ConnectionStrings:&lt;name&gt;), never here.</div></div>
+                            <div class="field full"><label>Table or view</label><input @bind="_source.Location" placeholder="dbo.V_SOP_INVENTORY" />
+                                <div class="help">Columns named like the Excel template (aliases accepted). Read with SELECT * — use a read-only account.</div></div>
+                        }
+                        else
+                        {
+                            <div class="field full"><label>Inbox sub-folder</label><input @bind="_source.Location" placeholder="inventory" />
+                                <div class="help">Files go to @(_info?.InboxRoot ?? "<inbox>")/@(_source.Location)/ — processed files move to processed/, rejected ones to rejected/ with an error report.</div></div>
+                        }
+                        <div class="field"><label>Run daily at (HH:mm)</label><input @bind="_source.DailyAt" placeholder="06:00" /><div class="help">Empty = manual only.</div></div>
+                        <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" @bind="_source.Enabled" /> Enabled</label></div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    @if (_sourceId is not null) { <button class="btn danger" style="margin-right:auto" @onclick="DeleteSource">Delete</button> }
+                    <button class="btn" @onclick="() => _source = null">Cancel</button><button class="btn primary" @onclick="SaveSource">Save</button>
+                </div>
+            </div>
+        </div>
+    }
 
     @if (_confirmPurge)
     {
@@ -162,7 +240,70 @@
         return n < current ? "done" : n == current ? "on" : "";
     }
 
+    private sealed class SourceForm
+    {
+        public string Name { get; set; } = "";
+        public string Kind { get; set; } = "SqlStaging";
+        public string ImportType { get; set; } = "inventory";
+        public string Location { get; set; } = "";
+        public string? ConnectionName { get; set; }
+        public string? DailyAt { get; set; } = "06:00";
+        public bool Enabled { get; set; } = true;
+    }
+    private List<DataSourceDto> _sources = [];
+    private RefreshInfo? _info;
+    private List<DataSourceRunResult> _runResults = [];
+    private SourceForm? _source;
+    private int? _sourceId;
+    private string? _sourceError;
+
     protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private void NewSource() { _sourceId = null; _sourceError = null; _source = new SourceForm(); }
+
+    private void EditSource(DataSourceDto s)
+    {
+        _sourceId = s.Id; _sourceError = null;
+        _source = new SourceForm { Name = s.Name, Kind = s.Kind, ImportType = s.ImportType, Location = s.Location, ConnectionName = s.ConnectionName, DailyAt = s.DailyAt, Enabled = s.Enabled };
+    }
+
+    private async Task SaveSource()
+    {
+        if (_source is null) return;
+        _sourceError = null;
+        var body = new DataSourceUpsert(_source.Name, _source.Kind, _source.ImportType, _source.Location, _source.ConnectionName, _source.DailyAt, _source.Enabled);
+        try
+        {
+            if (_sourceId is { } id) await Api.PutAsync<DataSourceDto>($"api/data-sources/{id}", body);
+            else await Api.PostAsync<DataSourceDto>("api/data-sources", body);
+            _source = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _sourceError = ex.Full; }
+    }
+
+    private async Task DeleteSource()
+    {
+        if (_sourceId is not { } id) return;
+        try { await Api.SendAsync(HttpMethod.Delete, $"api/data-sources/{id}"); _source = null; await LoadAsync(); }
+        catch (ApiException ex) { _sourceError = ex.Full; }
+    }
+
+    private async Task RunSource(DataSourceDto s) => await Run($"api/data-sources/{s.Id}/run");
+    private async Task RunAll() => await Run("api/data-sources/run-all");
+
+    private async Task Run(string url)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            _runResults = (await Api.PostAsync<List<DataSourceRunResult>>(url, new { })).ToList();
+            Filters.Options = await Api.GetAsync<FilterOptions>("api/filters/options");
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+        finally { _busy = false; }
+    }
 
     private async Task LoadAsync()
     {
@@ -171,6 +312,8 @@
             _templates = (await Api.GetAsync<List<ImportTemplateInfo>>("api/imports/templates")).ToList();
             _history = (await Api.GetAsync<List<ImportBatchDto>>("api/imports/history")).ToList();
             _status = await Api.GetAsync<DataStatus>("api/data/status");
+            _sources = (await Api.GetAsync<List<DataSourceDto>>("api/data-sources")).ToList();
+            _info = await Api.GetAsync<RefreshInfo>("api/data-sources/info");
         }
         catch (ApiException ex) { _error = ex.Full; }
     }

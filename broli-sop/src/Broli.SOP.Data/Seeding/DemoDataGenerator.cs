@@ -223,6 +223,9 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
         AddRiskRegister(specs, suppliers);
         db.ChangeTracker.DetectChanges();
         await db.SaveChangesAsync(ct);
+        AddActions(specs);
+        db.ChangeTracker.DetectChanges();
+        await db.SaveChangesAsync(ct);
         db.ChangeTracker.AutoDetectChangesEnabled = true;
         db.ChangeTracker.Clear();
     }
@@ -490,6 +493,52 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
             "Identifier des transporteurs alternatifs", 12, RiskStatus.Closed);
         Risk(RiskCategory.Overstock, true, "Opportunité: achat spot de semoule à prix réduit", specs.First(s => s.Product.Description == "SEMOULE SSSE PREMIUM"), suppliers["S08"],
             ImpactLevel.Medium, 40, "Évaluer l'impact trésorerie avec la Finance", 8, RiskStatus.Open);
+    }
+
+    private void AddActions(List<Spec> specs)
+    {
+        var risks = db.RiskItems.Local.ToDictionary(r => r.Code);
+        var n = 0;
+        void Action(string topic, string description, string owner, string dept, int dueInDays, ActionPriority priority, ActionStatus status,
+            bool decision = false, string? risk = null, Spec? spec = null, string? comment = null, int ageDays = 10)
+        {
+            db.Actions.Add(new SopAction
+            {
+                Code = $"A-{++n:0000}", Date = _today.AddDays(-ageDays), Topic = topic, Description = description, Owner = owner, Department = dept,
+                DueDate = _today.AddDays(dueInDays), Priority = priority, Status = status, IsDecision = decision, Comment = comment,
+                RiskItemId = risk is not null && risks.TryGetValue(risk, out var r) ? r.Id : null, CArtSap = spec?.Product.CArtSap,
+                CreatedAtUtc = clock.UtcNow.AddDays(-ageDays), CreatedBy = "demo", IsDemo = true,
+            });
+        }
+        var rahma = specs.First(s => s.Profile == Profile.Critical && s.Product.Description.StartsWith("FILM RAHMA"));
+        var wheat = specs.First(s => s.Product.Description == "BLE DUR UKRAINE");
+        var mayo = specs.First(s => s.Product.Description == "MAYONNAISE FIONA 500ML");
+        var dormant = specs.First(s => s.Profile == Profile.Dormant);
+
+        Action("Films Rahma", "Obtenir d'Anatolia Films une expédition partielle par avion (2 t) pour couvrir la rupture du 08/10",
+            "Supply Planner (DEMO)", "Supply Chain", 2, ActionPriority.Critical, ActionStatus.InProgress, risk: "R-0001", spec: rahma, comment: "Devis fret aérien demandé", ageDays: 4);
+        Action("Films Rahma", "Valider le surcoût du fret aérien pour les films Rahma 500g", "Directeur Général (DEMO)", "Direction", 1,
+            ActionPriority.Critical, ActionStatus.Open, decision: true, risk: "R-0001", spec: rahma, ageDays: 2);
+        Action("Blé dur", "Basculer 30 % du besoin d'octobre sur le blé canadien", "Supply Planner (DEMO)", "Supply Chain", 5,
+            ActionPriority.High, ActionStatus.Open, risk: "R-0005", spec: wheat, ageDays: 6);
+        Action("Blé dur", "Arbitrer : achat spot de blé à prix majoré ou arrêt ligne 2 pendant 5 jours", "Directeur Général (DEMO)", "Direction", 3,
+            ActionPriority.High, ActionStatus.Open, decision: true, risk: "R-0005", spec: wheat, ageDays: 2);
+        Action("Port de Douala", "Négocier la franchise de surestaries avec le transitaire", "Logistics Officer (DEMO)", "Logistics", -3,
+            ActionPriority.High, ActionStatus.InProgress, risk: "R-0003", comment: "Relance envoyée", ageDays: 20);
+        Action("Forecast", "Revue du forecast Armanti avec l'équipe commerciale", "Sales Manager (DEMO)", "Sales", -6,
+            ActionPriority.Medium, ActionStatus.Open, risk: "R-0007", ageDays: 25);
+        Action("Projet Mayonnaise", "Confirmer la capacité bocaux 500 ml et jaune d'oeuf pour le nouveau référencement", "Production Manager (DEMO)",
+            "Production", 12, ActionPriority.High, ActionStatus.Open, risk: "R-0010", spec: mayo, ageDays: 5);
+        Action("Projet Mayonnaise", "Go / No go du référencement Fiona 500 ml dans la nouvelle enseigne", "Directeur Général (DEMO)", "Direction", 9,
+            ActionPriority.Medium, ActionStatus.Open, decision: true, risk: "R-0010", spec: mayo, ageDays: 3);
+        Action("Stock dormant", "Décider réutilisation ou mise au rebut du film promo sans consommation", "Finance Controller (DEMO)", "Finance", -1,
+            ActionPriority.Medium, ActionStatus.Open, decision: true, risk: "R-0012", spec: dormant, ageDays: 15);
+        Action("Maintenance", "Constituer 10 jours de stock tampon spaghetti avant l'arrêt de la ligne 2", "Production Manager (DEMO)", "Production", 14,
+            ActionPriority.High, ActionStatus.InProgress, risk: "R-0009", ageDays: 8);
+        Action("Fournisseurs", "Qualifier un second fournisseur de films (appel d'offres)", "Supply Planner (DEMO)", "Supply Chain", 40,
+            ActionPriority.Medium, ActionStatus.Open, risk: "R-0002", ageDays: 12);
+        Action("Transport", "Identifier des transporteurs alternatifs Douala–Yaoundé", "Logistics Officer (DEMO)", "Logistics", -10,
+            ActionPriority.Low, ActionStatus.Done, risk: "R-0013", comment: "Deux transporteurs référencés", ageDays: 30);
     }
 
     private string Pick(params string[] values) => values[_rnd.Next(values.Length)];

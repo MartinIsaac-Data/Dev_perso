@@ -97,6 +97,28 @@ Chaque résultat est un nombre fini ou `null` (affiché « — ») : pas de NaN 
 Le filtre Année/Mois désigne la période. Sans mois : dernier mois disposant d'un stock. Le stock est pris au dernier mois
 sélectionné (plafonné au dernier instantané disponible). Les comparaisons utilisent le bloc de mois précédent de même longueur.
 
+## Phase 3 — processus S&OP, alertes, périmètre et alimentation automatique
+
+```
+ ERP (vue de staging) ─┐                    ┌─► validation (ImportValidator) ─► erreurs ─► historique « Rejected »
+                       ├─► DataRefreshService┤                                              + notification admins
+ Dossier de dépôt .xlsx┘   (planificateur)  └─► import transactionnel (même code que l'upload) ─► IDataVersion++
+                                                   └─► AlertEngine ─► notifications (cloche / e-mail)
+```
+
+- **Périmètre de données** : `DataScope.Apply` intersecte le filtre demandé avec les agences / familles autorisées de
+  l'utilisateur (portées par le jeton). Il est appliqué au tout début de `AnalyticsEngine.GetSnapshotAsync`, donc par
+  construction à tous les écrans et exports ; le filtre restreint est aussi la clé de cache, si bien que deux utilisateurs de
+  périmètres différents ne partagent jamais un résultat. Recherche, options de filtre et registre des risques sont filtrés à part.
+- **Acteur système** : le planificateur s'exécute sous `SystemActor` (`scheduler`), droits complets, sans périmètre, audité.
+- **Alertes** : une notification récapitulative par règle et par destinataire ; `SYS_ALERT_STATE` mémorise la dernière
+  alerte de chaque objet pour ne pas la répéter avant `RepeatAfterDays`.
+- **Sources** : `SYS_DATA_SOURCE` stocke le type, l'import cible, un identifiant de table/vue ou un nom de sous-dossier
+  (validés par expression régulière), le nom d'une connexion de configuration et l'heure quotidienne — jamais de SQL, de chemin
+  absolu ni d'identifiant de connexion.
+- **Nouvelles tables** : `SOP_ACTION`, `SYS_NOTIFICATION`, `SYS_ALERT_STATE`, `SYS_DATA_SOURCE` ; colonnes de périmètre sur `SEC_USER` ;
+  source, erreurs et message sur `SYS_IMPORT_BATCH`.
+
 ## Cache et performance
 
 `AnalyticsEngine` charge, pour un filtre, des agrégats par produit × mois, puis calcule toutes les positions, projections et

@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 namespace Broli.SOP.Tests;
 
 /// <summary>Runs the real API on a throw-away SQLite file with generated DEMO data.</summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>
+public class ApiFactory : WebApplicationFactory<Program>
 {
     public const string AdminPassword = "Admin#Test2026";
     public const string DemoPassword = "Demo#Test2026";
@@ -29,7 +29,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Bootstrap:AdminUsername", "admin");
         builder.UseSetting("Bootstrap:AdminPassword", AdminPassword);
         builder.UseSetting("Demo:UserPassword", DemoPassword);
+        builder.UseSetting("Refresh:Enabled", "false"); // tests trigger refreshes and alerts explicitly
+        Configure(builder);
     }
+
+    protected virtual void Configure(IWebHostBuilder builder) { }
 
     public async Task<HttpClient> ClientAsync(string user = "admin", string? password = null)
     {

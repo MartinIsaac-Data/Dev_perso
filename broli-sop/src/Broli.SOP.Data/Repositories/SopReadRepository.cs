@@ -177,13 +177,16 @@ public sealed class SopReadRepository(SopDbContext db) : ISopReadRepository
             Enum.GetValues<SupplyStatus>().Select(s => new Option(s.ToString(), Application.Labels.Of(s))).ToList());
     }
 
-    public async Task<IReadOnlyList<SearchResult>> SearchAsync(string term, int limit, CancellationToken ct)
+    public async Task<IReadOnlyList<SearchResult>> SearchAsync(string term, int limit, IReadOnlyList<string> categories, CancellationToken ct)
     {
+        var scoped = categories.Count > 0;
+        var cats = categories.ToList();
         var pattern = "%" + term.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]") + "%";
         if (db.Database.IsSqlite()) pattern = "%" + term.Replace("%", "").Replace("_", "") + "%";
         var results = new List<SearchResult>();
 
         var products = await db.Products.AsNoTracking()
+            .Where(p => !scoped || cats.Contains(p.Category!.Code))
             .Where(p => EF.Functions.Like(p.CArtSap, pattern) || EF.Functions.Like(p.Description, pattern))
             .OrderBy(p => p.CArtSap).Take(limit)
             .Select(p => new { p.CArtSap, p.Description, Category = p.Category!.Name, Brand = p.Brand != null ? p.Brand.Name : null })
@@ -198,6 +201,7 @@ public sealed class SopReadRepository(SopDbContext db) : ISopReadRepository
             $"/supply?view=all&supplier={Uri.EscapeDataString(s.Code)}")));
 
         var pos = await db.SupplyLines.AsNoTracking()
+            .Where(l => !scoped || cats.Contains(l.Product!.Category!.Code))
             .Where(l => EF.Functions.Like(l.PoNumber, pattern))
             .OrderByDescending(l => l.OrderDate).Take(5)
             .Select(l => new { l.PoNumber, Product = l.Product!.Description, l.Status, Supplier = l.Supplier!.Name }).ToListAsync(ct);
@@ -207,9 +211,10 @@ public sealed class SopReadRepository(SopDbContext db) : ISopReadRepository
         var brands = await db.Brands.AsNoTracking().Where(b => EF.Functions.Like(b.Name, pattern)).Take(5).Select(b => b.Name).ToListAsync(ct);
         results.AddRange(brands.Select(b => new SearchResult("Brand", b, b, "Brand — filter all pages", $"/inventory?brand={Uri.EscapeDataString(b)}")));
 
-        var categories = await db.Categories.AsNoTracking().Where(c => EF.Functions.Like(c.Name, pattern) || EF.Functions.Like(c.Code, pattern))
+        var families = await db.Categories.AsNoTracking().Where(c => !scoped || cats.Contains(c.Code))
+            .Where(c => EF.Functions.Like(c.Name, pattern) || EF.Functions.Like(c.Code, pattern))
             .Take(5).Select(c => new { c.Code, c.Name, c.MaterialType }).ToListAsync(ct);
-        results.AddRange(categories.Select(c => new SearchResult("Material", c.Code, c.Name, $"{Application.Labels.Of(c.MaterialType)} family",
+        results.AddRange(families.Select(c => new SearchResult("Material", c.Code, c.Name, $"{Application.Labels.Of(c.MaterialType)} family",
             $"/inventory?category={Uri.EscapeDataString(c.Code)}")));
 
         return results;

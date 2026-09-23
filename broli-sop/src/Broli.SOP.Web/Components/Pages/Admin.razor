@@ -1,6 +1,7 @@
 @page "/admin"
 @inject ApiClient Api
 @inject AuthSession Session
+@inject FilterState Filters
 
 <PageTitle>Administration · Broli S&amp;OP</PageTitle>
 
@@ -18,7 +19,7 @@
             <div class="table-tools"><input type="search" placeholder="Search users…" @bind="_search" @bind:event="oninput" /></div>
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>User</th><th>Department</th><th>Roles</th><th>Last login</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>User</th><th>Department</th><th>Roles</th><th>Data scope</th><th>Last login</th><th>Status</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var u in _users.Where(u => _search.Length == 0 || $"{u.Username} {u.DisplayName} {u.Department} {string.Join(' ', u.Roles)}".Contains(_search, StringComparison.OrdinalIgnoreCase)))
                         {
@@ -26,6 +27,7 @@
                                 <td><b>@u.DisplayName</b><span class="sub">@u.Username @(u.Email is null ? "" : "· " + u.Email)</span></td>
                                 <td>@u.Department</td>
                                 <td>@string.Join(", ", u.Roles)</td>
+                                <td class="muted">@Scope(u)</td>
                                 <td class="nowrap">@Fmt.DateTime(u.LastLoginUtc)</td>
                                 <td>
                                     <StatusBadge Status="@(u.IsActive ? "OK" : "Critical")" Text="@(u.IsActive ? "Active" : "Inactive")" />
@@ -81,6 +83,12 @@
                         <div class="field"><label>@(_userId is null ? "Initial password" : "New password (leave empty to keep)")</label><input type="password" @bind="_user.Password" autocomplete="new-password" />
                             <div class="help">At least 10 characters with letters and digits.</div></div>
                         <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" @bind="_user.IsActive" /> Active</label></div>
+                        <div class="field full"><label>Data scope — agencies</label>
+                            <div class="chips">@foreach (var a in Filters.Options?.Agencies ?? []) { var code = a.Value; <label class="check chip" style="padding:4px 10px"><input type="checkbox" checked="@_user.ScopeAgencies.Contains(code)" @onchange="e => Toggle(_user.ScopeAgencies, code, (bool)e.Value!)" /> @a.Label</label> }</div>
+                            <div class="help">None ticked = all agencies. Applied by the API to every view, export and search.</div></div>
+                        <div class="field full"><label>Data scope — product families</label>
+                            <div class="chips">@foreach (var c in Filters.Options?.Categories ?? []) { var code = c.Value; <label class="check chip" style="padding:4px 10px"><input type="checkbox" checked="@_user.ScopeCategories.Contains(code)" @onchange="e => Toggle(_user.ScopeCategories, code, (bool)e.Value!)" /> @c.Label</label> }</div>
+                            <div class="help">None ticked = all families. Takes effect at the user's next sign-in.</div></div>
                     </div>
                 </div>
                 <div class="modal-foot"><button class="btn" @onclick="() => _user = null">Cancel</button><button class="btn primary" @onclick="SaveUser">Save</button></div>
@@ -113,7 +121,16 @@
         public bool IsActive { get; set; } = true;
         public List<string> Roles { get; set; } = [];
         public string? Password { get; set; }
+        public List<string> ScopeAgencies { get; set; } = [];
+        public List<string> ScopeCategories { get; set; } = [];
     }
+
+    private static void Toggle(List<string> list, string code, bool on) { if (on) { if (!list.Contains(code)) list.Add(code); } else list.Remove(code); }
+
+    private static string Scope(UserDto u) =>
+        u.ScopeAgencies.Count + u.ScopeCategories.Count == 0 ? "all data"
+        : string.Join(" · ", new[] { u.ScopeAgencies.Count > 0 ? "agencies: " + string.Join(", ", u.ScopeAgencies) : null,
+                                     u.ScopeCategories.Count > 0 ? "families: " + string.Join(", ", u.ScopeCategories) : null }.Where(x => x is not null));
     private sealed class RoleForm { public string Name { get; set; } = ""; public string Description { get; set; } = ""; }
 
     private string _tab = "users", _search = "";
@@ -177,7 +194,8 @@
     {
         _userId = u.Id;
         _formError = null;
-        _user = new UserForm { Username = u.Username, DisplayName = u.DisplayName, Email = u.Email, Department = u.Department, IsActive = u.IsActive, Roles = u.Roles.ToList() };
+        _user = new UserForm { Username = u.Username, DisplayName = u.DisplayName, Email = u.Email, Department = u.Department, IsActive = u.IsActive, Roles = u.Roles.ToList(),
+            ScopeAgencies = u.ScopeAgencies.ToList(), ScopeCategories = u.ScopeCategories.ToList() };
     }
 
     private void ToggleRole(string name, bool on) { if (_user is null) return; if (on) _user.Roles.Add(name); else _user.Roles.Remove(name); }
@@ -186,7 +204,8 @@
     {
         if (_user is null) return;
         _formError = null;
-        var body = new UserUpsert(_user.Username, _user.DisplayName, _user.Email, _user.Department, _user.IsActive, _user.Roles, string.IsNullOrEmpty(_user.Password) ? null : _user.Password);
+        var body = new UserUpsert(_user.Username, _user.DisplayName, _user.Email, _user.Department, _user.IsActive, _user.Roles, string.IsNullOrEmpty(_user.Password) ? null : _user.Password,
+            _user.ScopeAgencies, _user.ScopeCategories);
         try
         {
             if (_userId is { } id) await Api.PutAsync<UserDto>($"api/admin/users/{id}", body);

@@ -26,6 +26,13 @@ public static class DependencyInjection
         services.AddScoped<MaterialsService>();
         services.AddScoped<TransitService>();
         services.AddScoped<SupplierService>();
+        services.AddScoped<ActionService>();
+        services.AddScoped<MeetingService>();
+        services.AddScoped<NotificationService>();
+        services.AddScoped<INotificationPublisher>(sp => sp.GetRequiredService<NotificationService>());
+        services.AddScoped<AlertEngine>();
+        services.AddScoped<DataRefreshService>();
+        services.AddScoped<DataSourceService>();
         return services;
     }
 }

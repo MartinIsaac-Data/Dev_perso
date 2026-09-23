@@ -120,6 +120,7 @@ public sealed class ExportController(ExportService service) : ControllerBase
             "risk-register" or "risks" => Permissions.RisksView,
             "supply" or "mrp" or "transit" or "suppliers" => Permissions.SupplyView,
             "demand" => Permissions.DemandView,
+            "actions" => Permissions.ActionsView,
             _ => Permissions.InventoryView,
         };
         if (!User.HasClaim(Broli.SOP.Infrastructure.JwtTokenService.PermissionClaim, required)) return Forbid();

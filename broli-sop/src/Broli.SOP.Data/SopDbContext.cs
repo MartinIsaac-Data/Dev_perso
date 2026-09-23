@@ -35,6 +35,10 @@ public class SopDbContext(DbContextOptions<SopDbContext> options) : DbContext(op
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<SopAction> Actions => Set<SopAction>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<AlertState> AlertStates => Set<AlertState>();
+    public DbSet<DataSource> DataSources => Set<DataSource>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -47,6 +51,9 @@ public class SopDbContext(DbContextOptions<SopDbContext> options) : DbContext(op
         builder.Properties<ImpactLevel>().HaveConversion<string>().HaveMaxLength(20);
         builder.Properties<ImportType>().HaveConversion<string>().HaveMaxLength(20);
         builder.Properties<ImportStatus>().HaveConversion<string>().HaveMaxLength(20);
+        builder.Properties<ActionStatus>().HaveConversion<string>().HaveMaxLength(20);
+        builder.Properties<ActionPriority>().HaveConversion<string>().HaveMaxLength(20);
+        builder.Properties<DataSourceKind>().HaveConversion<string>().HaveMaxLength(20);
     }
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -173,7 +180,48 @@ public class SopDbContext(DbContextOptions<SopDbContext> options) : DbContext(op
             e.Property(x => x.Key).HasMaxLength(60);
             e.Property(x => x.JsonValue).HasMaxLength(8000);
         });
-        b.Entity<ImportBatch>(e => { e.ToTable("SYS_IMPORT_BATCH"); e.HasIndex(x => x.UploadedAtUtc); });
+        b.Entity<ImportBatch>(e =>
+        {
+            e.ToTable("SYS_IMPORT_BATCH");
+            e.HasIndex(x => x.UploadedAtUtc);
+            e.Property(x => x.Message).HasMaxLength(2000);
+        });
+        b.Entity<AppUser>(e =>
+        {
+            e.Property(x => x.ScopeAgencies).HasMaxLength(1000);
+            e.Property(x => x.ScopeCategories).HasMaxLength(1000);
+        });
+        b.Entity<SopAction>(e =>
+        {
+            e.ToTable("SOP_ACTION");
+            e.HasIndex(x => x.Code).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Code).HasMaxLength(20);
+            e.Property(x => x.Description).HasMaxLength(2000);
+            e.Property(x => x.Comment).HasMaxLength(2000);
+            e.HasOne(x => x.RiskItem).WithMany().HasForeignKey(x => x.RiskItemId).OnDelete(DeleteBehavior.SetNull);
+        });
+        b.Entity<Notification>(e =>
+        {
+            e.ToTable("SYS_NOTIFICATION");
+            e.HasIndex(x => new { x.UserId, x.ReadAtUtc });
+            e.Property(x => x.Message).HasMaxLength(2000);
+            e.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<AlertState>(e =>
+        {
+            e.ToTable("SYS_ALERT_STATE");
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(300);
+        });
+        b.Entity<DataSource>(e =>
+        {
+            e.ToTable("SYS_DATA_SOURCE");
+            e.HasIndex(x => x.Name).IsUnique();
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.DailyAt).HasMaxLength(5);
+            e.Property(x => x.LastMessage).HasMaxLength(1000);
+        });
     }
 
     private static void Fact<T>(EntityTypeBuilder<T> e) where T : class

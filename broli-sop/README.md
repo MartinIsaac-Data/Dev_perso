@@ -52,7 +52,52 @@ Source de données en Phase 1 : fichiers Excel importés ; Phase 2 : SQL Server 
   (délai port → entrepôt, seuil d'alerte fournisseur, familles « film », fenêtre de rotation lente).
 - Correctif de sécurité : un export exige désormais aussi la permission de l'écran concerné (un profil Sales ne peut plus exporter la Supply).
 
-Le module S&OP Actions (Phase 3) apparaît dans le menu avec un badge « P3 ».
+## État d'avancement — Phase 3
+
+| Étape | Contenu | État |
+|---|---|---|
+| 17 | **S&OP Action Plan** (`/actions`) + **S&OP Meeting** (`/meeting`) | ✅ |
+| 18 | **Notifications** : cloche, moteur d'alertes, e-mail optionnel | ✅ |
+| 19 | **Permissions avancées** : périmètre de données par utilisateur | ✅ |
+| 20 | **SQL Server** : migrations EF Core versionnées | ✅ (script généré ; non exécuté ici, voir *Limites*) |
+| 21 | **Intégration ERP** : tables/vues de staging SQL + dossier de dépôt Excel | ✅ |
+| 22 | **Rafraîchissement automatique** : planificateur quotidien | ✅ |
+
+- **Action Plan (§21)** : Action ID, date, sujet, description, responsable, département, échéance, priorité, statut, commentaire ;
+  filtres département / responsable / statut / priorité / échéance ; vues Actives, Mes actions, En retard, Décisions ;
+  lien vers un risque du registre et un CArtSAP ; export Excel/CSV. Modifiable avec la permission `actions.edit`
+  (MANAGEMENT, SUPPLY, SALES, LOGISTICS, PRODUCTION par défaut ; FINANCE et WAREHOUSE en lecture). Le responsable est notifié.
+- **Meeting View (§22)** : une page pour la réunion S&OP — Demand, Supply, Inventory, Logistics, Risks, Opportunities,
+  **Decisions required** et actions en retard ; chaque chiffre renvoie au détail ; bouton « Present » (plein écran TV) et impression PDF.
+- **Notifications (§34)** : cloche avec compteur (rafraîchie chaque minute). Règles : *Stockout risk*, *Coverage below threshold*,
+  *ETA delay*, *Open PO overdue*, *actions en retard* (au responsable), *échec d'un rafraîchissement* (aux administrateurs de données).
+  Une notification récapitulative par règle, envoyée aux utilisateurs qui ont la permission de l'écran concerné ;
+  un même objet n'est pas re-signalé avant N jours. Règles, délai et e-mail activables dans *Configuration*.
+  E-mail via SMTP (`Smtp:Host`, `Smtp:From`, …) — sans SMTP, seules les notifications internes sont envoyées.
+- **Périmètre de données** : pour chaque utilisateur, agences et/ou familles autorisées (vide = tout). Appliqué **par l'API** à
+  tous les tableaux de bord, exports, recherches, options de filtre, fiches produit (404 hors périmètre) et au registre des risques.
+  Exemple : un acheteur films ne voit que la famille FILMS, même en forçant un autre filtre dans l'URL.
+- **SQL Server** : migrations dans `src/Broli.SOP.Data/Migrations/SqlServer`, appliquées automatiquement au démarrage
+  quand `Database:Provider=SqlServer`. Un test vérifie que le modèle et les migrations sont synchronisés.
+- **ERP et dossier de dépôt** (*Data Management › Automated sources*) :
+  - *ERP / SQL staging* : une table ou vue (ex. `dbo.V_SOP_INVENTORY`) dont les colonnes suivent les modèles Excel ;
+    la chaîne de connexion est dans la configuration serveur (`ConnectionStrings:<nom>`), jamais en base ni dans l'écran.
+    Seul un identifiant de table/vue validé est stocké (pas de SQL libre). Utiliser un compte en lecture seule.
+  - *Dossier Excel* : chaque .xlsx déposé dans `<DataSources:InboxRoot>/<sous-dossier>/` ; traité → `processed/`,
+    rejeté → `rejected/` avec un rapport `.errors.txt`.
+  - **Même validation que l'import manuel** : une source avec une seule erreur est rejetée entièrement, tracée dans
+    l'historique (statut *Rejected* + motif) et signalée aux administrateurs. Rien d'invalide n'est chargé automatiquement.
+- **Planificateur** : chaque source peut avoir une heure quotidienne ; les sources dues s'exécutent dans l'ordre
+  maîtres → faits (fournisseurs, produits, stock, ventes, forecast, supply), puis les alertes sont recalculées.
+  Les alertes tournent aussi chaque jour à `Refresh:AlertsAt` (07:00). Boutons « Run now » / « Refresh all now ».
+  Toutes les exécutions sont auditées (utilisateur système `scheduler`).
+
+**Vérifié :** la solution compile sans avertissement ; **99 tests** passent (dont 14 pour la Phase 3 : actions, meeting,
+alertes et déduplication, périmètre de données, synchronisation des migrations SQL Server, chaîne complète ERP → validation →
+rejet/import → purge DEMO → historique → notifications, avec une base SQLite jouant le rôle de l'ERP et un vrai dossier de dépôt).
+Le parcours prioritaire (§42) a été rejoué après la Phase 3.
+
+### Phase 2 — vérifications
 
 **Vérifié :** la solution compile sans avertissement ; **85 tests** passent (unitaires sur KPI, couverture, projection, ETA, import,
 MRP, alertes matières, délais, score fournisseur ; intégration de l'API réelle) ; le parcours prioritaire (§42) et la chaîne de
@@ -142,6 +187,12 @@ Tous les paramètres techniques passent par `appsettings.json` ou des **variable
 | `Demo__Enabled` | générer les données DEMO sur une base vide | `true` en Development |
 | `Demo__UserPassword` | mot de passe des comptes DEMO | aléatoire |
 | `Api__BaseUrl` (Web) | adresse de l'API | `http://localhost:5080/` |
+| `Refresh__Enabled` | planificateur de rafraîchissement et d'alertes | `true` |
+| `Refresh__AlertsAt` | heure du calcul quotidien des alertes | `07:00` |
+| `DataSources__InboxRoot` | racine des dossiers de dépôt Excel | — |
+| `ConnectionStrings__<Nom>` | connexion à une base ERP / staging (ex. `ConnectionStrings__Erp`) | — |
+| `DataSources__Connections__<Nom>__Provider` | `SqlServer` (défaut) ou `Sqlite` | `SqlServer` |
+| `Smtp__Host`, `Smtp__Port`, `Smtp__From`, `Smtp__Username`, `Smtp__Password`, `Smtp__EnableSsl` | e-mail des alertes | désactivé |
 
 Les **paramètres métier** ne sont pas dans les fichiers : ils sont en base et modifiables dans *Configuration*
 (seuils de couverture, base de consommation — forecast / historique / max —, nombre de mois, prise en compte du transit,
@@ -155,8 +206,18 @@ Database__Provider=SqlServer
 ConnectionStrings__Sop="Server=SRV-SQL;Database=BroliSOP;Trusted_Connection=True;TrustServerCertificate=True"
 ```
 
-Le schéma est créé au démarrage (`EnsureCreated`). Aucune modification du frontend ni de la logique métier.
-Pour l'exploitation durable sur SQL Server, introduire les migrations EF Core (Phase 3, voir *Limites*).
+Au démarrage, l'API applique les **migrations EF Core** (`src/Broli.SOP.Data/Migrations/SqlServer`) puis les données de référence.
+Aucune modification du frontend ni de la logique métier. Pour faire évoluer le schéma :
+
+```bash
+dotnet tool install --global dotnet-ef --version 10.0.*
+dotnet ef migrations add <NomDuChangement> --project src/Broli.SOP.Data --output-dir Migrations/SqlServer --namespace Broli.SOP.Data.Migrations.SqlServer
+dotnet ef migrations script --idempotent --project src/Broli.SOP.Data -o deploy.sql   # script à faire valider par le DBA
+```
+
+**SQLite (démo / poste local)** : le schéma est créé à partir du modèle. Après une mise à jour de version, une base SQLite ne
+contenant que des données DEMO est reconstruite automatiquement ; une base contenant des imports réels n'est jamais modifiée :
+l'API s'arrête avec un message explicite (exporter les données, puis supprimer le fichier `.db` ou passer à SQL Server).
 
 ## Import des données Excel
 
@@ -183,6 +244,8 @@ dotnet test
   couverture et bandes configurables, stock de sécurité, excédent, conversion TC, projection de rupture, moteur de risque ETA.
 - `PeriodAndAdvisorTests` — résolution des périodes, recommandations d'action.
 - `ImportValidatorTests` — chaque règle de validation d'import.
+- `Phase3Tests` — périmètre de données, planification, synchronisation des migrations SQL Server, plan d'actions et
+  notification du responsable, vue réunion, alertes et déduplication, et chaîne ERP/dossier → validation → import ou rejet.
 - `Phase2Tests` — besoin net, arrondi TC, date limite de commande, alertes matières, délais standard, score fournisseur,
   et les 4 modules via l'API (cohérence des compteurs, périmètres, permissions, exports).
 - `ApiTests` / `ImportApiTests` — l'API réelle sur une base SQLite temporaire : 401 / 403, verrouillage après 5 échecs,
@@ -220,6 +283,11 @@ et l'autorisation repose sur des permissions indépendantes du fournisseur d'ide
 
 ## Limites connues / prochaines étapes
 
+- Migrations SQL Server : générées et contrôlées (synchronisation modèle/migration, génération du script) mais **pas exécutées
+  sur un SQL Server réel** dans cet environnement : à valider sur le serveur de recette avant la production.
+- Connecteur ERP : lecture de tables/vues de staging alimentées par l'ERP (extraction SAP, vue SQL…) ; pas d'appel direct aux API SAP.
+- Planificateur : une seule instance de l'API doit l'exécuter (`Refresh__Enabled=false` sur les autres).
+- Périmètre de données et permissions : pris en compte à la prochaine connexion de l'utilisateur (jeton JWT).
 - Export PDF : via « Print / PDF » du navigateur (feuille de style d'impression dédiée) — pas de génération PDF serveur.
 - MRP : les produits finis n'ont pas de plan de production futur dans le modèle ; leur besoin net est un besoin de production.
 - Qualité fournisseur : pas de données qualité en Phase 1–2 ; les livraisons partielles servent d'indicateur.

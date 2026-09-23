@@ -68,6 +68,8 @@ public sealed class AdminService(
         user.Email = string.IsNullOrWhiteSpace(r.Email) ? null : r.Email.Trim();
         user.Department = string.IsNullOrWhiteSpace(r.Department) ? null : r.Department.Trim();
         user.IsActive = r.IsActive;
+        user.ScopeAgencies = AuthService.Join(r.ScopeAgencies);
+        user.ScopeCategories = AuthService.Join(r.ScopeCategories);
         user.Roles.RemoveAll(ur => !roles.Any(x => x.Id == ur.RoleId));
         foreach (var role in roles.Where(x => user.Roles.All(ur => ur.RoleId != x.Id)))
             user.Roles.Add(new UserRole { User = user, RoleId = role.Id, Role = role });
@@ -157,8 +159,10 @@ public sealed class AdminService(
     }
 
     private UserDto ToDto(AppUser u) => new(u.Id, u.Username, u.DisplayName, u.Email, u.Department, u.IsActive, u.IsDemo,
-        u.Roles.Select(r => r.Role?.Name).OfType<string>().Order().ToList(), u.LastLoginUtc, u.LockoutEndUtc is { } l && l > clock.UtcNow);
+        u.Roles.Select(r => r.Role?.Name).OfType<string>().Order().ToList(), u.LastLoginUtc, u.LockoutEndUtc is { } l && l > clock.UtcNow,
+        AuthService.Split(u.ScopeAgencies), AuthService.Split(u.ScopeCategories));
 
     private static string Describe(AppUser u) =>
-        $"{u.DisplayName} | {u.Department} | {(u.IsActive ? "active" : "inactive")} | roles: {string.Join(", ", u.Roles.Select(r => r.Role?.Name).Order())}";
+        $"{u.DisplayName} | {u.Department} | {(u.IsActive ? "active" : "inactive")} | roles: {string.Join(", ", u.Roles.Select(r => r.Role?.Name).Order())}"
+        + $" | scope: agencies [{u.ScopeAgencies ?? "all"}], families [{u.ScopeCategories ?? "all"}]";
 }

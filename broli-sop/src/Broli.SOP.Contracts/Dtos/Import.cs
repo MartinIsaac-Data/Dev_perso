@@ -28,6 +28,9 @@ public record ImportBatchDto(
     int Inserted,
     int Updated,
     int Warnings,
-    string Status);
+    string Status,
+    string Source = "Manual upload",
+    int Errors = 0,
+    string? Message = null);
 
 public record ImportTemplateInfo(string Type, string Title, string Description, IReadOnlyList<string> RequiredColumns, IReadOnlyList<string> OptionalColumns);

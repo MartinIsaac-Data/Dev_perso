@@ -9,14 +9,14 @@ public sealed class SettingsService(ISettingsStore store, IAuditLogger audit, ID
     public async Task<SettingsDto> GetAsync(CancellationToken ct)
     {
         var s = await store.GetAsync(ct);
-        return new SettingsDto(s.Coverage, s.SafetyStock, s.Forecast, s.Supply, s.Tc, s.General);
+        return new SettingsDto(s.Coverage, s.SafetyStock, s.Forecast, s.Supply, s.Tc, s.General, s.AlertRules);
     }
 
     public async Task SaveAsync(SettingsDto dto, CancellationToken ct)
     {
         Validate(dto);
         var before = await store.GetAsync(ct);
-        var after = new SopSettings(dto.Coverage, dto.SafetyStock, dto.Forecast, dto.Supply, dto.Tc, dto.General);
+        var after = new SopSettings(dto.Coverage, dto.SafetyStock, dto.Forecast, dto.Supply, dto.Tc, dto.General, dto.Alerts ?? before.AlertRules);
         await store.SaveAsync(after, user.Username, ct);
 
         var changes = new List<(string Section, string Old, string New)>();
@@ -32,6 +32,7 @@ public sealed class SettingsService(ISettingsStore store, IAuditLogger audit, ID
         Diff(SupplySettings.Key, before.Supply, after.Supply);
         Diff(TcSettings.Key, before.Tc, after.Tc);
         Diff(GeneralSettings.Key, before.General, after.General);
+        Diff(AlertSettings.Key, before.AlertRules, after.AlertRules);
         foreach (var c in changes)
             await audit.LogAsync("Updated configuration", "Configuration", c.Section, c.Old, c.New, ct);
         version.Bump();
@@ -57,6 +58,7 @@ public sealed class SettingsService(ISettingsStore store, IAuditLogger audit, ID
         if (s.Coverage.SlowMovingMonths is < 1 or > 24) e.Add("Slow moving window must be 1–24 months.");
         if (string.IsNullOrWhiteSpace(s.General.Currency) || s.General.Currency.Length > 5) e.Add("Currency code is required (max 5 characters).");
         if (s.General.FiscalYearStartMonth is < 1 or > 12) e.Add("Fiscal year start month must be 1–12.");
+        if (s.Alerts is { RepeatAfterDays: < 0 or > 90 }) e.Add("Alert repeat delay must be 0–90 days.");
         if (e.Count > 0) throw new ValidationException(e);
     }
 }
