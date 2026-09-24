@@ -146,31 +146,35 @@ function Get-ApiSqlPrincipal([string] $sqlServer) {
     return "$env:USERDOMAIN\$env:COMPUTERNAME$"
 }
 
+# The two T-SQL batches of Grant-DatabaseAccess (parameters @db and @login), kept apart so they can be tested as generated.
+function Get-GrantSql([bool] $applyMigrations) {
+    $roles = $(if ($applyMigrations) { @('db_owner') } else { @('db_datareader', 'db_datawriter') })
+    $master = @(
+        'DECLARE @sql nvarchar(max);'
+        'IF DB_ID(@db) IS NULL BEGIN SET @sql = N''CREATE DATABASE '' + QUOTENAME(@db); EXEC (@sql); END'
+        'IF SUSER_ID(@login) IS NULL BEGIN SET @sql = N''CREATE LOGIN '' + QUOTENAME(@login) + N'' FROM WINDOWS''; EXEC (@sql); END'
+    )
+    $grant = @(
+        'DECLARE @sql nvarchar(max);'
+        'DECLARE @user sysname = (SELECT name FROM sys.database_principals WHERE sid = SUSER_SID(@login));'
+        'IF @user IS NULL'
+        'BEGIN'
+        '    SET @user = N''BroliSOP-API'';'
+        '    SET @sql = N''CREATE USER '' + QUOTENAME(@user) + N'' FOR LOGIN '' + QUOTENAME(@login); EXEC (@sql);'
+        'END'
+    ) + @($roles | ForEach-Object { "SET @sql = N'ALTER ROLE $_ ADD MEMBER ' + QUOTENAME(@user); EXEC (@sql);" })
+    [pscustomobject]@{ Master = ($master -join "`r`n"); Grant = ($grant -join "`r`n"); Roles = $roles }
+}
+
 # Creates the database if needed, the Windows login and the database user of the API, with the rights of the chosen mode
 # (db_owner when the application migrates its schema, read/write only otherwise). Idempotent; runs with the identity of
 # the person installing, who must be allowed to do this on the SQL Server (typically sysadmin on a local instance).
 function Grant-DatabaseAccess([string] $sqlServer, [string] $database, [bool] $applyMigrations) {
     $login = Get-ApiSqlPrincipal $sqlServer
-    $roles = $(if ($applyMigrations) { @('db_owner') } else { @('db_datareader', 'db_datawriter') })
-    Write-Host "   $login -> [$database] ($($roles -join ', '))"
+    $sql = Get-GrantSql $applyMigrations
+    Write-Host "   $login -> [$database] ($($sql.Roles -join ', '))"
 
-    $master = @'
-DECLARE @sql nvarchar(max);
-IF DB_ID(@db) IS NULL BEGIN SET @sql = N'CREATE DATABASE ' + QUOTENAME(@db); EXEC (@sql); END
-IF SUSER_ID(@login) IS NULL BEGIN SET @sql = N'CREATE LOGIN ' + QUOTENAME(@login) + N' FROM WINDOWS'; EXEC (@sql); END
-'@
-    $grant = @'
-DECLARE @sql nvarchar(max);
-DECLARE @user sysname = (SELECT name FROM sys.database_principals WHERE sid = SUSER_SID(@login));
-IF @user IS NULL
-BEGIN
-    SET @user = N'BroliSOP-API';
-    SET @sql = N'CREATE USER ' + QUOTENAME(@user) + N' FOR LOGIN ' + QUOTENAME(@login); EXEC (@sql);
-END
-'@
-    foreach ($role in $roles) { $grant += "SET @sql = N'ALTER ROLE $role ADD MEMBER ' + QUOTENAME(@user); EXEC (@sql);`r`n" }
-
-    foreach ($step in @(@{ Db = 'master'; Sql = $master }, @{ Db = $database; Sql = $grant })) {
+    foreach ($step in @(@{ Db = 'master'; Sql = $sql.Master }, @{ Db = $database; Sql = $sql.Grant })) {
         $cn = New-Object System.Data.SqlClient.SqlConnection "Server=$sqlServer;Database=$($step.Db);Integrated Security=True;TrustServerCertificate=True"
         try {
             $cn.Open()
