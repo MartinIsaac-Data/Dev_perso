@@ -1,0 +1,43 @@
+name: Broli S&OP — build & tests
+
+on:
+  pull_request:
+    paths: ["broli-sop/**", ".github/workflows/broli-sop.yml"]
+  push:
+    branches: ["claude/transformation-os-architecture-122kmh"]
+    paths: ["broli-sop/**", ".github/workflows/broli-sop.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: broli-sop
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore
+        run: dotnet restore Broli.SOP.sln
+      - name: Build (warnings are errors)
+        run: dotnet build Broli.SOP.sln --no-restore -c Release -warnaserror
+      - name: SQL Server migrations in sync with the model
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.*
+          dotnet ef migrations has-pending-model-changes --project src/Broli.SOP.Data --no-build --configuration Release
+      - name: Tests
+        run: dotnet test Broli.SOP.sln --no-build -c Release --logger "trx;LogFileName=results.trx" --results-directory TestResults
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: broli-sop/TestResults/*.trx
