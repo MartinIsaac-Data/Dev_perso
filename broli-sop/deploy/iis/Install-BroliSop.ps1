@@ -189,8 +189,9 @@ if ($null -eq $webSite -or $HostName -or $CertificateThumbprint) {
         $port = $(if ($WebPort -gt 0) { $WebPort } else { 443 })
         $hash = New-Object byte[] ($thumb.Length / 2)
         for ($i = 0; $i -lt $hash.Length; $i++) { $hash[$i] = [Convert]::ToByte($thumb.Substring($i * 2, 2), 16) }
-        $webSite = $sm.Sites.Add($names.WebSite, "*:${port}:$HostName", $webPath, $hash, 'My')
-        $webSite.Bindings[0].SetAttributeValue('sslFlags', 1)   # SNI: several HTTPS sites can share the server
+        # SNI (per host name) must be set when the binding is created: IIS then registers the certificate in HTTP.sys
+        # for "<host>:<port>". Switching the flag afterwards leaves an IP-based registration and the TLS handshake fails.
+        $webSite = $sm.Sites.Add($names.WebSite, "*:${port}:$HostName", $webPath, $hash, 'My', [Microsoft.Web.Administration.SslFlags]::Sni)
     }
     else {
         $port = $(if ($WebPort -gt 0) { $WebPort } else { 80 })
