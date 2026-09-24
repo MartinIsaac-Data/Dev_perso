@@ -129,7 +129,8 @@ jobs:
         shell: pwsh
         run: ./deploy/build-release.ps1 -SkipTests -Version ci -Output "$env:RUNNER_TEMP\release"
       - name: Install, update, broken update, rollback (Windows PowerShell 5.1)
-        shell: powershell
+        # -NonInteractive: any prompt fails at once instead of waiting for a keyboard until the job times out.
+        shell: powershell -NonInteractive -Command ". '{0}'"
         run: ./deploy/ci/verify-iis.ps1 -Package "$env:RUNNER_TEMP\release\broli-sop-ci"
       - name: Diagnostics
         if: failure()

@@ -122,17 +122,17 @@ if ($firstInstall -and $applyMigrations -eq 'false' -and -not $SchemaUpdatedByDb
            '(it creates the schema), then run this script again with -SchemaUpdatedByDba.')
 }
 
-$adminPassword = $null
+$adminPlain = $null
 if ($firstInstall) {
     if ($AdminPassword) {
-        $adminPassword = ConvertTo-Plain $AdminPassword
+        $adminPlain = ConvertTo-Plain $AdminPassword
     }
     else {
-        $adminPassword = ConvertTo-Plain (Read-Host 'Password for the first administrator account "admin" (min. 8 characters)' -AsSecureString)
+        $adminPlain = ConvertTo-Plain (Read-Host 'Password for the first administrator account "admin" (min. 8 characters)' -AsSecureString)
         $again = ConvertTo-Plain (Read-Host 'Type it again' -AsSecureString)
-        if ($again -cne $adminPassword) { throw 'The two passwords differ. Nothing has been changed.' }
+        if ($again -cne $adminPlain) { throw 'The two passwords differ. Nothing has been changed.' }
     }
-    if ($adminPassword.Length -lt 8) { throw 'The administrator password must have at least 8 characters.' }
+    if ($adminPlain.Length -lt 8) { throw 'The administrator password must have at least 8 characters.' }
 }
 
 Write-Host ("   {0} {1} -> {2}" -f $(if ($firstInstall) { 'Install' } else { 'Update' }), (Get-InstalledVersion $InstallRoot), $newVersion)
@@ -222,9 +222,9 @@ if (-not (Get-PoolVariable $apiPool 'Jwt__Key')) {
     Set-PoolVariable $apiPool 'Jwt__Key' ([Convert]::ToBase64String($bytes))
 }
 if ($InboxRoot) { Set-PoolVariable $apiPool 'DataSources__InboxRoot' $InboxRoot }
-if ($adminPassword) {
+if ($adminPlain) {
     Set-PoolVariable $apiPool 'Bootstrap__AdminUsername' 'admin'
-    Set-PoolVariable $apiPool 'Bootstrap__AdminPassword' $adminPassword
+    Set-PoolVariable $apiPool 'Bootstrap__AdminPassword' $adminPlain
 }
 Set-PoolVariable $webPool 'ASPNETCORE_ENVIRONMENT' 'Production'
 Set-PoolVariable $webPool 'Api__BaseUrl' "http://127.0.0.1:$ApiPort/"
@@ -266,9 +266,9 @@ try {
     }
     Write-Host '   API healthy'
 
-    if ($adminPassword) {
+    if ($adminPlain) {
         Step 'Checking the administrator account'
-        $body = @{ username = 'admin'; password = $adminPassword } | ConvertTo-Json
+        $body = @{ username = 'admin'; password = $adminPlain } | ConvertTo-Json
         try {
             Invoke-WebRequest -Uri "http://127.0.0.1:$ApiPort/api/auth/login" -Method Post -Body $body -ContentType 'application/json' -UseBasicParsing | Out-Null
             Write-Host '   sign-in OK'
@@ -279,12 +279,12 @@ try {
     }
 }
 finally {
-    if ($adminPassword) {
+    if ($adminPlain) {
         # Only needed to create the account: never leave the password in the server configuration, even after a failure.
         $sm = New-Object Microsoft.Web.Administration.ServerManager
         Set-PoolVariable $sm.ApplicationPools[$names.ApiPool] 'Bootstrap__AdminPassword' $null
         $sm.CommitChanges()
-        $adminPassword = $null
+        $adminPlain = $null
     }
 }
 
