@@ -67,6 +67,7 @@ jobs:
             sleep 2
           done
           echo "BROLI_TEST_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$pw;TrustServerCertificate=True" >> "$GITHUB_ENV"
+          echo "MSSQL_SA_PASSWORD=$pw" >> "$GITHUB_ENV"
       - name: Build
         run: dotnet build Broli.SOP.sln -c Release
       - name: Tests on SQL Server (migrations, imports, writes, start-up checks)
@@ -77,3 +78,63 @@ jobs:
         with:
           name: test-results-sqlserver
           path: broli-sop/TestResults/*.trx
+      - name: Build the release package
+        shell: pwsh
+        run: ./deploy/build-release.ps1 -SkipTests -Version "ci-$("${{ github.sha }}".Substring(0,7))" -Output "$env:RUNNER_TEMP/release"
+      - name: Verify the package on SQL Server (Production mode, DBA script and self-migration)
+        run: |
+          pkg=$(find "$RUNNER_TEMP/release" -mindepth 1 -maxdepth 1 -type d | head -1)
+          ./deploy/ci/verify-package.sh "$pkg" mssql "$MSSQL_SA_PASSWORD"
+      - name: Upload the release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: ${{ runner.temp }}/release/*.zip
+
+  iis:
+    name: IIS install, update and rollback (Windows Server 2022)
+    runs-on: windows-2022
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: broli-sop
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: IIS with WebSocket Protocol and Application Initialization
+        shell: powershell
+        run: Install-WindowsFeature Web-Server, Web-WebSockets, Web-AppInit, Web-Mgmt-Console | Format-Table -AutoSize
+      - name: ASP.NET Core 10 Hosting Bundle
+        shell: powershell
+        run: |
+          $meta = Invoke-RestMethod 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json'
+          $release = $meta.releases | Where-Object { $_.'aspnetcore-runtime' } | Select-Object -First 1
+          $file = $release.'aspnetcore-runtime'.files | Where-Object { $_.name -eq 'dotnet-hosting-win.exe' }
+          Write-Host "Hosting Bundle $($release.'aspnetcore-runtime'.version)"
+          Invoke-WebRequest $file.url -OutFile "$env:RUNNER_TEMP\hosting.exe" -UseBasicParsing
+          $p = Start-Process "$env:RUNNER_TEMP\hosting.exe" -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "Hosting Bundle install failed ($($p.ExitCode))" }
+          net stop was /y; net start w3svc
+      - name: SQL Server Express
+        shell: powershell
+        run: |
+          choco install sql-server-express -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "SQL Server Express install failed ($LASTEXITCODE)" }
+      - name: Build the release package
+        shell: pwsh
+        run: ./deploy/build-release.ps1 -SkipTests -Version ci -Output "$env:RUNNER_TEMP\release"
+      - name: Install, update, broken update, rollback (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./deploy/ci/verify-iis.ps1 -Package "$env:RUNNER_TEMP\release\broli-sop-ci"
+      - name: Diagnostics
+        if: failure()
+        shell: powershell
+        run: |
+          Get-WinEvent -LogName Application -MaxEvents 40 | Where-Object { $_.LevelDisplayName -in 'Error', 'Warning' } |
+            Format-List TimeCreated, ProviderName, Message
+          Get-ChildItem C:\inetpub\broli-sop -ErrorAction SilentlyContinue

@@ -159,6 +159,8 @@ broli-sop/
 ├── run.ps1 / run.sh
 ├── docs/ARCHITECTURE.md            ← modèle de données, formules (Phase 1 et 2), décisions
 ├── docs/LOAD-TEST.md               ← test de charge 50 utilisateurs : méthode et résultats
+├── docs/DEPLOYMENT.md              ← installation IIS / SQL Server, mise à jour, retour arrière, exploitation
+├── deploy/                         ← build-release.ps1, scripts IIS (Install / Rollback), vérifications CI
 ├── src/
 │   ├── Broli.SOP.Domain            Entités (dimensions, faits, opérationnel), enums. Aucune dépendance.
 │   ├── Broli.SOP.Contracts         DTO de l'API, SopFilter, permissions, paramètres métier (partagés API ↔ Web)
@@ -278,19 +280,32 @@ et l'autorisation repose sur des permissions indépendantes du fournisseur d'ide
 - **Test de charge** (50 utilisateurs, 3 000 SKU, 48 mois, 120 s) : 0 erreur, p95 12 ms, p99 69 ms, max 96 ms —
   méthode, outil et résultats avant/après dans [`docs/LOAD-TEST.md`](docs/LOAD-TEST.md).
 
-## Déploiement (Windows Server / IIS)
+## Déploiement (Windows Server / IIS / SQL Server)
 
-1. `dotnet publish src/Broli.SOP.API -c Release -o publish/api` et idem pour `src/Broli.SOP.Web`.
-2. Deux sites IIS (ASP.NET Core Hosting Bundle 10) ou un reverse proxy ; le Web doit pouvoir joindre l'API (`Api__BaseUrl`).
-3. Variables d'environnement : `ASPNETCORE_ENVIRONMENT=Production`, `Jwt__Key`, `ConnectionStrings__Sop`, `Database__Provider`,
-   `Bootstrap__AdminPassword` (premier démarrage).
-4. Activer **WebSockets** sur IIS (Blazor Server). Certificat HTTPS sur le site Web.
-5. Pour plusieurs instances de l'API : partager la clé Data Protection et remplacer `IDataVersion` en mémoire par un compteur partagé.
+Procédure complète : [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+```powershell
+pwsh deploy/build-release.ps1          # construit le paquet : API, portail, sql/migrations.sql, scripts IIS
+# sur le serveur, PowerShell en administrateur, dans le paquet décompressé :
+.\Install-BroliSop.ps1 -SqlServer SQLPROD01 -HostName sop.broli.local -CertificateThumbprint <empreinte>
+.\Install-BroliSop.ps1                 # mise à jour ; retour automatique à la version précédente en cas d'échec
+.\Rollback-BroliSop.ps1                # retour arrière manuel
+```
+
+- L'API n'écoute que sur `127.0.0.1` ; seul le portail l'appelle et lui transmet l'adresse du navigateur.
+- Connexion SQL en authentification Windows avec l'identité du pool : aucun mot de passe stocké. Les secrets sont des
+  variables des pools IIS, jamais des fichiers livrés.
+- Deux modes pour la base : l'application applique ses migrations (`db_owner`), ou le DBA exécute `sql/migrations.sql`
+  (`Database:ApplyMigrations=false`) et l'API refuse de démarrer sur un schéma en retard.
+- La CI vérifie à chaque PR :
+  - la suite de tests sur SQL Server 2022 ;
+  - le paquet en mode Production (script SQL rejoué deux fois, migrations appliquées par l'application) ;
+  - installation, mise à jour, mise à jour cassée avec retour automatique, puis retour arrière, sur un vrai IIS Windows Server 2022.
 
 ## Limites connues / prochaines étapes
 
-- Migrations SQL Server : générées et contrôlées (synchronisation modèle/migration, génération du script) mais **pas exécutées
-  sur un SQL Server réel** dans cet environnement : à valider sur le serveur de recette avant la production.
+- Scripts IIS : validés en CI sur Windows Server 2022, à rejouer une fois sur le serveur de recette. Le test de charge a été fait sur SQLite :
+  à refaire sur l'infrastructure cible.
 - Connecteur ERP : lecture de tables/vues de staging alimentées par l'ERP (extraction SAP, vue SQL…) ; pas d'appel direct aux API SAP.
 - Planificateur : une seule instance de l'API doit l'exécuter (`Refresh__Enabled=false` sur les autres).
 - Périmètre de données et permissions : pris en compte à la prochaine connexion de l'utilisateur (jeton JWT).

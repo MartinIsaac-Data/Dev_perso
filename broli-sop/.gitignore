@@ -7,3 +7,4 @@ obj/
 .vs/
 TestResults/
 appsettings.*.local.json
+release/
