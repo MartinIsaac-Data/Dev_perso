@@ -41,6 +41,9 @@ public readonly record struct MonthlyQty(int ProductId, int MonthKey, double Qua
 
 public readonly record struct DemandPoint(int ProductId, int MonthKey, double Forecast, double Actual, double? Ordered);
 
+/// <summary>Demand at agency grain (month-normalised), so agency filters can be applied in memory.</summary>
+public readonly record struct AgencyDemand(int ProductId, int MonthKey, string AgencyCode, double Forecast, double Actual, double? Ordered);
+
 public record SupplyLineData(
     long Id,
     string PoNumber,

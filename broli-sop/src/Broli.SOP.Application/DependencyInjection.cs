@@ -8,7 +8,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddSopApplication(this IServiceCollection services)
     {
-        services.AddMemoryCache(o => o.SizeLimit = 2000);
+        // Entries are weighted by volume (≈ 1 unit per 1 000 rows or 100 products): ~5 000 units ≈ a few hundred MB at most.
+        services.AddMemoryCache(o => o.SizeLimit = 5000);
         services.AddScoped<IAnalyticsEngine, AnalyticsEngine>();
         services.AddScoped<ExecutiveService>();
         services.AddScoped<DemandService>();

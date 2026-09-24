@@ -1,3 +1,4 @@
+using Broli.SOP.Domain;
 using Broli.SOP.Application;
 using Broli.SOP.Application.Analytics;
 using Broli.SOP.Application.Calculations;
@@ -86,5 +87,38 @@ public class ActionAdvisorTests
         Assert.True(Labels.TryParse<SupplyStatus>("at port", out var s));
         Assert.Equal(SupplyStatus.AtPort, s);
         Assert.False(Labels.TryParse<SupplyStatus>("teleported", out _));
+    }
+}
+
+public class BaseWindowTests
+{
+    private static readonly DateOnly Today = new(2026, 9, 23);
+
+    [Theory]
+    [InlineData(6)]
+    [InlineData(12)]
+    public void Every_period_of_a_year_shares_the_yearly_window(int horizon)
+    {
+        var yearly = AnalyticsEngine.BaseWindow.ForYear(20260901, horizon);
+        var filters = Enumerable.Range(1, 12).Select(m => new SopFilter { Year = 2026, Months = [m] })
+            .Append(new SopFilter())
+            .Append(new SopFilter { Year = 2026 })
+            .Append(new SopFilter { Year = 2026, Months = [1, 2, 3] });
+        foreach (var f in filters)
+        {
+            var period = PeriodResolver.Resolve(f, 20260901, Today);
+            Assert.Equal(2026, DateKeys.FromKey(period.AsOfMonthKey).Year);
+            var needed = AnalyticsEngine.BaseWindow.ForPeriod(period, horizon);
+            Assert.True(yearly.Contains(needed), $"{f.ToQueryString()} needs {needed}");
+            Assert.Equal(yearly, AnalyticsEngine.BaseWindow.ForYear(period.AsOfMonthKey, horizon).Covering(needed));
+        }
+    }
+
+    [Fact]
+    public void A_period_outside_the_yearly_window_loads_exactly_what_it_needs()
+    {
+        var needed = new AnalyticsEngine.BaseWindow(20240101, 20260901, 20240101, 20270301, 20260801, 20270301, 20260901,
+            new DateOnly(2024, 1, 1), new DateOnly(2026, 9, 30));
+        Assert.Same(needed, AnalyticsEngine.BaseWindow.ForYear(20260901, 6).Covering(needed));
     }
 }

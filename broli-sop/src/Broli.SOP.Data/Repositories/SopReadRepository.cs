@@ -111,6 +111,16 @@ public sealed class SopReadRepository(SopDbContext db) : ISopReadRepository
             .ToList();
     }
 
+    public async Task<IReadOnlyList<AgencyDemand>> GetDemandByAgencyAsync(int fromMonthKey, int toMonthKey, CancellationToken ct)
+    {
+        var toKey = DateKeys.MonthEndKey(toMonthKey);
+        var rows = await db.SalesFacts.AsNoTracking()
+            .Where(f => f.DateKey >= fromMonthKey && f.DateKey <= toKey)
+            .Select(f => new { f.ProductId, f.DateKey, Agency = f.Agency!.Code, f.ForecastQty, f.ActualQty, f.OrderedQty })
+            .ToListAsync(ct);
+        return rows.Select(r => new AgencyDemand(r.ProductId, r.DateKey / 100 * 100 + 1, r.Agency, r.ForecastQty, r.ActualQty, r.OrderedQty)).ToList();
+    }
+
     public async Task<IReadOnlyList<MonthlyQty>> GetForecastAsync(ProductScope scope, int fromMonthKey, int toMonthKey, CancellationToken ct)
     {
         var toKey = DateKeys.MonthEndKey(toMonthKey);

@@ -27,6 +27,9 @@ public interface ISopReadRepository
     /// <summary>Demand per product and month, summed over the given agencies (all when empty).</summary>
     Task<IReadOnlyList<DemandPoint>> GetDemandAsync(ProductScope scope, IReadOnlyCollection<string> agencies, int fromMonthKey, int toMonthKey, CancellationToken ct);
 
+    /// <summary>Demand rows at agency grain for a month range (month-normalised, all products).</summary>
+    Task<IReadOnlyList<AgencyDemand>> GetDemandByAgencyAsync(int fromMonthKey, int toMonthKey, CancellationToken ct);
+
     Task<IReadOnlyList<MonthlyQty>> GetForecastAsync(ProductScope scope, int fromMonthKey, int toMonthKey, CancellationToken ct);
     Task<IReadOnlyList<MonthlyQty>> GetProductionAsync(ProductScope scope, int fromMonthKey, int toMonthKey, CancellationToken ct);
     Task<IReadOnlyList<SupplyLineData>> GetSupplyLinesAsync(ProductScope scope, SupplyWindow window, CancellationToken ct);

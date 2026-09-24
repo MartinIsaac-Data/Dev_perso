@@ -30,6 +30,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Bootstrap:AdminPassword", AdminPassword);
         builder.UseSetting("Demo:UserPassword", DemoPassword);
         builder.UseSetting("Refresh:Enabled", "false"); // tests trigger refreshes and alerts explicitly
+        builder.UseSetting("Analytics:WarmUp", "false");
         Configure(builder);
     }
 

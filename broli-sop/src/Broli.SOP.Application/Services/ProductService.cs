@@ -13,9 +13,9 @@ public sealed class ProductService(IAnalyticsEngine engine, ISopReadRepository r
         if (!s.Positions.TryGetValue(product.Id, out var pos)) return null;
 
         var finance = user.Has(Contracts.Security.Permissions.FinanceView);
-        var open = s.Lines.Where(l => l.IsOpen && l.Product.Id == product.Id).OrderBy(l => l.Line.Eta ?? DateOnly.MaxValue).ToList();
+        var open = s.OpenLinesByProduct[product.Id].OrderBy(l => l.Line.Eta ?? DateOnly.MaxValue).ToList();
         var months = s.WindowMonths.Skip(1).ToList();
-        var demand = s.Demand.Where(d => d.ProductId == product.Id).ToDictionary(d => d.MonthKey);
+        var demand = s.DemandByProduct[product.Id].ToDictionary(d => d.MonthKey);
         var set = s.Settings;
         var fn = s.DemandFn(product.Id);
 

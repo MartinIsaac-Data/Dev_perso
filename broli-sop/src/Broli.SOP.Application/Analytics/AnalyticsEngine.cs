@@ -38,7 +38,7 @@ public sealed class AnalyticsEngine(
             if (cache.TryGetValue(key, out cached) && cached is not null) return cached;
             var sw = Stopwatch.StartNew();
             var snapshot = await BuildAsync(filter, ct);
-            cache.Set(key, snapshot, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration, Size = 1 });
+            cache.Set(key, snapshot, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration, Size = 1 + snapshot.Products.Count / 100 });
             logger.LogInformation("Analytics snapshot built in {Elapsed} ms for {Products} products ({Filter})",
                 sw.ElapsedMilliseconds, snapshot.Products.Count, filter.ToQueryString());
             return snapshot;
@@ -69,20 +69,29 @@ public sealed class AnalyticsEngine(
         var windowStart = DateKeys.AddMonths(asOf, -12);
         var windowMonths = Enumerable.Range(0, 13).Select(i => DateKeys.AddMonths(windowStart, i)).ToList();
 
-        var demandFrom = new[] { windowStart, period.PreviousMonthKeys[0], period.FirstMonthKey }.Min();
         var demandTo = Math.Max(asOf, period.LastMonthKey);
-        var deliveredFrom = DateKeys.FromKey(Math.Min(windowStart, period.PreviousMonthKeys[0]));
-        var deliveredTo = DateKeys.MonthEnd(DateKeys.FromKey(Math.Max(asOf, period.LastMonthKey)));
 
-        var products = await repo.GetProductsAsync(scope, ct);
-        var stockRows = await repo.GetStockByMonthAsync(scope, windowStart, asOf, ct);
-        var demandAll = await repo.GetDemandAsync(scope, [], demandFrom, DateKeys.AddMonths(asOf, horizon), ct);
+        // All products are loaded once per (data version, year) and shared by every filter and period of that year; filters
+        // are applied in memory, so a new filter combination costs only the computation, not a new set of database queries.
+        var needed = BaseWindow.ForPeriod(period, horizon);
+        var (demandFrom, forecastFrom, forecastTo, productionTo) = (needed.DemandFrom, needed.ForecastFrom, needed.ForecastTo, needed.ProductionTo);
+        var (deliveredFrom, deliveredTo) = (needed.DeliveredFrom, needed.DeliveredTo);
+        var baseData = await GetBaseDataAsync(BaseWindow.ForYear(asOf, horizon).Covering(needed), ct);
+
+        var phase = Stopwatch.StartNew();
+        var products = baseData.Products.Where(p => Matches(p, scope)).ToList();
+        var ids = products.Select(p => p.Id).ToHashSet();
+        // The base may cover a wider window than this period needs: cut every range back to exactly what the period asks for.
+        var stockRows = baseData.Stock.Where(r => ids.Contains(r.ProductId) && r.MonthKey >= windowStart && r.MonthKey <= asOf).ToList();
+        var demandRows = baseData.Demand.Where(d => ids.Contains(d.ProductId) && d.MonthKey >= demandFrom && d.MonthKey <= forecastTo).ToList();
+        var demandAll = Aggregate(demandRows);
         var demandFiltered = filter.Agencies.Count == 0
             ? demandAll.Where(d => d.MonthKey <= demandTo).ToList()
-            : await repo.GetDemandAsync(scope, filter.Agencies, demandFrom, demandTo, ct);
-        var forecastRows = await repo.GetForecastAsync(scope, DateKeys.AddMonths(asOf, -1), DateKeys.AddMonths(asOf, horizon), ct);
-        var production = await repo.GetProductionAsync(scope, windowStart, Math.Max(asOf, period.LastMonthKey), ct);
-        var lines = await repo.GetSupplyLinesAsync(scope, new SupplyWindow(deliveredFrom, deliveredTo), ct);
+            : Aggregate(demandRows.Where(d => d.MonthKey <= demandTo && filter.Agencies.Contains(d.AgencyCode, StringComparer.OrdinalIgnoreCase)));
+        var forecastRows = baseData.Forecast.Where(r => ids.Contains(r.ProductId) && r.MonthKey >= forecastFrom && r.MonthKey <= forecastTo).ToList();
+        var production = baseData.Production.Where(r => ids.Contains(r.ProductId) && r.MonthKey >= windowStart && r.MonthKey <= productionTo).ToList();
+        var lines = baseData.Lines.Where(l => ids.Contains(l.ProductId)
+            && (l.Status != SupplyStatus.Delivered || (l.ActualArrival >= deliveredFrom && l.ActualArrival <= deliveredTo))).ToList();
 
         var stock = stockRows.ToDictionary(r => (r.ProductId, r.MonthKey), r => r.Quantity);
         var consumption = new Dictionary<(int, int), double>();
@@ -203,6 +212,7 @@ public sealed class AnalyticsEngine(
             }
         }
 
+        logger.LogDebug("Snapshot computed in {Compute} ms for {Products} products", phase.ElapsedMilliseconds, products.Count);
         return new AnalyticsSnapshot
         {
             Period = period,
@@ -222,6 +232,111 @@ public sealed class AnalyticsEngine(
             DemandFnFactory = id => DemandFnFor(id, avgByProduct.GetValueOrDefault(id)),
         };
     }
+
+    private sealed record BaseData(
+        IReadOnlyList<ProductRef> Products,
+        IReadOnlyList<MonthlyQty> Stock,
+        IReadOnlyList<AgencyDemand> Demand,
+        IReadOnlyList<MonthlyQty> Forecast,
+        IReadOnlyList<MonthlyQty> Production,
+        IReadOnlyList<SupplyLineData> Lines);
+
+    private static readonly SemaphoreSlim BaseLock = new(1);
+
+    /// <summary>Month and date ranges loaded for every product. <see cref="StockTo"/> is also the upper bound of stock rows.</summary>
+    public sealed record BaseWindow(int StockFrom, int StockTo, int DemandFrom, int DemandTo, int ForecastFrom, int ForecastTo,
+        int ProductionTo, DateOnly DeliveredFrom, DateOnly DeliveredTo)
+    {
+        /// <summary>Exactly what one period needs: 12 months of history before the as-of month, the period itself and the forecast horizon.</summary>
+        public static BaseWindow ForPeriod(ResolvedPeriod period, int horizon)
+        {
+            var asOf = period.AsOfMonthKey;
+            var windowStart = DateKeys.AddMonths(asOf, -12);
+            var last = Math.Max(asOf, period.LastMonthKey);
+            var forecastTo = DateKeys.AddMonths(asOf, horizon);
+            return new(windowStart, asOf,
+                new[] { windowStart, period.PreviousMonthKeys[0], period.FirstMonthKey }.Min(), forecastTo,
+                DateKeys.AddMonths(asOf, -1), forecastTo, last,
+                DateKeys.FromKey(Math.Min(windowStart, period.PreviousMonthKeys[0])), DateKeys.MonthEnd(DateKeys.FromKey(last)));
+        }
+
+        /// <summary>
+        /// One window per calendar year of the as-of month: from January of the previous year to December plus the forecast
+        /// horizon. Every month, quarter or YTD period of that year then shares a single database load.
+        /// </summary>
+        public static BaseWindow ForYear(int asOf, int horizon)
+        {
+            var jan = DateKeys.FromKey(asOf).Year * 10000 + 101;
+            var from = DateKeys.AddMonths(jan, -12);
+            var dec = DateKeys.AddMonths(jan, 11);
+            var to = DateKeys.AddMonths(dec, horizon);
+            return new(from, dec, from, to, from, to, to, DateKeys.FromKey(from), DateKeys.MonthEnd(DateKeys.FromKey(to)));
+        }
+
+        public bool Contains(BaseWindow w) =>
+            StockFrom <= w.StockFrom && StockTo >= w.StockTo && DemandFrom <= w.DemandFrom && DemandTo >= w.DemandTo
+            && ForecastFrom <= w.ForecastFrom && ForecastTo >= w.ForecastTo && ProductionTo >= w.ProductionTo
+            && DeliveredFrom <= w.DeliveredFrom && DeliveredTo >= w.DeliveredTo;
+
+        /// <summary>This window when it covers <paramref name="needed"/>, otherwise the exact needed window (unusual periods).</summary>
+        public BaseWindow Covering(BaseWindow needed) => Contains(needed) ? this : needed;
+    }
+
+    private async Task<BaseData> GetBaseDataAsync(BaseWindow w, CancellationToken ct)
+    {
+        var key = $"base:{version.Current}:{clock.Today:yyyyMMdd}:{w}";
+        if (cache.TryGetValue(key, out BaseData? cached) && cached is not null) return cached;
+        await BaseLock.WaitAsync(ct);
+        try
+        {
+            if (cache.TryGetValue(key, out cached) && cached is not null) return cached;
+            var sw = Stopwatch.StartNew();
+            var all = ProductScope.All;
+            var data = new BaseData(
+                await repo.GetProductsAsync(all, ct),
+                await repo.GetStockByMonthAsync(all, w.StockFrom, w.StockTo, ct),
+                await repo.GetDemandByAgencyAsync(w.DemandFrom, w.DemandTo, ct),
+                await repo.GetForecastAsync(all, w.ForecastFrom, w.ForecastTo, ct),
+                await repo.GetProductionAsync(all, w.StockFrom, w.ProductionTo, ct),
+                await repo.GetSupplyLinesAsync(all, new SupplyWindow(w.DeliveredFrom, w.DeliveredTo), ct));
+            // Weight in the cache ≈ rows / 1 000, so memory stays bounded by volume rather than by entry count.
+            var weight = 1 + (data.Demand.Count + data.Stock.Count + data.Lines.Count) / 1000;
+            cache.Set(key, data, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration, Size = weight, Priority = CacheItemPriority.High });
+            logger.LogInformation("Analytics base data loaded in {Elapsed} ms: {Products} products, {Demand} demand rows, {Stock} stock rows, {Lines} supply lines",
+                sw.ElapsedMilliseconds, data.Products.Count, data.Demand.Count, data.Stock.Count, data.Lines.Count);
+            return data;
+        }
+        finally
+        {
+            BaseLock.Release();
+        }
+    }
+
+    /// <summary>In-memory equivalent of the repository's product scope (case-insensitive, like SQL Server).</summary>
+    internal static bool Matches(ProductRef p, ProductScope s)
+    {
+        static bool In(IReadOnlyCollection<string> list, string? value) =>
+            list.Count == 0 || (value is not null && list.Contains(value, StringComparer.OrdinalIgnoreCase));
+        return In(s.Categories, p.CategoryCode) && In(s.Products, p.CArtSap) && In(s.Brands, p.Brand)
+               && In(s.Suppliers, p.MainSupplierCode) && In(s.Countries, p.SupplierCountryCode)
+               && (s.MaterialTypes.Count == 0 || s.MaterialTypes.Contains(p.MaterialType));
+    }
+
+    /// <summary>Sums agency rows per product and month; Ordered stays null when no row carries it.</summary>
+    private static List<DemandPoint> Aggregate(IEnumerable<AgencyDemand> rows) =>
+        rows.GroupBy(r => (r.ProductId, r.MonthKey))
+            .Select(g =>
+            {
+                double f = 0, a = 0, o = 0;
+                var hasOrdered = false;
+                foreach (var r in g)
+                {
+                    f += r.Forecast; a += r.Actual;
+                    if (r.Ordered is { } x) { o += x; hasOrdered = true; }
+                }
+                return new DemandPoint(g.Key.ProductId, g.Key.MonthKey, f, a, hasOrdered ? o : null);
+            })
+            .ToList();
 
     private static int? TransitDays(SupplyLineData l)
     {

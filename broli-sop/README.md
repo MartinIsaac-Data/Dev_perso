@@ -158,6 +158,7 @@ broli-sop/
 ├── Broli.SOP.sln
 ├── run.ps1 / run.sh
 ├── docs/ARCHITECTURE.md            ← modèle de données, formules (Phase 1 et 2), décisions
+├── docs/LOAD-TEST.md               ← test de charge 50 utilisateurs : méthode et résultats
 ├── src/
 │   ├── Broli.SOP.Domain            Entités (dimensions, faits, opérationnel), enums. Aucune dépendance.
 │   ├── Broli.SOP.Contracts         DTO de l'API, SopFilter, permissions, paramètres métier (partagés API ↔ Web)
@@ -167,7 +168,8 @@ broli-sop/
 │   ├── Broli.SOP.Infrastructure    Hachage des mots de passe, JWT, lecture/écriture Excel (ClosedXML), audit, horloge, notifications
 │   ├── Broli.SOP.API               ASP.NET Core Web API : contrôleurs, politiques de permissions, gestion d'erreurs, rate limiting
 │   └── Broli.SOP.Web               Blazor : pages, composants (filtres, KPI, graphiques, tableaux), client API typé
-└── tests/Broli.SOP.Tests           xUnit : calculs, import, API de bout en bout
+├── tests/Broli.SOP.Tests           xUnit : calculs, import, API de bout en bout
+└── tests/Broli.SOP.LoadTest        Test de charge : génération de volume + utilisateurs virtuels (voir docs/LOAD-TEST.md)
 ```
 
 Règle de dépendance : `Web → Contracts` uniquement (le frontend ne connaît que l'API REST, jamais Excel ni la base) ;
@@ -270,7 +272,11 @@ et l'autorisation repose sur des permissions indépendantes du fournisseur d'ide
 - Les faits sont agrégés en SQL (une ligne par produit × mois) avec index sur `(ProductId, DateKey)`.
 - Le calcul complet d'un filtre (positions de stock, couverture, projection jour par jour, risques ETA) est mis en cache
   10 min et partagé par tous les utilisateurs ; il est invalidé à chaque import, modification ou changement de paramètre.
-- Mesuré sur les données DEMO : 35–45 ms par calcul de snapshot (≈ 0,5 s pour la toute première requête après démarrage), 0,2–0,4 s par navigation.
+- Les données de tous les produits sont lues une fois par année et par version de données, puis filtrées en mémoire :
+  un nouveau filtre ne coûte que le calcul (≈ 3 ms sur 3 000 SKU). Le snapshot par défaut est préchauffé au démarrage
+  et après chaque import (`Analytics:WarmUp`).
+- **Test de charge** (50 utilisateurs, 3 000 SKU, 48 mois, 120 s) : 0 erreur, p95 12 ms, p99 69 ms, max 96 ms —
+  méthode, outil et résultats avant/après dans [`docs/LOAD-TEST.md`](docs/LOAD-TEST.md).
 
 ## Déploiement (Windows Server / IIS)
 

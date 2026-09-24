@@ -106,11 +106,11 @@ public sealed class MaterialsService(IAnalyticsEngine engine, ICurrentUser user)
     {
         var p = pos.Product;
         var months = s.Period.MonthKeys;
-        var demand = s.Demand.Where(d => d.ProductId == p.Id && months.Contains(d.MonthKey)).ToList();
+        var demand = s.DemandByProduct[p.Id].Where(d => months.Contains(d.MonthKey)).ToList();
         var production = months.Sum(m => s.Production.GetValueOrDefault((p.Id, m)));
         var slowWindow = Math.Max(1, s.Settings.Coverage.SlowMovingMonths);
         var recent = Enumerable.Range(0, slowWindow).Sum(i => s.Consumption.GetValueOrDefault((p.Id, DateKeys.AddMonths(s.Period.AsOfMonthKey, -i))));
-        var late = s.OpenLines.Any(l => l.Product.Id == p.Id && l.Assessment.Level >= EtaRiskLevel.SupplyRisk);
+        var late = s.OpenLinesByProduct[p.Id].Any(l => l.Assessment.Level >= EtaRiskLevel.SupplyRisk);
         var alertDate = MaterialFlags.AlertDate(s.Period.AsOfDate, LeadTimes.ProductLeadDays(p, s.Settings.Supply), s.Settings.Coverage);
         var flags = MaterialFlags.Compute(pos, recent, late, alertDate);
 

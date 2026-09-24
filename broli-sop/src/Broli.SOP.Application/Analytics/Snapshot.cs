@@ -79,4 +79,15 @@ public sealed class AnalyticsSnapshot
     }
 
     public IEnumerable<AssessedLine> OpenLines => Lines.Where(l => l.IsOpen);
+
+    private ILookup<int, DemandPoint>? _demandByProduct;
+    private ILookup<int, AssessedLine>? _openByProduct;
+
+    /// <summary>Demand indexed by product (built once), so per-product loops stay linear.</summary>
+    public ILookup<int, DemandPoint> DemandByProduct =>
+        LazyInitializer.EnsureInitialized(ref _demandByProduct, () => Demand.ToLookup(d => d.ProductId))!;
+
+    /// <summary>Open supply lines indexed by product (built once).</summary>
+    public ILookup<int, AssessedLine> OpenLinesByProduct =>
+        LazyInitializer.EnsureInitialized(ref _openByProduct, () => OpenLines.ToLookup(l => l.Product.Id))!;
 }

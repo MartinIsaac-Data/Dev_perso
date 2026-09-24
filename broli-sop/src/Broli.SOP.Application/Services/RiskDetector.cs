@@ -48,7 +48,7 @@ public static class RiskDetector
 
             // Forecast bias over the last three months up to the as-of month.
             var recent = Enumerable.Range(0, 3).Select(i => DateKeys.AddMonths(s.Period.AsOfMonthKey, -i)).ToHashSet();
-            var dem = s.Demand.Where(d => d.ProductId == p.Id && recent.Contains(d.MonthKey)).ToList();
+            var dem = s.DemandByProduct[p.Id].Where(d => recent.Contains(d.MonthKey)).ToList();
             var fSum = dem.Sum(d => d.Forecast);
             var aSum = dem.Sum(d => d.Actual);
             if (KpiMath.BiasPct(fSum, aSum) is { } bias && Math.Abs(bias) > 2 * set.Forecast.OnTrackTolerancePct && aSum > 0)

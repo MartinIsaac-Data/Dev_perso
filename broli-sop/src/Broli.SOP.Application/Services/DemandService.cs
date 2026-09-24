@@ -26,8 +26,9 @@ public sealed class DemandService(IAnalyticsEngine engine)
         var byMonth = s.Demand.GroupBy(d => d.MonthKey).ToDictionary(g => g.Key, g => g.ToList());
         double? M(int m, Func<List<DemandPoint>, double?> fn) => byMonth.TryGetValue(m, out var ds) ? Mapping.R(fn(ds)) : null;
 
+        var idByCode = s.Products.ToDictionary(p => p.CArtSap, p => p.Id);
         var worst = rows.Where(r => r.AccuracyPct.HasValue)
-            .OrderByDescending(r => conv(ProductId(s, r.CArtSap), r.Actual) ?? 0)
+            .OrderByDescending(r => conv(idByCode.GetValueOrDefault(r.CArtSap), r.Actual) ?? 0)
             .Take(15)
             .OrderBy(r => r.AccuracyPct)
             .Select(r => new ChartPoint($"{r.CArtSap} {Short(r.Description)}", r.AccuracyPct, r.CArtSap))
@@ -104,9 +105,6 @@ public sealed class DemandService(IAnalyticsEngine engine)
             })
             .ToList();
     }
-
-    private static int ProductId(AnalyticsSnapshot s, string cartSap) =>
-        s.Products.FirstOrDefault(p => p.CArtSap == cartSap)?.Id ?? 0;
 
     private static string Short(string text) => text.Length <= 22 ? text : text[..21] + "…";
 }
