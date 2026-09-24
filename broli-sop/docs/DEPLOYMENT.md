@@ -33,9 +33,16 @@ Install-WindowsFeature Web-Server, Web-WebSockets, Web-AppInit -IncludeManagemen
 
 ## 2. Base de données (DBA)
 
+**Cas simple : SQL Server sur le même serveur que IIS, et l'installateur est administrateur de l'instance.**
+Ajouter `-GrantDatabaseAccess` à la première installation (étape 4). Le script crée la base, puis donne l'accès à
+l'identité du pool une fois celui-ci créé : ce compte n'existe qu'à partir de ce moment. Rien d'autre à faire ici.
+
+**Sinon, le DBA prépare la base :**
+
 1. Créer une base vide `BroliSOP` (SQL Server 2019 ou plus récent).
 2. Donner l'accès au compte qui exécutera l'API. Par défaut, c'est l'authentification Windows, sans mot de passe stocké :
-   - SQL Server **sur le même serveur** que IIS : `IIS APPPOOL\BroliSOP-API` ;
+   - SQL Server **sur le même serveur** que IIS : `IIS APPPOOL\BroliSOP-API`. Ce compte n'existe qu'après la création
+     du pool : utiliser plutôt `-GrantDatabaseAccess`, ou lancer l'installation une première fois, accorder les droits, puis la relancer ;
    - SQL Server **sur un autre serveur** : le compte machine du serveur web, `DOMAINE\NOMSERVEUR$`.
 
 ```sql
@@ -96,6 +103,7 @@ Paramètres utiles :
 | `-InstallRoot` | dossier d'installation (défaut `C:\inetpub\broli-sop`) |
 | `-Database` | nom de la base (défaut `BroliSOP`) |
 | `-SqlCredential` | compte SQL au lieu de l'authentification Windows |
+| `-GrantDatabaseAccess` | crée la base si besoin et donne l'accès au compte de l'API, avec les droits du mode choisi (voir étape 2) |
 | `-DbaAppliesMigrations` | mode B (voir étape 2) ; à combiner avec `-SchemaUpdatedByDba` une fois le script SQL exécuté |
 | `-WebPort`, `-ApiPort` | ports (défauts 443 ou 80, et 5080) |
 | `-InboxRoot` | dossier de dépôt Excel pour l'import automatique ; les droits de modification sont accordés à l'API |

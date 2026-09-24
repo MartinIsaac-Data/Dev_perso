@@ -22,6 +22,10 @@
     .\Install-BroliSop.ps1 -SqlServer SQLPROD01 -HostName sop.broli.local -CertificateThumbprint 3F2A...
 
 .EXAMPLE
+    # First install with SQL Server on the same machine: also create the database and grant the pool identity access
+    .\Install-BroliSop.ps1 -SqlServer .\SQLEXPRESS -HostName sop.broli.local -CertificateThumbprint 3F2A... -GrantDatabaseAccess
+
+.EXAMPLE
     # Update: all settings are kept
     .\Install-BroliSop.ps1
 
@@ -41,6 +45,7 @@ param(
     [int] $WebPort = 0,
     [int] $ApiPort = 5080,
     [switch] $DbaAppliesMigrations,
+    [switch] $GrantDatabaseAccess,
     [switch] $SchemaUpdatedByDba,
     [switch] $SqlBackupDone,
     [string] $InboxRoot,
@@ -233,6 +238,14 @@ if ($InboxRoot) {
     & icacls $InboxRoot /grant "IIS AppPool\$($names.ApiPool):(OI)(CI)M" /T /Q | Out-Null
 }
 
+# The pool's virtual account exists only now that the pool does: SQL access for it can be granted from this point.
+if ($GrantDatabaseAccess) {
+    if (-not $SqlServer) { throw '-GrantDatabaseAccess needs -SqlServer.' }
+    if ($SqlCredential) { throw '-GrantDatabaseAccess sets up Windows authentication; do not combine it with -SqlCredential.' }
+    Step 'Granting database access'
+    Grant-DatabaseAccess $SqlServer $Database ($applyMigrations -eq 'true')
+}
+
 # ---------------------------------------------------------------- start and verify
 Step 'Starting'
 try {
@@ -248,7 +261,8 @@ try {
             $restored = Wait-ApiHealthy $ApiPort
             throw ("Update failed; previous version restored ({0}). {1}" -f $(if ($restored) { 'running' } else { 'NOT responding either' }), $hint)
         }
-        throw "The API did not start. Check the database connection and rights (DEPLOYMENT.md, step 2). $hint"
+        throw ("The API did not start. Check that SQL Server is reachable and that {0} has access to [{1}] " +
+           "(DEPLOYMENT.md, step 2, or rerun with -GrantDatabaseAccess). {2}") -f (Get-ApiSqlPrincipal $SqlServer), $Database, $hint
     }
     Write-Host '   API healthy'
 

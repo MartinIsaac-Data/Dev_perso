@@ -1,7 +1,8 @@
 <#
     CI only (Windows runner with IIS, the Hosting Bundle and SQL Server Express already installed).
     Runs the documented procedure end to end with Windows PowerShell 5.1:
-      1. first install over HTTPS (self-signed certificate), Windows authentication with the pool identity;
+      1. first install over HTTPS (self-signed certificate), database created and the pool identity granted access
+         (-GrantDatabaseAccess), Windows authentication without any stored password;
       2. update to a new version: backup kept, portal healthy;
       3. broken update: the installer must restore the previous version by itself;
       4. manual rollback with Rollback-BroliSop.ps1.
@@ -22,13 +23,6 @@ $config = Join-Path $env:windir 'system32\inetsrv\config\applicationHost.config'
 function Check([string] $what, [scriptblock] $test) {
     if (-not (& $test)) { throw "FAILED: $what" }
     Write-Host "  ok - $what" -ForegroundColor Green
-}
-
-function Invoke-Sql([string] $database, [string] $sql) {
-    $cn = New-Object System.Data.SqlClient.SqlConnection "Server=$SqlServer;Database=$database;Integrated Security=True;TrustServerCertificate=True"
-    $cn.Open()
-    try { $cmd = $cn.CreateCommand(); $cmd.CommandText = $sql; $cmd.ExecuteNonQuery() | Out-Null }
-    finally { $cn.Dispose() }
 }
 
 function Test-Status([string] $url, [int] $expected = 200) {
@@ -57,11 +51,6 @@ function New-PackageVersion([string] $version) {
     return $copy
 }
 
-Write-Host '== Database and login for the pool identity (DEPLOYMENT.md, step 2)'
-Invoke-Sql 'master' "IF DB_ID('BroliSOP') IS NULL CREATE DATABASE [BroliSOP]"
-Invoke-Sql 'master' "IF SUSER_ID('IIS APPPOOL\BroliSOP-API') IS NULL CREATE LOGIN [IIS APPPOOL\BroliSOP-API] FROM WINDOWS"
-Invoke-Sql 'BroliSOP' "IF USER_ID('BroliSOP-API') IS NULL CREATE USER [BroliSOP-API] FOR LOGIN [IIS APPPOOL\BroliSOP-API]; ALTER ROLE db_owner ADD MEMBER [BroliSOP-API]"
-
 $cert = New-SelfSignedCertificate -DnsName 'localhost' -CertStoreLocation 'Cert:\LocalMachine\My'
 $password = 'Ci-' + [Guid]::NewGuid().ToString('N').Substring(0, 16)
 $v1 = New-PackageVersion '1.0.0'
@@ -71,7 +60,7 @@ Set-Content (Join-Path $broken 'api\appsettings.json') '{ this is not json'
 
 Write-Host '== 1. First install'
 & (Join-Path $v1 'Install-BroliSop.ps1') -SqlServer $SqlServer -HostName 'localhost' -CertificateThumbprint $cert.Thumbprint `
-    -AdminPassword (ConvertTo-SecureString $password -AsPlainText -Force)
+    -GrantDatabaseAccess -AdminPassword (ConvertTo-SecureString $password -AsPlainText -Force)
 Assert-Running '1.0.0'
 Check 'admin can sign in with the password given at install' {
     $body = @{ username = 'admin'; password = $password } | ConvertTo-Json

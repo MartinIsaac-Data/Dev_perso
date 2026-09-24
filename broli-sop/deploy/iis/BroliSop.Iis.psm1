@@ -138,4 +138,50 @@ function Get-InstalledVersion([string] $installRoot) {
     return '(unknown)'
 }
 
+# The Windows account the API uses to reach SQL Server: the pool's virtual account when SQL Server runs on this machine,
+# the machine account (DOMAIN\SERVER$) when it runs elsewhere.
+function Get-ApiSqlPrincipal([string] $sqlServer) {
+    $hostPart = ($sqlServer -split '[\\,]')[0].Trim()
+    if ($hostPart -in @('.', 'localhost', '(local)', '127.0.0.1', $env:COMPUTERNAME)) { return "IIS APPPOOL\$script:ApiPool" }
+    return "$env:USERDOMAIN\$env:COMPUTERNAME$"
+}
+
+# Creates the database if needed, the Windows login and the database user of the API, with the rights of the chosen mode
+# (db_owner when the application migrates its schema, read/write only otherwise). Idempotent; runs with the identity of
+# the person installing, who must be allowed to do this on the SQL Server (typically sysadmin on a local instance).
+function Grant-DatabaseAccess([string] $sqlServer, [string] $database, [bool] $applyMigrations) {
+    $login = Get-ApiSqlPrincipal $sqlServer
+    $roles = $(if ($applyMigrations) { @('db_owner') } else { @('db_datareader', 'db_datawriter') })
+    Write-Host "   $login -> [$database] ($($roles -join ', '))"
+
+    $master = @'
+DECLARE @sql nvarchar(max);
+IF DB_ID(@db) IS NULL BEGIN SET @sql = N'CREATE DATABASE ' + QUOTENAME(@db); EXEC (@sql); END
+IF SUSER_ID(@login) IS NULL BEGIN SET @sql = N'CREATE LOGIN ' + QUOTENAME(@login) + N' FROM WINDOWS'; EXEC (@sql); END
+'@
+    $grant = @'
+DECLARE @sql nvarchar(max);
+DECLARE @user sysname = (SELECT name FROM sys.database_principals WHERE sid = SUSER_SID(@login));
+IF @user IS NULL
+BEGIN
+    SET @user = N'BroliSOP-API';
+    SET @sql = N'CREATE USER ' + QUOTENAME(@user) + N' FOR LOGIN ' + QUOTENAME(@login); EXEC (@sql);
+END
+'@
+    foreach ($role in $roles) { $grant += "SET @sql = N'ALTER ROLE $role ADD MEMBER ' + QUOTENAME(@user); EXEC (@sql);`r`n" }
+
+    foreach ($step in @(@{ Db = 'master'; Sql = $master }, @{ Db = $database; Sql = $grant })) {
+        $cn = New-Object System.Data.SqlClient.SqlConnection "Server=$sqlServer;Database=$($step.Db);Integrated Security=True;TrustServerCertificate=True"
+        try {
+            $cn.Open()
+            $cmd = $cn.CreateCommand()
+            $cmd.CommandText = $step.Sql
+            $cmd.Parameters.AddWithValue('@db', $database) | Out-Null
+            $cmd.Parameters.AddWithValue('@login', $login) | Out-Null
+            $cmd.ExecuteNonQuery() | Out-Null
+        }
+        finally { $cn.Dispose() }
+    }
+}
+
 Export-ModuleMember -Function *
