@@ -17,7 +17,6 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = 'C:\inetpub\broli-sop'
 $config = Join-Path $env:windir 'system32\inetsrv\config\applicationHost.config'
-[Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }   # self-signed test certificate
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 function Check([string] $what, [scriptblock] $test) {
@@ -35,8 +34,16 @@ function Assert-Running([string] $version) {
     $lan = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -ne '127.0.0.1' -and $_.PrefixOrigin -ne 'WellKnown' } | Select-Object -First 1).IPAddress
     Check "API not reachable from the network ($lan)" { -not (Test-Status "http://${lan}:5080/health") }
     Check 'portal served over HTTPS' {
-        $r = Invoke-WebRequest 'https://localhost/login' -UseBasicParsing -TimeoutSec 60
-        $r.StatusCode -eq 200 -and $r.Content -match 'blazor'
+        try {
+            $r = Invoke-WebRequest 'https://localhost/login' -UseBasicParsing -TimeoutSec 60
+            $r.StatusCode -eq 200 -and $r.Content -match 'blazor'
+        }
+        catch {
+            # Show the whole chain: the outer message of a TLS failure ("unexpected error on a send") hides the cause.
+            $e = $_.Exception
+            while ($null -ne $e) { Write-Host "    $($e.GetType().Name): $($e.Message)"; $e = $e.InnerException }
+            $false
+        }
     }
     Check "installed version is $version" { (Get-Content (Join-Path $root 'VERSION') -TotalCount 1).Trim() -eq $version }
     Check 'no administrator password left in applicationHost.config' { -not (Select-String -Path $config -Pattern 'Bootstrap__AdminPassword' -Quiet) }
@@ -52,6 +59,9 @@ function New-PackageVersion([string] $version) {
 }
 
 $cert = New-SelfSignedCertificate -DnsName 'localhost' -CertStoreLocation 'Cert:\LocalMachine\My'
+# Trusted like a corporate CA certificate would be on the users' machines (no validation bypass in the test client).
+$rootStore = New-Object Security.Cryptography.X509Certificates.X509Store('Root', 'LocalMachine')
+$rootStore.Open('ReadWrite'); $rootStore.Add($cert); $rootStore.Close()
 $password = 'Ci-' + [Guid]::NewGuid().ToString('N').Substring(0, 16)
 $v1 = New-PackageVersion '1.0.0'
 $v2 = New-PackageVersion '1.1.0'

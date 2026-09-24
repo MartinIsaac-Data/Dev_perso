@@ -159,5 +159,5 @@ jobs:
           Get-WinEvent -LogName Application -MaxEvents 40 | Where-Object { $_.LevelDisplayName -in 'Error', 'Warning' } |
             Format-List TimeCreated, ProviderName, Message
           Get-ChildItem C:\inetpub\broli-sop -ErrorAction SilentlyContinue
-          netsh http show sslcert
+          netsh http show sslcert hostnameport=localhost:443
           & "$env:windir\system32\inetsrv\appcmd.exe" list site
