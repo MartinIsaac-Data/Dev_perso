@@ -88,7 +88,7 @@ public sealed class ProductsController(ProductService service) : ControllerBase
 {
     [HttpGet("{cartSap}")]
     public async Task<ActionResult<ProductDetail>> Get(string cartSap, [FromQuery] SopFilter filter, CancellationToken ct) =>
-        await service.GetAsync(cartSap, filter, ct) is { } detail ? detail : NotFound(new ApiError($"Product '{cartSap}' not found."));
+        await service.GetAsync(cartSap, filter, ct) is { } detail ? detail : NotFound(new ApiError($"Article « {cartSap} » introuvable."));
 }
 
 [ApiController]
@@ -125,6 +125,6 @@ public sealed class ExportController(ExportService service) : ControllerBase
         };
         if (!User.HasClaim(Broli.SOP.Infrastructure.JwtTokenService.PermissionClaim, required)) return Forbid();
         var file = await service.ExportAsync(dataset, format, filter, query, ct);
-        return file is { } f ? File(f.Content, f.ContentType, f.FileName) : NotFound(new ApiError($"Unknown dataset '{dataset}'."));
+        return file is { } f ? File(f.Content, f.ContentType, f.FileName) : NotFound(new ApiError($"Jeu de données inconnu : « {dataset} »."));
     }
 }

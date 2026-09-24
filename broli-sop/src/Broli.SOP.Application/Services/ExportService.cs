@@ -30,7 +30,7 @@ public sealed class ExportService(
         var csv = string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase);
         var bytes = csv ? exporter.ToCsv(table) : exporter.ToXlsx(table);
         var name = $"broli-sop-{dataset}-{DateTime.UtcNow:yyyyMMdd-HHmm}.{(csv ? "csv" : "xlsx")}";
-        await audit.LogAsync("Exported data", "Export", dataset, null, $"{table.Rows.Count} rows, {format}; {filter.ToQueryString()}", ct);
+        await audit.LogAsync("Données exportées", "Export", dataset, null, $"{table.Rows.Count} lignes, {format} ; {filter.ToQueryString()}", ct);
         return (bytes, name, csv ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
@@ -38,9 +38,9 @@ public sealed class ExportService(
     {
         var finance = user.Has(Contracts.Security.Permissions.FinanceView);
         var period = (await engine.GetSnapshotAsync(filter, ct)).Period.Info.Label;
-        var subtitle = $"Period: {period} · Filters: {(filter.ToQueryString() is { Length: > 0 } f ? Uri.UnescapeDataString(f) : "none")}"
-                       + (string.IsNullOrWhiteSpace(q.Search) ? "" : $" · Search: {q.Search}")
-                       + (string.IsNullOrWhiteSpace(q.View) ? "" : $" · View: {q.View}");
+        var subtitle = $"Période : {period} · Filtres : {(filter.ToQueryString() is { Length: > 0 } f ? Uri.UnescapeDataString(f) : "aucun")}"
+                       + (string.IsNullOrWhiteSpace(q.Search) ? "" : $" · Recherche : {q.Search}")
+                       + (string.IsNullOrWhiteSpace(q.View) ? "" : $" · Vue : {q.View}");
 
         switch (dataset.ToLowerInvariant())
         {
@@ -49,18 +49,18 @@ public sealed class ExportService(
                 var rows = await inventory.GetAllRowsAsync(filter, q, ct);
                 var cols = new List<TableColumn>
                 {
-                    new("CArtSAP"), new("Description"), new("Category"), new("Brand"), new("Material Type"), new("Unit"),
-                    new("Opening Stock", "number"), new("Receipts", "number"), new("Consumption", "number"), new("Closing Stock", "number"),
-                    new("Closing TC", "decimal"), new("Safety Stock", "number"), new("Avg Consumption / month", "number"),
-                    new("Coverage (months)", "decimal"), new("Coverage Status"), new("Excess", "number"), new("Below Safety"), new("At Risk"),
-                    new("Open Supply", "number"), new("In Transit", "number"), new("Next ETA", "date"), new("Projected Stockout", "date"),
+                    new("CArtSAP"), new("Désignation"), new("Catégorie"), new("Marque"), new("Type d'article"), new("Unité"),
+                    new("Stock initial", "number"), new("Réceptions", "number"), new("Consommation", "number"), new("Stock final", "number"),
+                    new("TC final", "decimal"), new("Stock de sécurité", "number"), new("Conso. moyenne / mois", "number"),
+                    new("Couverture (mois)", "decimal"), new("Statut couverture"), new("Excédent", "number"), new("Sous le stock de sécurité"), new("À risque"),
+                    new("Appro ouvert", "number"), new("En transit", "number"), new("Prochaine ETA", "date"), new("Rupture prévue", "date"),
                 };
-                if (finance) cols.Add(new("Stock Value", "number"));
-                return new TableData("Inventory & Coverage", subtitle, cols, rows.Select(r =>
+                if (finance) cols.Add(new("Valeur du stock", "number"));
+                return new TableData("Stock et couverture", subtitle, cols, rows.Select(r =>
                 {
                     var v = new List<object?> { r.CArtSap, r.Description, r.Category, r.Brand, r.MaterialType, r.Unit, r.OpeningStock, r.Receipts,
                         r.Consumption, r.ClosingStock, r.ClosingTc, r.SafetyStock, r.AvgMonthlyConsumption, r.CoverageMonths, r.CoverageStatus,
-                        r.ExcessStock, r.BelowSafety ? "Yes" : "No", r.AtRisk ? "Yes" : "No", r.OpenSupplyQty, r.InTransitQty, r.NextEta, r.StockoutDate };
+                        r.ExcessStock, r.BelowSafety ? "Oui" : "Non", r.AtRisk ? "Oui" : "Non", r.OpenSupplyQty, r.InTransitQty, r.NextEta, r.StockoutDate };
                     if (finance) v.Add(r.StockValue);
                     return v.ToArray();
                 }).ToList());
@@ -68,20 +68,20 @@ public sealed class ExportService(
             case "demand":
             {
                 var rows = await demand.GetAllRowsAsync(filter, q, ct);
-                return new TableData("Forecast vs Actual", subtitle,
-                    [new("CArtSAP"), new("Description"), new("Category"), new("Brand"), new("Unit"), new("Forecast", "number"), new("Actual", "number"),
-                     new("Variance", "number"), new("Variance %", "decimal"), new("Accuracy %", "decimal"), new("BIAS %", "decimal"), new("Status")],
+                return new TableData("Prévision vs réel", subtitle,
+                    [new("CArtSAP"), new("Désignation"), new("Catégorie"), new("Marque"), new("Unité"), new("Prévision", "number"), new("Réel", "number"),
+                     new("Écart", "number"), new("Écart %", "decimal"), new("Précision %", "decimal"), new("Biais %", "decimal"), new("Statut")],
                     rows.Select(r => new object?[] { r.CArtSap, r.Description, r.Category, r.Brand, r.Unit, r.Forecast, r.Actual, r.Variance,
                         r.VariancePct, r.AccuracyPct, r.BiasPct, r.Status }).ToList());
             }
             case "supply":
             {
                 var rows = await supply.GetAllRowsAsync(filter, q, ct);
-                return new TableData("Supply & Open Orders", subtitle,
-                    [new("PO"), new("CArtSAP"), new("Product"), new("Supplier"), new("Country"), new("Quantity", "number"), new("Unit"), new("TC", "decimal"),
-                     new("Order Date", "date"), new("Required Date", "date"), new("ETD", "date"), new("ETA", "date"), new("Actual Arrival", "date"),
-                     new("Status"), new("Delay (days)", "number"), new("Transit (days)", "number"), new("Projected Stockout", "date"), new("Risk"),
-                     new("Risk Reason"), new("Port"), new("Booking"), new("BL"), new("Customs")],
+                return new TableData("Approvisionnement et commandes ouvertes", subtitle,
+                    [new("Commande"), new("CArtSAP"), new("Article"), new("Fournisseur"), new("Pays"), new("Quantité", "number"), new("Unité"), new("TC", "decimal"),
+                     new("Date de commande", "date"), new("Date de besoin", "date"), new("ETD", "date"), new("ETA", "date"), new("Arrivée réelle", "date"),
+                     new("Statut"), new("Retard (j)", "number"), new("Transit (j)", "number"), new("Rupture prévue", "date"), new("Risque"),
+                     new("Motif du risque"), new("Port"), new("Booking"), new("BL"), new("Douane")],
                     rows.Select(r => new object?[] { r.PoNumber, r.CArtSap, r.Product, r.Supplier, r.Country, r.Quantity, r.Unit, r.Tc, r.OrderDate,
                         r.RequiredDate, r.Etd, r.Eta, r.ActualArrival, r.Status, r.DelayDays, r.TransitDays, r.StockoutDate, r.RiskLevel, r.RiskReason,
                         r.Port, r.Booking, r.BillOfLading, r.CustomsStatus }).ToList());
@@ -92,30 +92,30 @@ public sealed class ExportService(
                 rows = TableHelper.Filter(rows, q, r => $"{r.Category} {r.Severity} {r.CArtSap} {r.Product} {r.Title} {r.Reference}");
                 if (!string.IsNullOrWhiteSpace(q.View)) rows = rows.Where(r => string.Equals(r.Category, q.View, StringComparison.OrdinalIgnoreCase)
                                                                                || string.Equals(r.Severity, q.View, StringComparison.OrdinalIgnoreCase));
-                return new TableData("Detected Risks", subtitle,
-                    [new("Severity"), new("Category"), new("CArtSAP"), new("Product"), new("Risk"), new("Detail"), new("Suggested Action"), new("Reference"), new("Due By", "date")],
+                return new TableData("Risques détectés", subtitle,
+                    [new("Gravité"), new("Catégorie"), new("CArtSAP"), new("Article"), new("Risque"), new("Détail"), new("Action suggérée"), new("Référence"), new("Échéance", "date")],
                     rows.Select(r => new object?[] { r.Severity, r.Category, r.CArtSap, r.Product, r.Title, r.Detail, r.SuggestedAction, r.Reference, r.DueBy }).ToList());
             }
             case "risk-register":
             {
                 var rows = await risks.GetAllRegisterAsync(q, ct);
-                return new TableData("Risk & Opportunity Register", subtitle,
-                    [new("Risk ID"), new("Category"), new("Type"), new("Description"), new("CArtSAP"), new("Product"), new("Impact"), new("Probability %", "number"),
-                     new("Score", "number"), new("Owner"), new("Action"), new("Due Date", "date"), new("Status")],
-                    rows.Select(r => new object?[] { r.Code, r.Category, r.IsOpportunity ? "Opportunity" : "Risk", r.Description, r.CArtSap, r.Product, r.Impact,
+                return new TableData("Registre des risques et opportunités", subtitle,
+                    [new("N° risque"), new("Catégorie"), new("Type"), new("Désignation"), new("CArtSAP"), new("Article"), new("Impact"), new("Probabilité %", "number"),
+                     new("Score", "number"), new("Responsable"), new("Action"), new("Échéance", "date"), new("Statut")],
+                    rows.Select(r => new object?[] { r.Code, r.Category, r.IsOpportunity ? "Opportunité" : "Risque", r.Description, r.CArtSap, r.Product, r.Impact,
                         r.Probability, r.Score, r.Owner, r.Action, r.DueDate, r.Status }).ToList());
             }
             case "mrp":
             {
                 var rows = await mrp.GetAllRowsAsync(filter, q, ct);
                 var horizon = rows.FirstOrDefault()?.Forecast.Count ?? 0;
-                var cols = new List<TableColumn> { new("CArtSAP"), new("Description"), new("Category"), new("Material Type"), new("Unit"), new("Supplier"), new("Opening Stock", "number") };
-                cols.AddRange(Enumerable.Range(1, horizon).Select(i => new TableColumn($"Forecast M+{i}", "number")));
-                cols.AddRange([new("Open Order", "number"), new("In Transit", "number"), new("Safety Stock", "number"), new("Projected Stock", "number"),
-                    new("Coverage (months)", "decimal"), new("Coverage Status"), new("Net Requirement", "number"), new("Recommended Order", "number"),
-                    new("Recommended TC", "decimal"), new("Lead Time (days)", "number"), new("Need Date", "date"), new("Order By", "date"), new("Days Late", "number"), new("Risk")]);
-                if (finance) cols.Add(new("Recommended Value", "number"));
-                return new TableData("MRP — Net Requirements", subtitle, cols, rows.Select(r =>
+                var cols = new List<TableColumn> { new("CArtSAP"), new("Désignation"), new("Catégorie"), new("Type d'article"), new("Unité"), new("Fournisseur"), new("Stock initial", "number") };
+                cols.AddRange(Enumerable.Range(1, horizon).Select(i => new TableColumn($"Prévision M+{i}", "number")));
+                cols.AddRange([new("Commande ouverte", "number"), new("En transit", "number"), new("Stock de sécurité", "number"), new("Stock projeté", "number"),
+                    new("Couverture (mois)", "decimal"), new("Statut couverture"), new("Besoin net", "number"), new("Commande recommandée", "number"),
+                    new("TC recommandés", "decimal"), new("Délai (j)", "number"), new("Date de besoin", "date"), new("Commander avant", "date"), new("Jours de retard", "number"), new("Risque")]);
+                if (finance) cols.Add(new("Valeur recommandée", "number"));
+                return new TableData("MRP — besoins nets", subtitle, cols, rows.Select(r =>
                 {
                     var v = new List<object?> { r.CArtSap, r.Description, r.Category, r.MaterialType, r.Unit, r.Supplier, r.OpeningStock };
                     v.AddRange(r.Forecast.Cast<object?>());
@@ -130,14 +130,14 @@ public sealed class ExportService(
                 var rows = await materials.GetAllRowsAsync(dataset, filter, q, ct);
                 var cols = new List<TableColumn>
                 {
-                    new("CArtSAP"), new("Description"), new("Category"), new("Brand"), new("Material Type"), new("Format"), new("Color"), new("Supplier"),
-                    new("Country"), new("Unit"), new("Stock", "number"), new("Stock TC", "decimal"), new("Avg Consumption / month", "number"),
-                    new("Forecast (period)", "number"), new("Actual (period)", "number"), new("Production (period)", "number"), new("Service Level %", "decimal"),
-                    new("Coverage (months)", "decimal"), new("Coverage Status"), new("Open PO", "number"), new("In Transit", "number"), new("Next ETA", "date"),
-                    new("Projected Stockout", "date"), new("Flags"), new("Risk"),
+                    new("CArtSAP"), new("Désignation"), new("Catégorie"), new("Marque"), new("Type d'article"), new("Format"), new("Couleur"), new("Fournisseur"),
+                    new("Pays"), new("Unité"), new("Stock", "number"), new("Stock TC", "decimal"), new("Conso. moyenne / mois", "number"),
+                    new("Prévision (période)", "number"), new("Réel (période)", "number"), new("Production (période)", "number"), new("Taux de service %", "decimal"),
+                    new("Couverture (mois)", "decimal"), new("Statut couverture"), new("Commandes ouvertes", "number"), new("En transit", "number"), new("Prochaine ETA", "date"),
+                    new("Rupture prévue", "date"), new("Alertes"), new("Risque"),
                 };
-                if (finance) { cols.Add(new("Unit Cost", "decimal")); cols.Add(new("Stock Value", "number")); }
-                return new TableData(dataset switch { "films" => "Films", "finished-goods" => "Finished Goods", _ => "Raw Materials & Packaging" }, subtitle, cols,
+                if (finance) { cols.Add(new("Coût unitaire", "decimal")); cols.Add(new("Valeur du stock", "number")); }
+                return new TableData(dataset switch { "films" => "Films", "finished-goods" => "Produits finis", _ => "Matières premières et emballages" }, subtitle, cols,
                     rows.Select(r =>
                     {
                         var v = new List<object?> { r.CArtSap, r.Description, r.Category, r.Brand, r.MaterialType, r.Format, r.Color, r.Supplier, r.Country, r.Unit,
@@ -150,11 +150,11 @@ public sealed class ExportService(
             case "transit":
             {
                 var rows = await transit.GetAllRowsAsync(filter, q, ct);
-                return new TableData("Logistics & Transit", subtitle,
-                    [new("PO"), new("Supplier"), new("Material"), new("Quantity", "number"), new("Unit"), new("TC", "decimal"), new("Country"), new("Port"),
-                     new("Booking"), new("BL"), new("ETD", "date"), new("ETA", "date"), new("Actual Arrival", "date"), new("Status"), new("Customs Status"),
-                     new("Clearing"), new("Estimated Delivery", "date"), new("Transit (days)", "number"), new("Standard (days)", "number"),
-                     new("Gap (days)", "number"), new("Delay (days)", "number"), new("Risk")],
+                return new TableData("Logistique et transit", subtitle,
+                    [new("Commande"), new("Fournisseur"), new("Article"), new("Quantité", "number"), new("Unité"), new("TC", "decimal"), new("Pays"), new("Port"),
+                     new("Booking"), new("BL"), new("ETD", "date"), new("ETA", "date"), new("Arrivée réelle", "date"), new("Statut"), new("Statut douane"),
+                     new("Dédouanement"), new("Livraison estimée", "date"), new("Transit (j)", "number"), new("Standard (j)", "number"),
+                     new("Écart (j)", "number"), new("Retard (j)", "number"), new("Risque")],
                     rows.Select(r => new object?[] { r.PoNumber, r.Supplier, r.Material, r.Quantity, r.Unit, r.Tc, r.Country, r.Port, r.Booking, r.BillOfLading,
                         r.Etd, r.Eta, r.ActualArrival, r.Status, r.CustomsStatus, r.Clearing, r.EstimatedDelivery, r.TransitDays, r.StandardTransitDays,
                         r.TransitGapDays, r.DelayDays, r.Risk }).ToList());
@@ -163,21 +163,21 @@ public sealed class ExportService(
             {
                 IEnumerable<SupplierRow> rows = await suppliers.GetRowsAsync(filter, ct);
                 rows = TableHelper.Filter(rows, q, r => $"{r.Code} {r.Name} {r.Country} {r.Risk}");
-                return new TableData("Supplier Performance", subtitle + " · " + SupplierService.Window,
-                    [new("Code"), new("Supplier"), new("Country"), new("Orders", "number"), new("Delivered", "number"), new("On Time %", "decimal"),
-                     new("Avg Delay (days)", "decimal"), new("Partial Deliveries", "number"), new("Open Orders", "number"), new("In Transit TC", "decimal"),
-                     new("Avg Transit (days)", "decimal"), new("Standard Transit (days)", "number"), new("Late Open", "number"), new("Critical Open", "number"), new("Risk")],
+                return new TableData("Performance fournisseurs", subtitle + " · " + SupplierService.Window,
+                    [new("Code"), new("Fournisseur"), new("Pays"), new("Commandes", "number"), new("Livrées", "number"), new("À l'heure %", "decimal"),
+                     new("Retard moyen (j)", "decimal"), new("Livraisons partielles", "number"), new("Commandes ouvertes", "number"), new("TC en transit", "decimal"),
+                     new("Transit moyen (j)", "decimal"), new("Transit standard (j)", "number"), new("Ouvertes en retard", "number"), new("Ouvertes critiques", "number"), new("Risque")],
                     rows.Select(r => new object?[] { r.Code, r.Name, r.Country, r.Orders, r.Delivered, r.OnTimePct, r.AvgDelayDays, r.PartialDeliveries,
                         r.OpenOrders, r.InTransitTc, r.AvgTransitDays, r.StandardTransitDays, r.LateOpen, r.CriticalOpen, r.Risk }).ToList());
             }
             case "actions":
             {
                 var rows = await actions.ListAllAsync(new ActionQuery { Search = q.Search, View = q.View, Sort = q.Sort, Desc = q.Desc }, ct);
-                return new TableData("S&OP Action Plan", subtitle,
-                    [new("Action ID"), new("Date", "date"), new("Topic"), new("Description"), new("Owner"), new("Department"), new("Due Date", "date"),
-                     new("Priority"), new("Status"), new("Decision"), new("Risk"), new("CArtSAP"), new("Comment")],
+                return new TableData("Plan d'actions S&OP", subtitle,
+                    [new("N° action"), new("Date", "date"), new("Sujet"), new("Désignation"), new("Responsable"), new("Service"), new("Échéance", "date"),
+                     new("Priorité"), new("Statut"), new("Décision"), new("Risque"), new("CArtSAP"), new("Commentaire")],
                     rows.Select(a => new object?[] { a.Code, a.Date, a.Topic, a.Description, a.Owner, a.Department, a.DueDate, a.Priority,
-                        a.Status + (a.IsOverdue ? " (overdue)" : ""), a.IsDecision ? "Yes" : "No", a.RiskCode, a.CArtSap, a.Comment }).ToList());
+                        a.Status + (a.IsOverdue ? " (en retard)" : ""), a.IsDecision ? "Oui" : "Non", a.RiskCode, a.CArtSap, a.Comment }).ToList());
             }
             default:
                 return null;

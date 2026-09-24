@@ -98,7 +98,7 @@ public interface IImportRepository
     Task<ImportLookups> GetLookupsAsync(CancellationToken ct);
     /// <summary>Writes validated rows atomically; purges DEMO data first when asked.</summary>
     Task<ImportResult> CommitAsync(ImportType type, string fileName, string username, IReadOnlyList<object> rows, int warningCount, bool purgeDemo,
-        CancellationToken ct, string source = "Manual upload");
+        CancellationToken ct, string source = "Chargement manuel");
     /// <summary>Records an automated run that was not imported (validation errors or a read failure) in the import history.</summary>
     Task RecordRejectedAsync(ImportType type, string fileName, string source, int rowCount, int errors, int warnings, string message,
         ImportStatus status, CancellationToken ct);

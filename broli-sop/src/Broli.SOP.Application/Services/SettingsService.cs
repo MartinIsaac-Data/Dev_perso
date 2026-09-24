@@ -34,7 +34,7 @@ public sealed class SettingsService(ISettingsStore store, IAuditLogger audit, ID
         Diff(GeneralSettings.Key, before.General, after.General);
         Diff(AlertSettings.Key, before.AlertRules, after.AlertRules);
         foreach (var c in changes)
-            await audit.LogAsync("Updated configuration", "Configuration", c.Section, c.Old, c.New, ct);
+            await audit.LogAsync("Configuration modifiée", "Configuration", c.Section, c.Old, c.New, ct);
         version.Bump();
     }
 
@@ -44,21 +44,21 @@ public sealed class SettingsService(ISettingsStore store, IAuditLogger audit, ID
         var c = s.Coverage;
         if (c.AverageMonths is < 1 or > 24) e.Add("Coverage: averaging window must be 1–24 months.");
         if (!(c.CriticalBelowMonths > 0 && c.CriticalBelowMonths < c.RiskBelowMonths && c.RiskBelowMonths < c.WatchBelowMonths && c.WatchBelowMonths < c.ExcessAboveMonths))
-            e.Add("Coverage thresholds must increase: Critical < Risk < Watch < Excess.");
-        if (s.SafetyStock.DefaultMonths < 0 || s.SafetyStock.MonthsByCategory.Values.Any(v => v < 0)) e.Add("Safety stock months cannot be negative.");
-        if (s.Forecast.OnTrackTolerancePct is < 0 or > 100) e.Add("Forecast tolerance must be 0–100 %.");
-        if (s.Forecast.HorizonMonths is < 1 or > 24) e.Add("Forecast horizon must be 1–24 months.");
-        if (s.Forecast.AccuracyTargetPct is < 0 or > 100 || s.Forecast.ServiceLevelTargetPct is < 0 or > 100) e.Add("Targets must be 0–100 %.");
-        if (s.Supply.WatchWindowDays is < 0 or > 90) e.Add("Watch window must be 0–90 days.");
-        if (s.Supply.InFullTolerancePct is < 0 or > 100 || s.Supply.OtifTargetPct is < 0 or > 100) e.Add("Supply percentages must be 0–100 %.");
-        if (s.Supply.TransitDaysByCountry.Values.Any(v => v is < 0 or > 365)) e.Add("Transit days must be 0–365.");
-        if (s.Tc.DefaultKgPerTc <= 0) e.Add("Kg per TC must be positive.");
-        if (s.Supply.PortToWarehouseDays is < 0 or > 60) e.Add("Port to warehouse must be 0–60 days.");
-        if (s.Supply.SupplierOnTimeAlertPct is < 0 or > 100) e.Add("Supplier alert must be 0–100 %.");
-        if (s.Coverage.SlowMovingMonths is < 1 or > 24) e.Add("Slow moving window must be 1–24 months.");
-        if (string.IsNullOrWhiteSpace(s.General.Currency) || s.General.Currency.Length > 5) e.Add("Currency code is required (max 5 characters).");
-        if (s.General.FiscalYearStartMonth is < 1 or > 12) e.Add("Fiscal year start month must be 1–12.");
-        if (s.Alerts is { RepeatAfterDays: < 0 or > 90 }) e.Add("Alert repeat delay must be 0–90 days.");
+            e.Add("Les seuils de couverture doivent être croissants : Critique < Risque < À surveiller < Excédent.");
+        if (s.SafetyStock.DefaultMonths < 0 || s.SafetyStock.MonthsByCategory.Values.Any(v => v < 0)) e.Add("Les mois de stock de sécurité ne peuvent pas être négatifs.");
+        if (s.Forecast.OnTrackTolerancePct is < 0 or > 100) e.Add("La tolérance de prévision doit être comprise entre 0 et 100 %.");
+        if (s.Forecast.HorizonMonths is < 1 or > 24) e.Add("L'horizon de prévision doit être compris entre 1 et 24 mois.");
+        if (s.Forecast.AccuracyTargetPct is < 0 or > 100 || s.Forecast.ServiceLevelTargetPct is < 0 or > 100) e.Add("Les objectifs doivent être compris entre 0 et 100 %.");
+        if (s.Supply.WatchWindowDays is < 0 or > 90) e.Add("La fenêtre de surveillance doit être comprise entre 0 et 90 jours.");
+        if (s.Supply.InFullTolerancePct is < 0 or > 100 || s.Supply.OtifTargetPct is < 0 or > 100) e.Add("Les pourcentages d'approvisionnement doivent être compris entre 0 et 100 %.");
+        if (s.Supply.TransitDaysByCountry.Values.Any(v => v is < 0 or > 365)) e.Add("Les jours de transit doivent être compris entre 0 et 365.");
+        if (s.Tc.DefaultKgPerTc <= 0) e.Add("Les kg par TC doivent être positifs.");
+        if (s.Supply.PortToWarehouseDays is < 0 or > 60) e.Add("Le délai port → entrepôt doit être compris entre 0 et 60 jours.");
+        if (s.Supply.SupplierOnTimeAlertPct is < 0 or > 100) e.Add("L'alerte fournisseur doit être comprise entre 0 et 100 %.");
+        if (s.Coverage.SlowMovingMonths is < 1 or > 24) e.Add("La fenêtre de rotation lente doit être comprise entre 1 et 24 mois.");
+        if (string.IsNullOrWhiteSpace(s.General.Currency) || s.General.Currency.Length > 5) e.Add("Le code devise est obligatoire (5 caractères maximum).");
+        if (s.General.FiscalYearStartMonth is < 1 or > 12) e.Add("Le mois de début d'exercice doit être compris entre 1 et 12.");
+        if (s.Alerts is { RepeatAfterDays: < 0 or > 90 }) e.Add("Le délai de répétition des alertes doit être compris entre 0 et 90 jours.");
         if (e.Count > 0) throw new ValidationException(e);
     }
 }

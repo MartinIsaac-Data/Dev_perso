@@ -107,8 +107,8 @@ public class ImportBatch
     public int WarningCount { get; set; }
     public int ErrorCount { get; set; }
     public ImportStatus Status { get; set; }
-    /// <summary>"Manual upload", or the name of the data source for automated refreshes.</summary>
-    public string Source { get; set; } = "Manual upload";
+    /// <summary>"Chargement manuel", or the name of the data source for automated refreshes.</summary>
+    public string Source { get; set; } = "Chargement manuel";
     /// <summary>Summary of errors for rejected / failed automated runs.</summary>
     public string? Message { get; set; }
 }

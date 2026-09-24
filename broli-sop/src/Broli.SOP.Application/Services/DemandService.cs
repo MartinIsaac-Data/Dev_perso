@@ -47,7 +47,7 @@ public sealed class DemandService(IAnalyticsEngine engine)
             months.Select(m => M(m, ds => Sum(ds, d => d.Forecast))).ToList(),
             months.Select(m => M(m, ds => Sum(ds, d => d.Actual))).ToList(),
             months.Select(m => M(m, ds => KpiMath.ForecastAccuracyPct(ds.Select(d => (d.Forecast, d.Actual))))).ToList(),
-            worst, biasByFamily, tol, s.Settings.Forecast.AccuracyTargetPct);
+            worst, biasByFamily, tol, s.Settings.Forecast.AccuracyTargetPct, months.ToList());
     }
 
     public async Task<PagedResult<DemandRow>> GetRowsAsync(SopFilter filter, TableQuery q, CancellationToken ct)

@@ -35,7 +35,7 @@ public class ImportValidatorTests
     public void Missing_required_column_blocks_everything()
     {
         var o = Validate(ImportType.Inventory, Sheet(["Date", "CArtSAP", "Warehouse"], [new DateTime(2026, 9, 30), "100245", "Douala Central"]));
-        Assert.Contains(o.Issues, i => i.Severity == "Error" && i.Message.Contains("Missing required column 'Stock'"));
+        Assert.Contains(o.Issues, i => i.Severity == "Error" && i.Message.Contains("Colonne obligatoire manquante : « Stock »"));
         Assert.Empty(o.ValidRows);
     }
 
@@ -51,12 +51,12 @@ public class ImportValidatorTests
             [new DateTime(2026, 9, 30), "300101", "abc", "Douala Central"],
             [new DateTime(2026, 9, 30), null, 10.0, "Douala Central"]));
 
-        Assert.Contains(o.Issues, i => i.Row == 3 && i.Message.StartsWith("Invalid date"));
-        Assert.Contains(o.Issues, i => i.Row == 4 && i.Message.StartsWith("Negative value"));
-        Assert.Contains(o.Issues, i => i.Row == 5 && i.Message.StartsWith("Unknown CArtSAP"));
-        Assert.Contains(o.Issues, i => i.Row == 6 && i.Message.StartsWith("Duplicate of row 2"));
-        Assert.Contains(o.Issues, i => i.Row == 7 && i.Message.Contains("is not a number"));
-        Assert.Contains(o.Issues, i => i.Row == 8 && i.Message.StartsWith("Missing value"));
+        Assert.Contains(o.Issues, i => i.Row == 3 && i.Message.StartsWith("Date invalide"));
+        Assert.Contains(o.Issues, i => i.Row == 4 && i.Message.StartsWith("La valeur négative"));
+        Assert.Contains(o.Issues, i => i.Row == 5 && i.Message.StartsWith("CArtSAP inconnu"));
+        Assert.Contains(o.Issues, i => i.Row == 6 && i.Message.StartsWith("Doublon de la ligne 2"));
+        Assert.Contains(o.Issues, i => i.Row == 7 && i.Message.Contains("n'est pas un nombre"));
+        Assert.Contains(o.Issues, i => i.Row == 8 && i.Message.StartsWith("Valeur manquante"));
         Assert.Single(o.ValidRows);
     }
 
@@ -72,17 +72,17 @@ public class ImportValidatorTests
             ["4500005", "300101", "SUP-1", 1000.0, new DateTime(2026, 9, 5), new DateTime(2026, 10, 8), "Delivered"]));
 
         Assert.Equal(SupplyStatus.Shipped, Assert.IsType<SupplyImportRow>(o.ValidRows[0]).Status);
-        Assert.Contains(o.Issues, i => i.Row == 3 && i.Message.StartsWith("Unknown supplier"));
-        Assert.Contains(o.Issues, i => i.Row == 4 && i.Message.Contains("is before ETD"));
-        Assert.Contains(o.Issues, i => i.Row == 5 && i.Message.StartsWith("Unknown status"));
-        Assert.Contains(o.Issues, i => i.Row == 6 && i.Message.Contains("needs an Actual Arrival"));
+        Assert.Contains(o.Issues, i => i.Row == 3 && i.Message.StartsWith("Fournisseur inconnu"));
+        Assert.Contains(o.Issues, i => i.Row == 4 && i.Message.Contains("précède l'ETD"));
+        Assert.Contains(o.Issues, i => i.Row == 5 && i.Message.StartsWith("Statut inconnu"));
+        Assert.Contains(o.Issues, i => i.Row == 6 && i.Message.Contains("doit avoir une date Actual Arrival"));
     }
 
     [Fact]
     public void Facts_are_rejected_while_only_demo_products_exist()
     {
         var o = Validate(ImportType.Forecast, Sheet(["CArtSAP", "Month", "Forecast"], ["100245", "10/2026", 1250.0]), Lookups(demo: true));
-        Assert.Contains(o.Issues, i => i.Message.Contains("import PRODUCT MASTER first"));
+        Assert.Contains(o.Issues, i => i.Message.Contains("importez d'abord le référentiel produits"));
     }
 
     [Fact]
@@ -93,8 +93,8 @@ public class ImportValidatorTests
             ["100246", "MACARONI RAHMA 500G", "MACARONI", null, "Rahma"],
             ["300101", "FILM RAHMA", "Films", null, "Rahma"]));
         Assert.Equal(2, o.ValidRows.Count);
-        Assert.Contains(o.Issues, i => i.Severity == "Warning" && i.Message.Contains("New category 'SPAGHETTI'"));
-        Assert.Contains(o.Issues, i => i.Row == 3 && i.Message.Contains("needs a Material Type"));
+        Assert.Contains(o.Issues, i => i.Severity == "Warning" && i.Message.Contains("nouvelle catégorie « SPAGHETTI »"));
+        Assert.Contains(o.Issues, i => i.Row == 3 && i.Message.Contains("nécessite un Material Type"));
         Assert.Equal(MaterialType.FinishedGood, Assert.IsType<ProductImportRow>(o.ValidRows[0]).NewCategoryMaterialType);
     }
 

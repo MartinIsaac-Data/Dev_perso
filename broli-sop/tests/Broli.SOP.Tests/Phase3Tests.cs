@@ -89,7 +89,7 @@ public class Phase3ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     public async Task Actions_can_be_tracked_filtered_and_are_permissioned()
     {
         var supply = await factory.ClientAsync("supply");
-        var created = await (await supply.PostAsJsonAsync("api/actions", NewAction("Sales Manager (DEMO)", decision: true, risk: "R-0001"), ApiFactory.Json))
+        var created = await (await supply.PostAsJsonAsync("api/actions", NewAction("Responsable commercial (DÉMO)", decision: true, risk: "R-0001"), ApiFactory.Json))
             .Content.ReadFromJsonAsync<ActionDto>(ApiFactory.Json);
         Assert.StartsWith("A-", created!.Code);
         Assert.Equal("R-0001", created.RiskCode);
@@ -100,7 +100,7 @@ public class Phase3ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Contains(feed.Items, n => n.Title.Contains(created.Code));
 
         var update = await supply.PutAsJsonAsync($"api/actions/{created.Id}",
-            NewAction("Sales Manager (DEMO)", decision: true) with { Status = "Done", Comment = "Handled" }, ApiFactory.Json);
+            NewAction("Responsable commercial (DÉMO)", decision: true) with { Status = "Done", Comment = "Handled" }, ApiFactory.Json);
         Assert.True(update.IsSuccessStatusCode);
         var done = await supply.Get<PagedResult<ActionDto>>("api/actions?view=done&pageSize=100");
         Assert.Contains(done.Items, a => a.Code == created.Code && a.Comment == "Handled");
@@ -113,8 +113,8 @@ public class Phase3ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var bad = await supply.PostAsJsonAsync("api/actions", NewAction("", risk: "R-9999"), ApiFactory.Json);
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
         var body = await bad.Content.ReadAsStringAsync();
-        Assert.Contains("Owner is required", body);
-        Assert.Contains("Unknown risk", body);
+        Assert.Contains("Le responsable est obligatoire", body);
+        Assert.Contains("Risque inconnu", body);
 
         var finance = await factory.ClientAsync("finance");
         Assert.Equal(HttpStatusCode.OK, (await finance.GetAsync("api/actions")).StatusCode);
@@ -132,7 +132,7 @@ public class Phase3ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
             Assert.All(s.Kpis, k => Assert.DoesNotContain("NaN", k.Value));
         }
         Assert.NotEmpty(m.Decisions);
-        Assert.All(m.Decisions, d => Assert.True(d.IsDecision && d.Status is "Open" or "In Progress"));
+        Assert.All(m.Decisions, d => Assert.True(d.IsDecision && d.Status is "Ouverte" or "En cours"));
     }
 
     [Fact]
@@ -280,7 +280,7 @@ public class RefreshApiTests(RefreshFactory factory) : IClassFixture<RefreshFact
         Assert.Equal(1, rejected.Errors);
         Assert.Equal(0, (await c.Get<DataStatus>("api/data/status")).RowCounts["FACT_INVENTORY"]);
         var history = await c.Get<List<ImportBatchDto>>("api/imports/history");
-        Assert.Contains(history, b => b.Status == "Rejected" && b.Source == "ERP stock" && b.Message!.Contains("Unknown CArtSAP"));
+        Assert.Contains(history, b => b.Status == "Rejected" && b.Source == "ERP stock" && b.Message!.Contains("CArtSAP inconnu"));
         var feed = await c.Get<NotificationFeed>("api/notifications");
         Assert.Contains(feed.Items, n => n.Kind == "refresh" && n.Title.Contains("ERP stock"));
 

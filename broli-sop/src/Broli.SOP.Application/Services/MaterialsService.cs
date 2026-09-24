@@ -38,7 +38,7 @@ public sealed class MaterialsService(IAnalyticsEngine engine, ICurrentUser user)
                 Mapping.R(gRows.Sum(r => r.Forecast)), Mapping.R(gRows.Sum(r => r.Actual)), Mapping.R(gRows.Sum(r => r.Production)),
                 Mapping.R(KpiMath.ServiceLevelPct(gDemand.Select(d => (d.Ordered!.Value, d.Actual)))),
                 Mapping.R(KpiMath.SafeDivide(gCov.Sum(p => p.Tc(p.Available) ?? 0), gCov.Sum(p => p.Tc(p.AvgConsumption) ?? 0))),
-                gRows.Count(r => r.Risk is "Critical" or "High"));
+                gRows.Count(r => IsAtRisk(r)));
         }).OrderByDescending(f => f.StockTc).ToList();
 
         return new MaterialsDashboard(
@@ -77,7 +77,7 @@ public sealed class MaterialsService(IAnalyticsEngine engine, ICurrentUser user)
         IEnumerable<MaterialRow> rows = Items(s, kind).Select(p => Row(s, p, finance)).ToList();
         var view = q.View;
         if (string.IsNullOrWhiteSpace(view) || view == "all") return rows;
-        if (view == "at-risk") return rows.Where(r => r.Risk is "Critical" or "High");
+        if (view == "at-risk") return rows.Where(IsAtRisk);
         if (view == "raw") return rows.Where(r => r.MaterialType == Labels.Of(MaterialType.RawMaterial));
         if (view == "packaging") return rows.Where(r => r.MaterialType == Labels.Of(MaterialType.Packaging));
         if (view.StartsWith("group:")) { var g = view[6..]; return rows.Where(r => r.Category == g || r.Brand == g); }
@@ -86,9 +86,9 @@ public sealed class MaterialsService(IAnalyticsEngine engine, ICurrentUser user)
 
     private static string Title(string kind) => kind switch
     {
-        "films" => "Films Dashboard",
-        "finished-goods" => "Finished Goods",
-        _ => "Raw Materials & Packaging",
+        "films" => "Tableau de bord films",
+        "finished-goods" => "Produits finis",
+        _ => "Matières premières et emballages",
     };
 
     private static IEnumerable<ProductPosition> Items(AnalyticsSnapshot s, string kind)
@@ -125,6 +125,8 @@ public sealed class MaterialsService(IAnalyticsEngine engine, ICurrentUser user)
             flags, MaterialFlags.Risk(flags));
     }
 
+    private static bool IsAtRisk(MaterialRow r) => Labels.Rank<ImpactLevel>(r.Risk) >= (int)ImpactLevel.High;
+
     private static string Search(MaterialRow r) => $"{r.CArtSap} {r.Description} {r.Category} {r.Brand} {r.Supplier} {r.Country} {r.Format} {r.Color} {string.Join(' ', r.Flags)}";
 
     private static readonly Dictionary<string, Func<MaterialRow, object?>> SortKeys = new(StringComparer.OrdinalIgnoreCase)
@@ -148,6 +150,6 @@ public sealed class MaterialsService(IAnalyticsEngine engine, ICurrentUser user)
         ["InTransit"] = r => r.InTransit,
         ["NextEta"] = r => r.NextEta,
         ["StockValue"] = r => r.StockValue,
-        ["Risk"] = r => r.Risk switch { "Critical" => 3, "High" => 2, "Medium" => 1, _ => 0 },
+        ["Risk"] = r => Labels.Rank<ImpactLevel>(r.Risk, -1),
     };
 }

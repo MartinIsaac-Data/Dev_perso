@@ -1,22 +1,22 @@
 @page "/admin/audit"
 @inject ApiClient Api
 
-<PageTitle>Audit Log · Broli S&amp;OP</PageTitle>
+<PageTitle>Journal d'audit · Broli S&amp;OP</PageTitle>
 
 <RequirePermission Permission="@Permissions.AuditView">
-    <PageHeader Title="Audit Log" Question="Who changed what, and when?" />
+    <PageHeader Title="Journal d'audit" Question="Qui a modifié quoi, et quand ?" />
     @if (_error is not null) { <div class="alert error">@_error</div> }
     <div class="card">
         <div class="table-tools">
-            <input type="search" placeholder="Search user, action, object, value…" @bind="_search" @bind:event="oninput" @bind:after="Reload" />
+            <input type="search" placeholder="Rechercher utilisateur, action, objet, valeur…" @bind="_search" @bind:event="oninput" @bind:after="Reload" />
             <select class="btn sm" @bind="_module" @bind:after="Reload" aria-label="Module">
-                <option value="">All modules</option>
-                @foreach (var m in new[] { "Security", "Supply", "Risks", "Data Management", "Configuration", "Administration", "Export" }) { <option>@m</option> }
+                <option value="">Tous les modules</option>
+                @foreach (var m in new[] { "Sécurité", "Approvisionnement", "Risques", "Actions S&OP", "Gestion des données", "Configuration", "Administration", "Export" }) { <option>@m</option> }
             </select>
         </div>
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Date</th><th>User</th><th>Action</th><th>Module</th><th>Object</th><th>Old value</th><th>New value</th></tr></thead>
+                <thead><tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Module</th><th>Objet</th><th>Ancienne valeur</th><th>Nouvelle valeur</th></tr></thead>
                 <tbody>
                     @foreach (var a in _page?.Items ?? [])
                     {
@@ -25,13 +25,13 @@
                     }
                 </tbody>
             </table>
-            @if (_page is { Total: 0 }) { <div class="empty">No entry.</div> }
+            @if (_page is { Total: 0 }) { <div class="empty">Aucune entrée.</div> }
         </div>
         <div class="pager">
-            <span>@(_page?.Total ?? 0) entries</span>
-            <button class="btn sm" disabled="@(_p <= 1)" @onclick="() => Go(_p - 1)">‹ Prev</button>
+            <span>@(_page?.Total ?? 0) entrées</span>
+            <button class="btn sm" disabled="@(_p <= 1)" @onclick="() => Go(_p - 1)">‹ Préc.</button>
             <span>Page @_p / @Math.Max(1, _page?.PageCount ?? 1)</span>
-            <button class="btn sm" disabled="@(_p >= (_page?.PageCount ?? 1))" @onclick="() => Go(_p + 1)">Next ›</button>
+            <button class="btn sm" disabled="@(_p >= (_page?.PageCount ?? 1))" @onclick="() => Go(_p + 1)">Suiv. ›</button>
         </div>
     </div>
 </RequirePermission>

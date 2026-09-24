@@ -79,7 +79,7 @@ Source de données en Phase 1 : fichiers Excel importés ; Phase 2 : SQL Server 
   Exemple : un acheteur films ne voit que la famille FILMS, même en forçant un autre filtre dans l'URL.
 - **SQL Server** : migrations dans `src/Broli.SOP.Data/Migrations/SqlServer`, appliquées automatiquement au démarrage
   quand `Database:Provider=SqlServer`. Un test vérifie que le modèle et les migrations sont synchronisés.
-- **ERP et dossier de dépôt** (*Data Management › Automated sources*) :
+- **ERP et dossier de dépôt** (*Gestion des données › Sources automatiques*) :
   - *ERP / SQL staging* : une table ou vue (ex. `dbo.V_SOP_INVENTORY`) dont les colonnes suivent les modèles Excel ;
     la chaîne de connexion est dans la configuration serveur (`ConnectionStrings:<nom>`), jamais en base ni dans l'écran.
     Seul un identifiant de table/vue validé est stocké (pas de SQL libre). Utiliser un compte en lecture seule.
@@ -225,7 +225,7 @@ l'API s'arrête avec un message explicite (exporter les données, puis supprimer
 
 ## Import des données Excel
 
-*Data Management* (permission `data.import`) : **choisir le type → déposer le .xlsx → validation & aperçu → importer.**
+*Gestion des données* (permission `data.import`) : **choisir le type → déposer le .xlsx → validation & aperçu → importer.**
 
 - Modèles téléchargeables : SUPPLIER MASTER, PRODUCT MASTER, FACT_SALES, INVENTORY, SUPPLY, FORECAST
   (en-têtes foncés = obligatoires ; alias FR/EN acceptés, ex. « Code article », « Prévision », « Agence »).

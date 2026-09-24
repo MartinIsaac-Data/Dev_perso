@@ -14,36 +14,36 @@
             <div class="kpis">
                 <div class="kpi neutral"><div class="k-title">Stock</div>
                     <div class="k-value">@Fmt.Num(d.StockTc, 1)<span class="u">TC</span></div>
-                    <div class="k-sub">@(d.StockKg is { } kg ? $"{Fmt.Num(kg)} kg · {Fmt.Num(d.KgPerTc)} kg/TC" : $"{d.Skus} SKUs")</div></div>
-                <div class="kpi @CovStatus(d.CoverageMonths)"><div class="k-title">Coverage</div>
-                    <div class="k-value">@Fmt.Kpi(d.CoverageMonths, "months")<span class="u">months</span></div><div class="k-sub">TC-weighted, @d.Skus SKUs</div></div>
+                    <div class="k-sub">@(d.StockKg is { } kg ? $"{Fmt.Num(kg)} kg · {Fmt.Num(d.KgPerTc)} kg/TC" : $"{d.Skus} articles")</div></div>
+                <div class="kpi @CovStatus(d.CoverageMonths)"><div class="k-title">Couverture</div>
+                    <div class="k-value">@Fmt.Kpi(d.CoverageMonths, "months")<span class="u">mois</span></div><div class="k-sub">Pondérée en TC, @d.Skus articles</div></div>
                 @if (Kind == "finished-goods")
                 {
-                    <div class="kpi @(d.ServiceLevelPct is null ? "neutral" : d.ServiceLevelPct >= 95 ? "good" : d.ServiceLevelPct >= 90 ? "watch" : "bad")"><div class="k-title">Service Level</div>
-                        <div class="k-value">@Fmt.Pct(d.ServiceLevelPct)</div><div class="k-sub">Delivered ÷ ordered in the period</div></div>
+                    <div class="kpi @(d.ServiceLevelPct is null ? "neutral" : d.ServiceLevelPct >= 95 ? "good" : d.ServiceLevelPct >= 90 ? "watch" : "bad")"><div class="k-title">Taux de service</div>
+                        <div class="k-value">@Fmt.Pct(d.ServiceLevelPct)</div><div class="k-sub">Livré ÷ commandé sur la période</div></div>
                 }
                 else
                 {
-                    <div class="kpi neutral"><div class="k-title">Open PO</div><div class="k-value">@Fmt.Num(d.OpenPoTc, 1)<span class="u">TC</span></div><div class="k-sub">Not yet shipped</div></div>
+                    <div class="kpi neutral"><div class="k-title">Commandes ouvertes</div><div class="k-value">@Fmt.Num(d.OpenPoTc, 1)<span class="u">TC</span></div><div class="k-sub">Pas encore expédiées</div></div>
                 }
-                <div class="kpi neutral"><div class="k-title">In Transit</div><div class="k-value">@Fmt.Num(d.InTransitTc, 1)<span class="u">TC</span></div><div class="k-sub">Shipped, at port, customs</div></div>
-                <button type="button" class="kpi @(AtRisk(d) > 0 ? "bad" : "good")" @onclick="@(() => SetView("at-risk"))"><div class="k-title"><span>At risk</span><span class="go">›</span></div>
-                    <div class="k-value">@AtRisk(d)<span class="u">SKUs</span></div><div class="k-sub">@(d.StockValue is { } v ? $"Stock value {Fmt.Num(v)} {d.Currency}" : "Shortage, stockout risk or late supply")</div></button>
+                <div class="kpi neutral"><div class="k-title">En transit</div><div class="k-value">@Fmt.Num(d.InTransitTc, 1)<span class="u">TC</span></div><div class="k-sub">Expédiées, au port, en douane</div></div>
+                <button type="button" class="kpi @(AtRisk(d) > 0 ? "bad" : "good")" @onclick="@(() => SetView("at-risk"))"><div class="k-title"><span>À risque</span><span class="go">›</span></div>
+                    <div class="k-value">@AtRisk(d)<span class="u">articles</span></div><div class="k-sub">@(d.StockValue is { } v ? $"Valeur du stock {Fmt.Num(v)} {d.Currency}" : "Pénurie, risque de rupture ou appro en retard")</div></button>
             </div>
 
             <div class="grid g-2 mb">
                 <div class="card">
-                    <div class="card-head"><h2>Automatic alerts</h2><span class="hint">SKUs per flag · click to list</span></div>
+                    <div class="card-head"><h2>Alertes automatiques</h2><span class="hint">Articles par alerte · cliquer pour la liste</span></div>
                     <div class="card-body">
-                        <SopChart Type="bar" Horizontal="true" Height="220" Unit="SKUs" Labels="d.FlagCounts.Select(f => f.Label).ToList()" AriaLabel="Products per alert"
-                                  Datasets="@([new ChartDataset("SKUs", d.FlagCounts.Select(f => f.Value).ToList(), "--series-1", PointColors: d.FlagCounts.Select(f => FlagColor(f.Label)).ToList())])"
+                        <SopChart Type="bar" Horizontal="true" Height="220" Unit="articles" Labels="d.FlagCounts.Select(f => f.Label).ToList()" AriaLabel="Articles par alerte"
+                                  Datasets="@([new ChartDataset("Articles", d.FlagCounts.Select(f => f.Value).ToList(), "--series-1", PointColors: d.FlagCounts.Select(f => FlagColor(f.Label)).ToList())])"
                                   OnClick="c => SetView(d.FlagCounts[c.Index].Label)" />
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-head"><h2>Stock by @(Kind == "films" ? "brand" : "family")</h2><span class="hint">TC · click to list</span></div>
+                    <div class="card-head"><h2>Stock par @(Kind == "films" ? "marque" : "famille")</h2><span class="hint">TC · cliquer pour la liste</span></div>
                     <div class="card-body">
-                        <SopChart Type="bar" Horizontal="true" Height="220" Unit="TC" Labels="d.StockByGroupTc.Select(f => f.Label).ToList()" AriaLabel="Stock by group"
+                        <SopChart Type="bar" Horizontal="true" Height="220" Unit="TC" Labels="d.StockByGroupTc.Select(f => f.Label).ToList()" AriaLabel="Stock par groupe"
                                   Datasets="@([new ChartDataset("Stock", d.StockByGroupTc.Select(f => f.Value).ToList(), "--series-1")])"
                                   OnClick="c => SetView(GroupView(d.StockByGroupTc[c.Index].Label))" />
                     </div>
@@ -51,11 +51,11 @@
             </div>
 
             <div class="card mb">
-                <div class="card-head"><h2>By @(Kind == "films" ? "brand" : "family")</h2></div>
+                <div class="card-head"><h2>Par @(Kind == "films" ? "marque" : "famille")</h2></div>
                 <div class="card-body flush table-wrap">
                     <table class="data dense">
-                        <thead><tr><th>@(Kind == "films" ? "Brand" : "Family")</th><th class="num">SKUs</th><th class="num">Stock TC</th><th class="num">Coverage</th><th class="num">Forecast</th><th class="num">Actual</th>
-                            @if (Kind == "finished-goods") { <th class="num">Production</th><th class="num">Service level</th> }<th class="num">At risk</th></tr></thead>
+                        <thead><tr><th>@(Kind == "films" ? "Marque" : "Famille")</th><th class="num">Articles</th><th class="num">Stock TC</th><th class="num">Couverture</th><th class="num">Prévision</th><th class="num">Réel</th>
+                            @if (Kind == "finished-goods") { <th class="num">Production</th><th class="num">Taux de service</th> }<th class="num">À risque</th></tr></thead>
                         <tbody>
                             @foreach (var f in d.Families)
                             {
@@ -68,41 +68,41 @@
                             }
                         </tbody>
                     </table>
-                    <div class="chart-note" style="padding:8px 12px">Forecast / Actual@(Kind == "finished-goods" ? " / Production" : "") summed over the period in each product's unit.</div>
+                    <div class="chart-note" style="padding:8px 12px">Prévision / réel@(Kind == "finished-goods" ? " / production" : "") cumulés sur la période, dans l'unité de chaque article.</div>
                 </div>
             </div>
 
             <div class="card">
                 <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView" Items="Tabs" />
                 <div class="table-tools">
-                    <input type="search" placeholder="Search CArtSAP, product, supplier, format, colour…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
+                    <input type="search" placeholder="Rechercher CArtSAP, article, fournisseur, format, couleur…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
                     @if (_q.View?.StartsWith("group:") == true) { <span class="chip">@_q.View[6..] <button @onclick="@(() => SetView(""))">✕</button></span> }
                 </div>
                 <div class="table-wrap">
                     <table class="data dense">
                         <thead>
                             <tr>
-                                <Th Query="_q" Field="CArtSap" OnChanged="LoadRows">@(Kind == "finished-goods" ? "Product" : "Material")</Th>
-                                @if (Kind == "films") { <Th Query="_q" Field="Format" OnChanged="LoadRows">Format / colour</Th> }
-                                @if (Kind != "finished-goods") { <Th Query="_q" Field="Supplier" OnChanged="LoadRows">Supplier</Th> }
+                                <Th Query="_q" Field="CArtSap" OnChanged="LoadRows">@(Kind == "finished-goods" ? "Article" : "Matière")</Th>
+                                @if (Kind == "films") { <Th Query="_q" Field="Format" OnChanged="LoadRows">Format / couleur</Th> }
+                                @if (Kind != "finished-goods") { <Th Query="_q" Field="Supplier" OnChanged="LoadRows">Fournisseur</Th> }
                                 <Th Query="_q" Field="Stock" Numeric OnChanged="LoadRows">Stock</Th>
                                 @if (Kind == "finished-goods")
                                 {
-                                    <Th Query="_q" Field="Forecast" Numeric OnChanged="LoadRows">Forecast</Th>
-                                    <Th Query="_q" Field="Actual" Numeric OnChanged="LoadRows">Sales</Th>
+                                    <Th Query="_q" Field="Forecast" Numeric OnChanged="LoadRows">Prévision</Th>
+                                    <Th Query="_q" Field="Actual" Numeric OnChanged="LoadRows">Ventes</Th>
                                     <Th Query="_q" Field="Production" Numeric OnChanged="LoadRows">Production</Th>
                                     <Th Query="_q" Field="ServiceLevelPct" Numeric OnChanged="LoadRows">Service</Th>
                                 }
                                 else
                                 {
-                                    <Th Query="_q" Field="AvgConsumption" Numeric OnChanged="LoadRows">Consumption /mo</Th>
-                                    <Th Query="_q" Field="Forecast" Numeric OnChanged="LoadRows">Forecast</Th>
-                                    <Th Query="_q" Field="OpenPo" Numeric OnChanged="LoadRows">Open PO / transit</Th>
+                                    <Th Query="_q" Field="AvgConsumption" Numeric OnChanged="LoadRows">Conso. / mois</Th>
+                                    <Th Query="_q" Field="Forecast" Numeric OnChanged="LoadRows">Prévision</Th>
+                                    <Th Query="_q" Field="OpenPo" Numeric OnChanged="LoadRows">Commandes / transit</Th>
                                     <Th Query="_q" Field="NextEta" OnChanged="LoadRows">ETA</Th>
                                 }
-                                <Th Query="_q" Field="CoverageMonths" Numeric OnChanged="LoadRows">Coverage</Th>
-                                <th>Alerts</th>
-                                <Th Query="_q" Field="Risk" OnChanged="LoadRows">Risk</Th>
+                                <Th Query="_q" Field="CoverageMonths" Numeric OnChanged="LoadRows">Couverture</Th>
+                                <th>Alertes</th>
+                                <Th Query="_q" Field="Risk" OnChanged="LoadRows">Risque</Th>
                             </tr>
                         </thead>
                         <tbody>
@@ -111,7 +111,7 @@
                                 <tr class="click" @onclick="@(() => Go($"products/{Uri.EscapeDataString(r.CArtSap)}"))">
                                     <td style="min-width:150px"><b>@r.Description</b><span class="sub">@r.CArtSap · @r.Category @(r.Brand is null ? "" : "· " + r.Brand)</span></td>
                                     @if (Kind == "films") { <td>@r.Format<span class="sub">@r.Color</span></td> }
-                                    @if (Kind != "finished-goods") { <td style="max-width:150px">@if (r.SupplierCode is { } sc) {<a href="@($"transit?view=all&supplier={Uri.EscapeDataString(sc)}")" @onclick:stopPropagation title="All shipments of this supplier">@r.Supplier</a>} else {@Fmt.Empty}<span class="sub">@r.Country</span></td> }
+                                    @if (Kind != "finished-goods") { <td style="max-width:150px">@if (r.SupplierCode is { } sc) {<a href="@($"transit?view=all&supplier={Uri.EscapeDataString(sc)}")" @onclick:stopPropagation title="Toutes les expéditions de ce fournisseur">@r.Supplier</a>} else {@Fmt.Empty}<span class="sub">@r.Country</span></td> }
                                     <td class="num"><b>@Fmt.Num(r.Stock)</b> <span class="muted">@r.Unit</span><span class="sub">@(r.StockTc is { } tc ? $"{Fmt.Num(tc, 2)} TC" : "")@(r.StockValue is { } sv ? $" · {Fmt.Compact(sv)} {_d?.Currency}" : "")</span></td>
                                     @if (Kind == "finished-goods")
                                     {
@@ -119,7 +119,7 @@
                                     }
                                     else
                                     {
-                                        <td class="num">@Fmt.Num(r.AvgConsumption)</td><td class="num">@Fmt.Num(r.Forecast)</td><td class="num">@Fmt.Num(r.OpenPo + r.InTransit)@if (r.InTransit > 0) {<span class="sub">@Fmt.Num(r.InTransit) in transit</span>}</td><td class="nowrap">@Fmt.Date(r.NextEta)</td>
+                                        <td class="num">@Fmt.Num(r.AvgConsumption)</td><td class="num">@Fmt.Num(r.Forecast)</td><td class="num">@Fmt.Num(r.OpenPo + r.InTransit)@if (r.InTransit > 0) {<span class="sub">@Fmt.Num(r.InTransit) en transit</span>}</td><td class="nowrap">@Fmt.Date(r.NextEta)</td>
                                     }
                                     <td class="num"><StatusBadge Status="@r.CoverageStatus" Text="@(r.CoverageMonths is null ? r.CoverageStatus : Fmt.Months(r.CoverageMonths))" /></td>
                                     <td><div class="flags">@foreach (var f in r.Flags) { <span class="badge @FlagClass(f)">@f</span> }</div></td>
@@ -128,7 +128,7 @@
                             }
                         </tbody>
                     </table>
-                    @if (_rows is { Total: 0 }) { <div class="empty">No item matches this view and filter.</div> }
+                    @if (_rows is { Total: 0 }) { <div class="empty">Aucun article ne correspond à cette vue et à ces filtres.</div> }
                 </div>
                 <Pager Query="_q" Total="@(_rows?.Total ?? 0)" OnChanged="LoadRows" />
             </div>
@@ -146,18 +146,18 @@
     private bool _finance => Session.Can(Permissions.FinanceView);
     private string Route => Kind;
 
-    private string Title => Kind switch { "films" => "Films Dashboard", "finished-goods" => "Finished Goods", _ => "Raw Materials & Packaging" };
+    private string Title => Kind switch { "films" => "Tableau de bord films", "finished-goods" => "Produits finis", _ => "Matières premières et emballages" };
     private string Question => Kind switch
     {
-        "films" => "Which films are short, late, in excess or slow moving?",
-        "finished-goods" => "Can we serve demand for each pasta family — and is production keeping up?",
-        _ => "Which raw material or packaging item needs action?",
+        "films" => "Quels films sont en pénurie, en retard, en excédent ou à rotation lente ?",
+        "finished-goods" => "Pouvons-nous servir la demande de chaque famille de pâtes — et la production suit-elle ?",
+        _ => "Quelle matière première ou quel emballage nécessite une action ?",
     };
 
     private IReadOnlyList<(string, string)> Tabs => Kind switch
     {
-        "raw-materials" => [("", "All"), ("at-risk", "At risk"), ("raw", "Raw materials"), ("packaging", "Packaging"), ("Late supply", "Late supply"), ("Excess", "Excess"), ("Slow moving", "Slow moving")],
-        _ => [("", "All"), ("at-risk", "At risk"), ("Shortage", "Shortage"), ("Stockout risk", "Stockout risk"), ("Late supply", "Late supply"), ("Excess", "Excess"), ("Slow moving", "Slow moving")],
+        "raw-materials" => [("", "Tous"), ("at-risk", "À risque"), ("raw", "Matières premières"), ("packaging", "Emballages"), ("Appro en retard", "Appro en retard"), ("Excédent", "Excédent"), ("Rotation lente", "Rotation lente")],
+        _ => [("", "Tous"), ("at-risk", "À risque"), ("Pénurie", "Pénurie"), ("Risque de rupture", "Risque de rupture"), ("Appro en retard", "Appro en retard"), ("Excédent", "Excédent"), ("Rotation lente", "Rotation lente")],
     };
 
     protected override async Task LoadAsync(CancellationToken ct)
@@ -185,17 +185,17 @@
 
     private static string FlagClass(string f) => f switch
     {
-        "Shortage" => "st-critical",
-        "Stockout risk" or "Late supply" => "st-serious",
-        "Excess" => "st-excess",
+        "Pénurie" => "st-critical",
+        "Risque de rupture" or "Appro en retard" => "st-serious",
+        "Excédent" => "st-excess",
         _ => "st-warning",
     };
 
     private static string FlagColor(string f) => f switch
     {
-        "Shortage" => "--critical",
-        "Stockout risk" or "Late supply" => "--serious",
-        "Excess" => "--excess",
+        "Pénurie" => "--critical",
+        "Risque de rupture" or "Appro en retard" => "--serious",
+        "Excédent" => "--excess",
         _ => "--warning",
     };
 }

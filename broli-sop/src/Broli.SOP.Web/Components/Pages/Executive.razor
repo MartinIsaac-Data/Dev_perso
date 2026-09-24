@@ -1,10 +1,10 @@
 @page "/"
 @inherits SopPage
 
-<PageTitle>Executive · Broli S&amp;OP</PageTitle>
+<PageTitle>Synthèse · Broli S&amp;OP</PageTitle>
 
 <RequirePermission Permission="@Permissions.ExecutiveView">
-    <PageHeader Title="Executive Dashboard" Question="Are supply, stock and demand under control — and where must we act?" Period="_d?.Period">
+    <PageHeader Title="Tableau de bord de synthèse" Question="L'approvisionnement, le stock et la demande sont-ils sous contrôle — et où devons-nous agir ?" Period="_d?.Period">
         <Actions><ExportMenu Dataset="inventory" Query="_exportQuery" /></Actions>
     </PageHeader>
 
@@ -17,21 +17,21 @@
 
             <div class="grid g-32 mb">
                 <div class="card">
-                    <div class="card-head"><h2>Forecast vs Actual — last 12 months</h2><span class="hint">@_demandUnit · click a month to analyse</span></div>
+                    <div class="card-head"><h2>Prévision vs réel — 12 derniers mois</h2><span class="hint">@_demandUnit · cliquer sur un mois pour l'analyser</span></div>
                     <div class="card-body">
                         <SopChart Type="line" Height="270" Labels="d.ForecastTrend.Points.Select(p => p.Label).ToList()" Unit="@_demandUnit"
-                                  AriaLabel="Forecast versus actual by month"
-                                  Datasets="@([new ChartDataset("Forecast", d.ForecastTrend.Points.Select(p => p.Value).ToList(), "--series-1", Dashed: true),
-                                              new ChartDataset("Actual", d.ActualTrend.Points.Select(p => p.Value).ToList(), "--series-2")])"
+                                  AriaLabel="Prévision et réel par mois"
+                                  Datasets="@([new ChartDataset("Prévision", d.ForecastTrend.Points.Select(p => p.Value).ToList(), "--series-1", Dashed: true),
+                                              new ChartDataset("Réel", d.ActualTrend.Points.Select(p => p.Value).ToList(), "--series-2")])"
                                   OnClick="c => DrillMonth(d.ActualTrend.Points[c.Index].Key)" />
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-head"><h2>Products by coverage status</h2><span class="hint">SKUs · click a bar for the list</span></div>
+                    <div class="card-head"><h2>Articles par statut de couverture</h2><span class="hint">Articles · cliquer sur une barre pour la liste</span></div>
                     <div class="card-body">
-                        <SopChart Type="bar" Height="270" Labels="d.CoverageDistribution.Select(p => p.Label).ToList()" Unit="SKUs"
-                                  AriaLabel="Number of products per coverage status"
-                                  Datasets="@([new ChartDataset("Products", d.CoverageDistribution.Select(p => p.Value).ToList(), "--series-1",
+                        <SopChart Type="bar" Height="270" Labels="d.CoverageDistribution.Select(p => p.Label).ToList()" Unit="articles"
+                                  AriaLabel="Nombre d'articles par statut de couverture"
+                                  Datasets="@([new ChartDataset("Articles", d.CoverageDistribution.Select(p => p.Value).ToList(), "--series-1",
                                               PointColors: d.CoverageDistribution.Select(p => StatusColors.For(p.Label)).ToList())])"
                                   OnClick="c => Go(CoverageUrl(d.CoverageDistribution[c.Index].Key))" />
                     </div>
@@ -40,13 +40,13 @@
 
             <div class="grid g-2 mb">
                 <div class="card">
-                    <div class="card-head"><h2>Stock at risk — act first</h2><a href="inventory?view=at-risk" class="hint">All @d.Kpis.First(k => k.Code == "STOCK_AT_RISK").Value?.ToString("0") ›</a></div>
+                    <div class="card-head"><h2>Stock à risque — à traiter en priorité</h2><a href="inventory?view=at-risk" class="hint">Tous (@d.Kpis.First(k => k.Code == "STOCK_AT_RISK").Value?.ToString("0")) ›</a></div>
                     <div class="card-body flush table-wrap">
-                        @if (d.TopRisks.Count == 0) { <div class="empty">✔ No product below the risk threshold.</div> }
+                        @if (d.TopRisks.Count == 0) { <div class="empty">✔ Aucun article sous le seuil de risque.</div> }
                         else
                         {
                             <table class="data">
-                                <thead><tr><th>Product</th><th class="num">Stock</th><th class="num">Coverage</th><th>Stockout</th><th>Next ETA</th></tr></thead>
+                                <thead><tr><th>Article</th><th class="num">Stock</th><th class="num">Couverture</th><th>Rupture</th><th>Prochaine ETA</th></tr></thead>
                                 <tbody>
                                     @foreach (var r in d.TopRisks)
                                     {
@@ -64,13 +64,13 @@
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-head"><h2>Late or critical supply</h2><a href="supply?view=late" class="hint">All late orders ›</a></div>
+                    <div class="card-head"><h2>Approvisionnements en retard ou critiques</h2><a href="supply?view=late" class="hint">Toutes les commandes en retard ›</a></div>
                     <div class="card-body flush table-wrap">
-                        @if (d.LateSupply.Count == 0) { <div class="empty">✔ No supply line at risk.</div> }
+                        @if (d.LateSupply.Count == 0) { <div class="empty">✔ Aucune ligne d'approvisionnement à risque.</div> }
                         else
                         {
                             <table class="data">
-                                <thead><tr><th>PO</th><th>Product</th><th>ETA</th><th>Risk</th></tr></thead>
+                                <thead><tr><th>Commande</th><th>Article</th><th>ETA</th><th>Risque</th></tr></thead>
                                 <tbody>
                                     @foreach (var s in d.LateSupply)
                                     {
@@ -89,10 +89,10 @@
             </div>
 
             <div class="card">
-                <div class="card-head"><h2>Stock by product family</h2><span class="hint">TC at end of @d.Period.AsOfMonth.ToString("MMM yyyy") · click to filter</span></div>
+                <div class="card-head"><h2>Stock par famille de produits</h2><span class="hint">TC à fin @d.Period.AsOfMonth.ToString("MMMM yyyy") · cliquer pour filtrer</span></div>
                 <div class="card-body">
                     <SopChart Type="bar" Horizontal="true" Height="@(Math.Max(160, d.StockByCategoryTc.Count * 32 + 40))" Unit="TC"
-                              Labels="d.StockByCategoryTc.Select(p => p.Label).ToList()" AriaLabel="Stock in containers by product family"
+                              Labels="d.StockByCategoryTc.Select(p => p.Label).ToList()" AriaLabel="Stock en conteneurs par famille de produits"
                               Datasets="@([new ChartDataset("Stock", d.StockByCategoryTc.Select(p => p.Value).ToList(), "--series-1")])"
                               OnClick="c => FilterFamily(d.StockByCategoryTc[c.Index].Key)" />
                 </div>

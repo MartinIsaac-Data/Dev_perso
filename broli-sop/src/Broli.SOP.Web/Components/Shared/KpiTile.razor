@@ -1,17 +1,17 @@
 @inject NavigationManager Nav
 
-<button type="button" class="kpi @Kpi.Status" @onclick="() => Nav.NavigateTo(Kpi.DrillUrl)" title="@($"{Kpi.Title} — click for detail")">
+<button type="button" class="kpi @Kpi.Status" @onclick="() => Nav.NavigateTo(Kpi.DrillUrl)" title="@($"{Kpi.Title} — cliquer pour le détail")">
     <div class="k-title"><span>@Kpi.Title</span><span class="go" aria-hidden="true">›</span></div>
     <div class="k-value">@Fmt.Kpi(Kpi.Value, Kpi.Format)@if (Kpi.Value is not null && Kpi.Unit is { } u && u != "%") {<span class="u">@u</span>}</div>
     @if (Kpi.ChangePct is { } c && double.IsFinite(c))
     {
         var up = c > 0.05; var down = c < -0.05;
         var cls = (!up && !down) || Kpi.Status == "neutral" ? "flat" : (up == Kpi.HigherIsBetter ? "up-good" : "up-bad");
-        <div class="k-delta @cls">@(up ? "▲" : down ? "▼" : "▬") @Fmt.SignedPct(c) <span class="vs">vs @(Previous ?? "previous")</span></div>
+        <div class="k-delta @cls">@(up ? "▲" : down ? "▼" : "▬") @Fmt.SignedPct(c) <span class="vs">vs @(Previous ?? "période précédente")</span></div>
     }
     else
     {
-        <div class="k-delta flat"><span class="vs">@(Kpi.PreviousValue is null && Kpi.Value is not null ? "live position" : "no comparison")</span></div>
+        <div class="k-delta flat"><span class="vs">@(Kpi.PreviousValue is null && Kpi.Value is not null ? "position actuelle" : "pas de comparaison")</span></div>
     }
     @if (Kpi.Status is "bad" or "watch" or "good")
     {
@@ -26,5 +26,5 @@
 
     private string StateClass => Kpi.Status switch { "bad" => "st-critical", "watch" => "st-warning", _ => "st-good" };
     private string StateIcon => Kpi.Status switch { "bad" => "✖", "watch" => "◆", _ => "✔" };
-    private string StateLabel => Kpi.Status switch { "bad" => "Action", "watch" => "Watch", _ => "OK" };
+    private string StateLabel => Kpi.Status switch { "bad" => "Action", "watch" => "À surveiller", _ => "OK" };
 }

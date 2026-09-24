@@ -27,21 +27,21 @@ public static class EtaRiskEngine
         }
 
         if (eta is null)
-            return new EtaAssessment(EtaRiskLevel.Watch, "No ETA communicated", null);
+            return new EtaAssessment(EtaRiskLevel.Watch, "Aucune ETA communiquée", null);
 
         var e = eta.Value;
         int? delay = requiredDate is { } r ? Math.Max(0, e.DayNumber - r.DayNumber) : null;
 
         if (stockoutDate is { } so && e > so)
             return new EtaAssessment(EtaRiskLevel.Critical,
-                $"ETA {e:dd/MM} is {e.DayNumber - so.DayNumber} d after projected stockout {so:dd/MM}", delay);
+                $"ETA du {e:dd/MM} : {e.DayNumber - so.DayNumber} j après la rupture prévue le {so:dd/MM}", delay);
 
         if (e < today)
             return new EtaAssessment(EtaRiskLevel.SupplyRisk,
-                $"ETA {e:dd/MM} passed {today.DayNumber - e.DayNumber} d ago, not received", Math.Max(delay ?? 0, today.DayNumber - e.DayNumber));
+                $"ETA du {e:dd/MM} dépassée de {today.DayNumber - e.DayNumber} j, non reçue", Math.Max(delay ?? 0, today.DayNumber - e.DayNumber));
 
         if (requiredDate is { } req2 && e > req2)
-            return new EtaAssessment(EtaRiskLevel.SupplyRisk, $"ETA {delay} d after required date {req2:dd/MM}", delay);
+            return new EtaAssessment(EtaRiskLevel.SupplyRisk, $"ETA {delay} j après la date de besoin du {req2:dd/MM}", delay);
 
         DateOnly? limit = (requiredDate, stockoutDate) switch
         {
@@ -51,7 +51,7 @@ public static class EtaRiskEngine
             _ => null,
         };
         if (limit is { } l && e > l.AddDays(-watchWindowDays))
-            return new EtaAssessment(EtaRiskLevel.Watch, $"ETA within {watchWindowDays}-day safety window of {l:dd/MM}", delay);
+            return new EtaAssessment(EtaRiskLevel.Watch, $"ETA dans la marge de sécurité de {watchWindowDays} j avant le {l:dd/MM}", delay);
 
         return new EtaAssessment(EtaRiskLevel.None, null, delay);
     }

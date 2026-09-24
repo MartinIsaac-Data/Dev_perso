@@ -4,23 +4,23 @@
 
 <div class="fsel">
     <button type="button" class="@(Filters.Filter.Products.Count > 0 ? "on" : "")" @onclick="() => _open = !_open">
-        Product @if (Filters.Filter.Products.Count > 0) { <span class="count">@Filters.Filter.Products.Count</span> } <span class="caret">▼</span>
+        Article @if (Filters.Filter.Products.Count > 0) { <span class="count">@Filters.Filter.Products.Count</span> } <span class="caret">▼</span>
     </button>
     @if (_open)
     {
         <div class="backdrop" @onclick="() => _open = false"></div>
         <div class="fpanel">
-            <input type="search" placeholder="Type a CArtSAP or name…" @bind="_q" @bind:event="oninput" @bind:after="Search" />
+            <input type="search" placeholder="Saisir un CArtSAP ou un nom…" @bind="_q" @bind:event="oninput" @bind:after="Search" />
             <div class="opts">
                 @foreach (var r in _results)
                 {
                     <label><input type="checkbox" checked="@Filters.Filter.Products.Contains(r.Key)" @onchange="() => Pick(r.Key)" /> @r.Title</label>
                 }
-                @if (_results.Count == 0) { <div class="empty" style="padding:10px">Type at least 2 characters</div> }
+                @if (_results.Count == 0) { <div class="empty" style="padding:10px">Saisir au moins 2 caractères</div> }
             </div>
             <div class="actions">
-                <button type="button" @onclick="Clear">Clear</button>
-                <button type="button" @onclick="() => _open = false">Done</button>
+                <button type="button" @onclick="Clear">Effacer</button>
+                <button type="button" @onclick="() => _open = false">OK</button>
             </div>
         </div>
     }

@@ -17,7 +17,7 @@ public sealed class RiskService(
         return new RiskDashboard(
             s.Period.Info,
             detected.Count,
-            detected.Count(d => d.Severity == "Critical"),
+            detected.Count(d => Labels.Is(d.Severity, ImpactLevel.Critical)),
             register.Count(r => r.Status != RiskStatus.Closed),
             register.Count(r => r.Status != RiskStatus.Closed && r.DueDate is { } d && d < today),
             detected.GroupBy(d => d.Category).OrderByDescending(g => g.Count())
@@ -50,9 +50,9 @@ public sealed class RiskService(
         var rows = (await VisibleAsync(ct)).Select(r => r.ToDto(today));
         return q.View?.ToLowerInvariant() switch
         {
-            "open" => rows.Where(r => r.Status != "Closed"),
+            "open" => rows.Where(r => !Labels.Is(r.Status, RiskStatus.Closed)),
             "overdue" => rows.Where(r => r.IsOverdue),
-            "closed" => rows.Where(r => r.Status == "Closed"),
+            "closed" => rows.Where(r => Labels.Is(r.Status, RiskStatus.Closed)),
             "opportunities" => rows.Where(r => r.IsOpportunity),
             _ => rows,
         };
@@ -84,7 +84,7 @@ public sealed class RiskService(
         await ApplyAsync(item, request, ct);
         repository.Add(item);
         await repository.SaveChangesAsync(ct);
-        await audit.LogAsync("Created risk", "Risks", item.Code, null, Describe(item), ct);
+        await audit.LogAsync("Risque créé", "Risques", item.Code, null, Describe(item), ct);
         var saved = await repository.FindAsync(item.Id, ct);
         return (saved ?? item).ToDto(clock.Today);
     }
@@ -98,7 +98,7 @@ public sealed class RiskService(
         item.UpdatedAtUtc = clock.UtcNow;
         await repository.SaveChangesAsync(ct);
         var after = Describe(item);
-        if (before != after) await audit.LogAsync("Updated risk", "Risks", item.Code, before, after, ct);
+        if (before != after) await audit.LogAsync("Risque modifié", "Risques", item.Code, before, after, ct);
         var saved = await repository.FindAsync(id, ct);
         return saved?.ToDto(clock.Today);
     }
@@ -106,23 +106,23 @@ public sealed class RiskService(
     private async Task ApplyAsync(RiskItem item, RiskItemUpsert r, CancellationToken ct)
     {
         var errors = new List<string>();
-        if (!Labels.TryParse<RiskCategory>(r.Category, out var category)) errors.Add($"Unknown category '{r.Category}'.");
-        if (!Labels.TryParse<ImpactLevel>(r.Impact, out var impact)) errors.Add($"Unknown impact '{r.Impact}'.");
-        if (!Labels.TryParse<RiskStatus>(r.Status, out var status)) errors.Add($"Unknown status '{r.Status}'.");
-        if (string.IsNullOrWhiteSpace(r.Description)) errors.Add("Description is required.");
-        if (string.IsNullOrWhiteSpace(r.Owner)) errors.Add("Owner is required.");
-        if (r.Probability is < 0 or > 100) errors.Add("Probability must be between 0 and 100.");
+        if (!Labels.TryParse<RiskCategory>(r.Category, out var category)) errors.Add($"Catégorie inconnue : « {r.Category} ».");
+        if (!Labels.TryParse<ImpactLevel>(r.Impact, out var impact)) errors.Add($"Impact inconnu : « {r.Impact} ».");
+        if (!Labels.TryParse<RiskStatus>(r.Status, out var status)) errors.Add($"Statut inconnu : « {r.Status} ».");
+        if (string.IsNullOrWhiteSpace(r.Description)) errors.Add("La description est obligatoire.");
+        if (string.IsNullOrWhiteSpace(r.Owner)) errors.Add("Le responsable est obligatoire.");
+        if (r.Probability is < 0 or > 100) errors.Add("La probabilité doit être comprise entre 0 et 100.");
 
         int? productId = null, supplierId = null;
         if (!string.IsNullOrWhiteSpace(r.CArtSap))
         {
             productId = await repository.ProductIdAsync(r.CArtSap.Trim(), ct);
-            if (productId is null) errors.Add($"Unknown CArtSAP '{r.CArtSap}'.");
+            if (productId is null) errors.Add($"CArtSAP inconnu : « {r.CArtSap} ».");
         }
         if (!string.IsNullOrWhiteSpace(r.SupplierCode))
         {
             supplierId = await repository.SupplierIdAsync(r.SupplierCode.Trim(), ct);
-            if (supplierId is null) errors.Add($"Unknown supplier '{r.SupplierCode}'.");
+            if (supplierId is null) errors.Add($"Fournisseur inconnu : « {r.SupplierCode} ».");
         }
         if (errors.Count > 0) throw new ValidationException(errors);
 

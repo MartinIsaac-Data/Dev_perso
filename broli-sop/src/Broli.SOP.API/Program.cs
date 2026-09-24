@@ -13,6 +13,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 
+// French user interface: numbers, dates and month names in human-readable text follow fr-FR on every thread.
+// Machine formats (JSON, database, CSS values, imports) use explicit invariant cultures and are unaffected.
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ---- JWT signing key: configuration only (Jwt__Key). Development falls back to an ephemeral random key.

@@ -9,7 +9,7 @@ window.sop = (() => {
     if (a >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
     if (a >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
     if (a >= 1e4) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k";
-    return a >= 100 ? Math.round(n).toLocaleString("en-US") : (Math.round(n * 10) / 10).toLocaleString("en-US");
+    return a >= 100 ? Math.round(n).toLocaleString("fr-FR") : (Math.round(n * 10) / 10).toLocaleString("fr-FR");
   };
 
   function renderChart(id, cfg, dotnet) {
@@ -66,7 +66,7 @@ window.sop = (() => {
             padding: 10, cornerRadius: 6, boxPadding: 4, usePointStyle: true,
             callbacks: { label: (ctx) => {
               const v = horizontal ? ctx.parsed.x : ctx.parsed.y;
-              const shown = (v === null || v === undefined || !isFinite(v)) ? "—" : (Math.abs(v) < 100 ? (Math.round(v * 10) / 10).toLocaleString("en-US") : Math.round(v).toLocaleString("en-US"));
+              const shown = (v === null || v === undefined || !isFinite(v)) ? "—" : (Math.abs(v) < 100 ? (Math.round(v * 10) / 10).toLocaleString("fr-FR") : Math.round(v).toLocaleString("fr-FR"));
               return ` ${ctx.dataset.label}: ${shown}${unit}`;
             } },
           },

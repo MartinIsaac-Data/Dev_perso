@@ -16,7 +16,7 @@ public sealed class AdminService(
     {
         Validate(request, isNew: true);
         if (await users.FindByUsernameAsync(request.Username.Trim(), ct) is not null)
-            throw new ValidationException([$"User '{request.Username}' already exists."]);
+            throw new ValidationException([$"L'utilisateur « {request.Username} » existe déjà."]);
         AuthService.ValidatePassword(request.Password);
 
         var user = new AppUser
@@ -28,7 +28,7 @@ public sealed class AdminService(
         await ApplyAsync(user, request, ct);
         users.Add(user);
         await users.SaveChangesAsync(ct);
-        await audit.LogAsync("Created user", "Administration", user.Username, null, Describe(user), ct);
+        await audit.LogAsync("Utilisateur créé", "Administration", user.Username, null, Describe(user), ct);
         return ToDto(user);
     }
 
@@ -40,7 +40,7 @@ public sealed class AdminService(
         if (string.Equals(user.Username, actingUser, StringComparison.OrdinalIgnoreCase)
             && (!request.IsActive || !request.Roles.Contains("ADMIN", StringComparer.OrdinalIgnoreCase))
             && user.Roles.Any(r => r.Role?.Name == "ADMIN"))
-            throw new ValidationException(["You cannot deactivate yourself or remove your own ADMIN role."]);
+            throw new ValidationException(["Vous ne pouvez pas vous désactiver ni retirer votre propre rôle ADMIN."]);
 
         var before = Describe(user);
         await ApplyAsync(user, request, ct);
@@ -50,11 +50,11 @@ public sealed class AdminService(
             user.PasswordHash = hasher.Hash(request.Password);
             user.LockoutEndUtc = null;
             user.FailedLoginCount = 0;
-            await audit.LogAsync("Reset password", "Administration", user.Username, null, null, ct);
+            await audit.LogAsync("Mot de passe réinitialisé", "Administration", user.Username, null, null, ct);
         }
         await users.SaveChangesAsync(ct);
         var after = Describe(user);
-        if (before != after) await audit.LogAsync("Updated user", "Administration", user.Username, before, after, ct);
+        if (before != after) await audit.LogAsync("Utilisateur modifié", "Administration", user.Username, before, after, ct);
         return ToDto(user);
     }
 
@@ -62,7 +62,7 @@ public sealed class AdminService(
     {
         var roles = await users.FindRolesAsync(r.Roles, ct);
         var unknown = r.Roles.Except(roles.Select(x => x.Name), StringComparer.OrdinalIgnoreCase).ToList();
-        if (unknown.Count > 0) throw new ValidationException([$"Unknown role(s): {string.Join(", ", unknown)}."]);
+        if (unknown.Count > 0) throw new ValidationException([$"Rôle(s) inconnu(s) : {string.Join(", ", unknown)}."]);
 
         user.DisplayName = r.DisplayName.Trim();
         user.Email = string.IsNullOrWhiteSpace(r.Email) ? null : r.Email.Trim();
@@ -79,9 +79,9 @@ public sealed class AdminService(
     {
         var errors = new List<string>();
         if (isNew && (string.IsNullOrWhiteSpace(r.Username) || r.Username.Trim().Length < 3 || !r.Username.Trim().All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-')))
-            errors.Add("Username must be at least 3 characters (letters, digits, . _ -).");
-        if (string.IsNullOrWhiteSpace(r.DisplayName)) errors.Add("Display name is required.");
-        if (r.Roles.Count == 0) errors.Add("At least one role is required.");
+            errors.Add("L'identifiant doit comporter au moins 3 caractères (lettres, chiffres, . _ -).");
+        if (string.IsNullOrWhiteSpace(r.DisplayName)) errors.Add("Le nom affiché est obligatoire.");
+        if (r.Roles.Count == 0) errors.Add("Au moins un rôle est obligatoire.");
         if (errors.Count > 0) throw new ValidationException(errors);
     }
 
@@ -101,13 +101,13 @@ public sealed class AdminService(
     public async Task<RoleDto> CreateRoleAsync(RoleUpsert request, CancellationToken ct)
     {
         var name = (request.Name ?? "").Trim().ToUpperInvariant();
-        if (name.Length < 2) throw new ValidationException(["Role name is required."]);
-        if ((await users.FindRolesAsync([name], ct)).Count > 0) throw new ValidationException([$"Role '{name}' already exists."]);
+        if (name.Length < 2) throw new ValidationException(["Le nom du rôle est obligatoire."]);
+        if ((await users.FindRolesAsync([name], ct)).Count > 0) throw new ValidationException([$"Le rôle « {name} » existe déjà."]);
         var role = new AppRole { Name = name, Description = request.Description?.Trim() ?? "" };
         SetPermissions(role, request.Permissions);
         users.AddRole(role);
         await users.SaveChangesAsync(ct);
-        await audit.LogAsync("Created role", "Administration", role.Name, null, string.Join(", ", request.Permissions), ct);
+        await audit.LogAsync("Rôle créé", "Administration", role.Name, null, string.Join(", ", request.Permissions), ct);
         return new RoleDto(role.Id, role.Name, role.Description, role.IsSystem, role.Permissions.Select(p => p.Permission).ToList(), 0);
     }
 
@@ -116,13 +116,13 @@ public sealed class AdminService(
         var role = await users.FindRoleAsync(id, ct);
         if (role is null) return false;
         if (role.Name == "ADMIN" && !request.Permissions.Contains(Permissions.UsersManage))
-            throw new ValidationException(["The ADMIN role must keep the users.manage permission."]);
+            throw new ValidationException(["Le rôle ADMIN doit conserver la permission users.manage."]);
         var before = string.Join(", ", role.Permissions.Select(p => p.Permission).Order());
         role.Description = request.Description?.Trim() ?? role.Description;
         SetPermissions(role, request.Permissions);
         await users.SaveChangesAsync(ct);
         var after = string.Join(", ", role.Permissions.Select(p => p.Permission).Order());
-        await audit.LogAsync("Updated role permissions", "Administration", role.Name, before, after, ct);
+        await audit.LogAsync("Permissions du rôle modifiées", "Administration", role.Name, before, after, ct);
         return true;
     }
 
@@ -130,12 +130,12 @@ public sealed class AdminService(
     {
         var role = await users.FindRoleAsync(id, ct);
         if (role is null) return false;
-        if (role.IsSystem) throw new ValidationException(["System roles cannot be deleted."]);
+        if (role.IsSystem) throw new ValidationException(["Les rôles système ne peuvent pas être supprimés."]);
         if ((await users.ListAsync(ct)).Any(u => u.Roles.Any(r => r.RoleId == id)))
-            throw new ValidationException(["The role is still assigned to users."]);
+            throw new ValidationException(["Le rôle est encore attribué à des utilisateurs."]);
         users.RemoveRole(role);
         await users.SaveChangesAsync(ct);
-        await audit.LogAsync("Deleted role", "Administration", role.Name, null, null, ct);
+        await audit.LogAsync("Rôle supprimé", "Administration", role.Name, null, null, ct);
         return true;
     }
 
@@ -144,7 +144,7 @@ public sealed class AdminService(
         var valid = Permissions.All.Select(p => p.Code).ToHashSet();
         var requested = permissions.Distinct().ToList();
         var unknown = requested.Where(p => !valid.Contains(p)).ToList();
-        if (unknown.Count > 0) throw new ValidationException([$"Unknown permission(s): {string.Join(", ", unknown)}."]);
+        if (unknown.Count > 0) throw new ValidationException([$"Permission(s) inconnue(s) : {string.Join(", ", unknown)}."]);
         role.Permissions.RemoveAll(p => !requested.Contains(p.Permission));
         foreach (var p in requested.Where(p => role.Permissions.All(x => x.Permission != p)))
             role.Permissions.Add(new RolePermission { Role = role, Permission = p });

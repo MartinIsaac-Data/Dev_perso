@@ -29,7 +29,7 @@ public record ImportBatchDto(
     int Updated,
     int Warnings,
     string Status,
-    string Source = "Manual upload",
+    string Source = "Chargement manuel",
     int Errors = 0,
     string? Message = null);
 

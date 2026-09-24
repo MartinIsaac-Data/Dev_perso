@@ -1,6 +1,11 @@
 using Broli.SOP.Web.Components;
 using Broli.SOP.Web.Services;
 
+// French user interface: numbers, dates and month names in human-readable text follow fr-FR on every thread.
+// Machine formats (JSON, database, CSS values, imports) use explicit invariant cultures and are unaffected.
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()

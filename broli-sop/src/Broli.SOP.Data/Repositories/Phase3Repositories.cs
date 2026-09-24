@@ -31,11 +31,13 @@ public sealed class NotificationRepository(SopDbContext db) : INotificationRepos
 
     public async Task<Recipient?> FindRecipientAsync(string person, CancellationToken ct)
     {
-        var p = person.Trim().ToLower();
-        return await db.Users.AsNoTracking()
-            .Where(u => u.IsActive && (u.Username.ToLower() == p || u.DisplayName.ToLower() == p))
+        // Compared in memory: SQLite's lower() ignores accents ("DÉMO"), and the user list is small.
+        var p = person.Trim();
+        var users = await db.Users.AsNoTracking().Where(u => u.IsActive)
             .Select(u => new Recipient(u.Id, u.Username, u.DisplayName, u.Email))
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+        return users.FirstOrDefault(u => string.Equals(u.Username, p, StringComparison.OrdinalIgnoreCase))
+               ?? users.FirstOrDefault(u => string.Equals(u.DisplayName, p, StringComparison.OrdinalIgnoreCase));
     }
 
     public Task<int?> UserIdAsync(string username, CancellationToken ct)

@@ -223,7 +223,7 @@ public class EtaRiskEngineTests
         var a = EtaRiskEngine.Assess(SupplyStatus.Shipped, new(2026, 10, 25), new(2026, 10, 3), null, new(2026, 10, 8), Today, 7);
         Assert.Equal(EtaRiskLevel.Critical, a.Level);
         Assert.Equal(22, a.DelayDays);
-        Assert.Contains("17 d after projected stockout", a.Reason);
+        Assert.Contains("17 j après la rupture prévue", a.Reason);
     }
 
     [Fact]

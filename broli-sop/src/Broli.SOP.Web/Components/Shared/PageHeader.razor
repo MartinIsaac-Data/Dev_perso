@@ -7,7 +7,7 @@
     <div class="toolbar">
         @if (Period is not null)
         {
-            <span class="period-pill">Period <b>@Period.Label</b>@if (Period.AsOfMonth.Month != Period.PeriodEnd.Month || Period.AsOfMonth.Year != Period.PeriodEnd.Year) {<span> · stock as of @Period.AsOfMonth.ToString("MMM yyyy")</span>}</span>
+            <span class="period-pill">Période <b>@Period.Label</b>@if (Period.AsOfMonth.Month != Period.PeriodEnd.Month || Period.AsOfMonth.Year != Period.PeriodEnd.Year) {<span> · stock au @Period.AsOfMonth.ToString("MMM yyyy")</span>}</span>
         }
         @Actions
     </div>

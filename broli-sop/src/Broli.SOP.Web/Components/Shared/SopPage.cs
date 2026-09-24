@@ -57,7 +57,7 @@ public abstract class SopPage : ComponentBase, IDisposable
         }
         catch (Exception ex)
         {
-            Error = "Something went wrong while loading this page.";
+            Error = "Une erreur est survenue lors du chargement de cette page.";
             Console.Error.WriteLine(ex);
         }
         if (cts.IsCancellationRequested) return;

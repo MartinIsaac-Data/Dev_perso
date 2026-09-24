@@ -4,20 +4,20 @@
 
 <div class="search" role="search">
     <span class="glyph" aria-hidden="true">⌕</span>
-    <input type="search" placeholder="Search CArtSAP, product, supplier, PO, brand…" aria-label="Global search"
+    <input type="search" placeholder="Rechercher CArtSAP, article, fournisseur, commande, marque…" aria-label="Recherche globale"
            value="@_term" @oninput="OnInput" @onkeydown="OnKey" @onfocus="() => _open = _results.Count > 0" @onblur="Close" />
     @if (_open)
     {
         <div class="search-results">
             @if (_results.Count == 0)
             {
-                <div class="empty" style="padding:14px">@(_searching ? "Searching…" : "No match.")</div>
+                <div class="empty" style="padding:14px">@(_searching ? "Recherche…" : "Aucun résultat.")</div>
             }
             @for (var i = 0; i < _results.Count; i++)
             {
                 var r = _results[i];
                 <button class="@(i == _sel ? "sel" : "")" @onmousedown="() => Open(r)" @onmousedown:preventDefault>
-                    <span class="type">@r.Type</span>
+                    <span class="type">@TypeLabel(r.Type)</span>
                     <span><b>@r.Title</b> <span class="sub">@r.Subtitle</span></span>
                 </button>
             }
@@ -57,6 +57,11 @@
         _searching = false;
         StateHasChanged();
     }
+
+    private static string TypeLabel(string type) => type switch
+    {
+        "Product" => "Article", "Supplier" => "Fournisseur", "PO" => "Commande", "Brand" => "Marque", "Material" => "Famille", _ => type,
+    };
 
     private void OnKey(KeyboardEventArgs e)
     {

@@ -20,7 +20,10 @@ public record ResolvedPeriod(
 /// </summary>
 public static class PeriodResolver
 {
-    private static readonly CultureInfo En = CultureInfo.GetCultureInfo("en-US");
+    private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
+
+    /// <summary>"septembre 2026" → "Septembre 2026".</summary>
+    private static string Cap(string s) => s.Length == 0 ? s : char.ToUpper(s[0], Fr) + s[1..];
 
     public static ResolvedPeriod Resolve(SopFilter filter, int? latestStockMonthKey, DateOnly today)
     {
@@ -55,7 +58,7 @@ public static class PeriodResolver
         return new ResolvedPeriod(info, keys, previous, asOfKey, asOfDate);
     }
 
-    public static string MonthLabel(int monthKey) => DateKeys.FromKey(monthKey).ToString("MMM yy", En);
+    public static string MonthLabel(int monthKey) => Cap(DateKeys.FromKey(monthKey).ToString("MMM yy", Fr));
 
     private static string Label(int year, IReadOnlyList<int> months) =>
         Label(months.Select(m => new DateOnly(year, m, 1)).ToList());
@@ -63,12 +66,12 @@ public static class PeriodResolver
     private static string Label(IReadOnlyList<DateOnly> months)
     {
         if (months.Count == 0) return "";
-        if (months.Count == 1) return months[0].ToString("MMMM yyyy", En);
+        if (months.Count == 1) return Cap(months[0].ToString("MMMM yyyy", Fr));
         var contiguous = months.Zip(months.Skip(1)).All(p => p.First.AddMonths(1) == p.Second);
         if (contiguous)
             return months[0].Year == months[^1].Year
-                ? $"{months[0].ToString("MMM", En)} – {months[^1].ToString("MMM yyyy", En)}"
-                : $"{months[0].ToString("MMM yyyy", En)} – {months[^1].ToString("MMM yyyy", En)}";
-        return string.Join(", ", months.Select(m => m.ToString("MMM", En))) + " " + months[^1].Year;
+                ? Cap($"{months[0].ToString("MMM", Fr)} – {months[^1].ToString("MMM yyyy", Fr)}")
+                : Cap($"{months[0].ToString("MMM yyyy", Fr)} – {months[^1].ToString("MMM yyyy", Fr)}");
+        return Cap(string.Join(", ", months.Select(m => m.ToString("MMM", Fr))) + " " + months[^1].Year);
     }
 }

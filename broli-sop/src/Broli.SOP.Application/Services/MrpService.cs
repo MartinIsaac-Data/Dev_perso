@@ -76,9 +76,9 @@ public sealed class MrpService(IAnalyticsEngine engine, ICurrentUser user)
             double? multiple = purchased && pos.UnitsPerTc is { } u && forecast.Average() >= u / 2 ? u : null;
             var r = MrpCalculator.Compute(pos.Closing, pos.OpenQty, forecast, pos.SafetyStock, multiple, lead, pos.StockoutDate, horizonEnd, s.Today);
 
-            var risk = r.DaysLate > 0 ? "Critical"
-                : r.NetRequirement > 0 && pos.StockoutDate is { } so && so <= horizonEnd ? "High"
-                : r.NetRequirement > 0 ? "Medium"
+            var risk = r.DaysLate > 0 ? Labels.Of(ImpactLevel.Critical)
+                : r.NetRequirement > 0 && pos.StockoutDate is { } so && so <= horizonEnd ? Labels.Of(ImpactLevel.High)
+                : r.NetRequirement > 0 ? Labels.Of(ImpactLevel.Medium)
                 : "OK";
             rows.Add(new MrpRow(p.CArtSap, p.Description, p.CategoryName, Labels.Of(p.MaterialType), p.Unit, p.MainSupplierName,
                 Mapping.R(pos.Closing), forecast.Select(Mapping.R).ToList(), Mapping.R(pos.OpenQty - pos.TransitQty), Mapping.R(pos.TransitQty),
@@ -106,6 +106,6 @@ public sealed class MrpService(IAnalyticsEngine engine, ICurrentUser user)
         ["RecommendedTc"] = r => r.RecommendedTc,
         ["OrderByDate"] = r => r.OrderByDate,
         ["NeedDate"] = r => r.NeedDate,
-        ["Risk"] = r => r.Risk switch { "Critical" => 3, "High" => 2, "Medium" => 1, _ => 0 },
+        ["Risk"] = r => Labels.Rank<ImpactLevel>(r.Risk, -1),
     };
 }

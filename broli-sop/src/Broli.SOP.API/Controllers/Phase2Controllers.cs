@@ -28,11 +28,11 @@ public sealed class MaterialsController(MaterialsService service) : ControllerBa
 {
     [HttpGet]
     public async Task<ActionResult<MaterialsDashboard>> Get(string kind, [FromQuery] SopFilter filter, CancellationToken ct) =>
-        await service.GetDashboardAsync(kind, filter, ct) is { } d ? d : NotFound(new ApiError($"Unknown materials view '{kind}'."));
+        await service.GetDashboardAsync(kind, filter, ct) is { } d ? d : NotFound(new ApiError($"Vue matières inconnue : « {kind} »."));
 
     [HttpGet("rows")]
     public async Task<ActionResult<PagedResult<MaterialRow>>> Rows(string kind, [FromQuery] SopFilter filter, [FromQuery] TableQuery query, CancellationToken ct) =>
-        await service.GetRowsAsync(kind, filter, query, ct) is { } r ? r : NotFound(new ApiError($"Unknown materials view '{kind}'."));
+        await service.GetRowsAsync(kind, filter, query, ct) is { } r ? r : NotFound(new ApiError($"Vue matières inconnue : « {kind} »."));
 }
 
 [ApiController]

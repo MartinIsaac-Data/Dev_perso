@@ -28,15 +28,15 @@ public sealed class ImportService(
     {
         var def = ImportDefinitions.Find(slug);
         if (def is null) return null;
-        var notes = $"{def.Title}: {def.Description}\nRequired columns: {string.Join(", ", def.RequiredColumns.Select(c => c.Name))}.\n"
-                    + "Dates: dd/mm/yyyy or Excel dates. Quantities: numbers ≥ 0. Replace the example row with your data.";
+        var notes = $"{def.Title} : {def.Description}\nColonnes obligatoires : {string.Join(", ", def.RequiredColumns.Select(c => c.Name))}.\n"
+                    + "Dates : jj/mm/aaaa ou dates Excel. Quantités : nombres ≥ 0. Remplacez la ligne d'exemple par vos données.";
         return (exporter.Template(def.Title, def.RequiredColumns.Select(c => c.Name).ToList(), def.OptionalColumns.Select(c => c.Name).ToList(),
             def.Example, notes), $"template-{def.Slug}.xlsx");
     }
 
     public async Task<ImportPreview> PreviewAsync(string slug, string fileName, Stream content, string username, CancellationToken ct)
     {
-        var def = ImportDefinitions.Find(slug) ?? throw new Services.ValidationException([$"Unknown import type '{slug}'."]);
+        var def = ImportDefinitions.Find(slug) ?? throw new Services.ValidationException([$"Type d'import inconnu : « {slug} »."]);
 
         RawSheet sheet;
         try
@@ -46,7 +46,7 @@ public sealed class ImportService(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Unreadable import file {File}", fileName);
-            throw new Services.ValidationException([$"The file could not be read as an Excel workbook (.xlsx): {ex.Message}"]);
+            throw new Services.ValidationException([$"Le fichier n'a pas pu être lu comme un classeur Excel (.xlsx) : {ex.Message}"]);
         }
 
         var (outcome, purge) = await ValidateAsync(def, sheet, ct);
@@ -71,11 +71,11 @@ public sealed class ImportService(
     public async Task<ImportResult> CommitAsync(Guid id, string username, CancellationToken ct)
     {
         if (!cache.TryGetValue(Key(id), out Staged? staged) || staged is null)
-            throw new Services.ValidationException(["This preview has expired. Upload the file again."]);
+            throw new Services.ValidationException(["Cet aperçu a expiré. Chargez à nouveau le fichier."]);
         if (!string.Equals(staged.Username, username, StringComparison.OrdinalIgnoreCase))
-            throw new Services.ValidationException(["Only the user who uploaded the file can import it."]);
+            throw new Services.ValidationException(["Seul l'utilisateur qui a chargé le fichier peut l'importer."]);
         if (!CanCommit(staged.Outcome))
-            throw new Services.ValidationException([$"The file has {staged.Outcome.ErrorCount} error(s). Fix them and upload again — nothing was imported."]);
+            throw new Services.ValidationException([$"Le fichier contient {staged.Outcome.ErrorCount} erreur(s). Corrigez-les et chargez-le à nouveau — rien n'a été importé."]);
 
         var result = await repository.CommitAsync(staged.Definition.Type, staged.FileName, username, staged.Outcome.ValidRows,
             staged.Outcome.WarningCount, staged.PurgeDemo, ct);
@@ -83,9 +83,9 @@ public sealed class ImportService(
         version.Bump();
 
         if (result.PurgedDemoData)
-            await audit.LogAsync("Purged DEMO data", "Data Management", staged.FileName, null, "first real master-data import", ct);
-        await audit.LogAsync("Imported file", "Data Management", $"{staged.Definition.Title}: {staged.FileName}", null,
-            $"{result.Inserted} inserted, {result.Updated} updated, {result.Warnings} warnings", ct);
+            await audit.LogAsync("Données de DÉMO supprimées", "Gestion des données", staged.FileName, null, "premier import réel du référentiel", ct);
+        await audit.LogAsync("Fichier importé", "Gestion des données", $"{staged.Definition.Title} : {staged.FileName}", null,
+            $"{result.Inserted} ajoutées, {result.Updated} mises à jour, {result.Warnings} avertissements", ct);
         return result;
     }
 
@@ -97,7 +97,7 @@ public sealed class ImportService(
     {
         var removed = await repository.PurgeDemoDataAsync(ct);
         version.Bump();
-        await audit.LogAsync("Purged DEMO data", "Data Management", null, null, $"{removed} rows removed", ct);
+        await audit.LogAsync("Données de DÉMO supprimées", "Gestion des données", null, null, $"{removed} lignes supprimées", ct);
         return removed;
     }
 

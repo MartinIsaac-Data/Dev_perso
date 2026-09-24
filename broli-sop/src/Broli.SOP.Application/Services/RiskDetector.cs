@@ -25,25 +25,25 @@ public static class RiskDetector
 
             if (pos.AtRisk)
             {
-                var severity = pos.Status == CoverageStatus.Critical ? "Critical" : "High";
-                result.Add(new DetectedRisk("Stockout", severity, p.CArtSap, p.Description,
-                    $"Coverage {Months(pos.CoverageMonths)} — {Labels.Of(pos.Status)}",
-                    $"Stock {Q(pos.Closing)} {p.Unit}, consumption {Q(pos.AvgConsumption)} {p.Unit}/month"
-                    + (pos.StockoutDate is { } so ? $", projected stockout {so.ToString("dd/MM/yyyy", Fr)}" : "")
-                    + (pos.OpenQty > 0 ? $", open supply {Q(pos.OpenQty)} {p.Unit}" : ", no open supply"),
+                var severity = pos.Status == CoverageStatus.Critical ? Labels.Of(ImpactLevel.Critical) : Labels.Of(ImpactLevel.High);
+                result.Add(new DetectedRisk(Labels.Of(RiskCategory.Stockout), severity, p.CArtSap, p.Description,
+                    $"Couverture {Months(pos.CoverageMonths)} — {Labels.Of(pos.Status)}",
+                    $"Stock {Q(pos.Closing)} {p.Unit}, consommation {Q(pos.AvgConsumption)} {p.Unit}/mois"
+                    + (pos.StockoutDate is { } so ? $", rupture prévue le {so.ToString("dd/MM/yyyy", Fr)}" : "")
+                    + (pos.OpenQty > 0 ? $", approvisionnement en cours {Q(pos.OpenQty)} {p.Unit}" : ", aucun approvisionnement en cours"),
                     Suggest(), null, pos.StockoutDate));
             }
             else if (pos.Status == CoverageStatus.Excess)
             {
-                result.Add(new DetectedRisk("Overstock", "Medium", p.CArtSap, p.Description,
-                    $"Coverage {Months(pos.CoverageMonths)} — above {set.Coverage.ExcessAboveMonths:0.#} months",
-                    $"Excess {Q(pos.Excess)} {p.Unit}" + (pos.OpenQty > 0 ? $", still {Q(pos.OpenQty)} {p.Unit} on order" : ""),
+                result.Add(new DetectedRisk(Labels.Of(RiskCategory.Overstock), Labels.Of(ImpactLevel.Medium), p.CArtSap, p.Description,
+                    $"Couverture {Months(pos.CoverageMonths)} — au-delà de {set.Coverage.ExcessAboveMonths:0.#} mois",
+                    $"Excédent {Q(pos.Excess)} {p.Unit}" + (pos.OpenQty > 0 ? $", encore {Q(pos.OpenQty)} {p.Unit} en commande" : ""),
                     Suggest(), null, null));
             }
             else if (pos.Status == CoverageStatus.NoDemand && pos.Closing > 0)
             {
-                result.Add(new DetectedRisk("Excess Stock", "Low", p.CArtSap, p.Description,
-                    "Dormant stock — no demand", $"{Q(pos.Closing)} {p.Unit} with no consumption or forecast", Suggest(), null, null));
+                result.Add(new DetectedRisk(Labels.Of(RiskCategory.ExcessStock), Labels.Of(ImpactLevel.Low), p.CArtSap, p.Description,
+                    "Stock dormant — aucune demande", $"{Q(pos.Closing)} {p.Unit} sans consommation ni prévision", Suggest(), null, null));
             }
 
             // Forecast bias over the last three months up to the as-of month.
@@ -53,12 +53,12 @@ public static class RiskDetector
             var aSum = dem.Sum(d => d.Actual);
             if (KpiMath.BiasPct(fSum, aSum) is { } bias && Math.Abs(bias) > 2 * set.Forecast.OnTrackTolerancePct && aSum > 0)
             {
-                result.Add(new DetectedRisk("Forecast Risk", Math.Abs(bias) > 4 * set.Forecast.OnTrackTolerancePct ? "High" : "Medium",
+                result.Add(new DetectedRisk(Labels.Of(RiskCategory.ForecastRisk), Math.Abs(bias) > 4 * set.Forecast.OnTrackTolerancePct ? Labels.Of(ImpactLevel.High) : Labels.Of(ImpactLevel.Medium),
                     p.CArtSap, p.Description,
-                    $"Forecast bias {bias:+0;-0}% over 3 months",
-                    bias > 0 ? $"Forecast {Q(fSum)} vs actual {Q(aSum)} {p.Unit}: over-forecast drives excess stock."
-                             : $"Forecast {Q(fSum)} vs actual {Q(aSum)} {p.Unit}: under-forecast drives shortages.",
-                    "Review the forecast with Sales at the next S&OP", null, null));
+                    $"Biais de prévision de {bias:+0;-0} % sur 3 mois",
+                    bias > 0 ? $"Prévision {Q(fSum)} pour un réel de {Q(aSum)} {p.Unit} : la surprévision crée du stock excédentaire."
+                             : $"Prévision {Q(fSum)} pour un réel de {Q(aSum)} {p.Unit} : la sous-prévision crée des ruptures.",
+                    "Revoir la prévision avec les ventes à la prochaine réunion S&OP", null, null));
             }
 
             // Demand increase: upcoming forecast well above recent history.
@@ -67,22 +67,22 @@ public static class RiskDetector
             var next = Enumerable.Range(1, 3).Select(i => fn(DateKeys.AddMonths(s.Period.AsOfMonthKey, i))).Average();
             if (hist > 0 && next > hist * (1 + set.Forecast.DemandIncreaseThresholdPct / 100))
             {
-                result.Add(new DetectedRisk("Demand Increase", "Medium", p.CArtSap, p.Description,
-                    $"Forecast +{(next / hist - 1) * 100:0}% vs last 3 months",
-                    $"Next 3 months average {Q(next)} vs {Q(hist)} {p.Unit}/month. Check capacity and supply.",
-                    "Confirm supply and production capacity", null, null));
+                result.Add(new DetectedRisk(Labels.Of(RiskCategory.DemandIncrease), Labels.Of(ImpactLevel.Medium), p.CArtSap, p.Description,
+                    $"Prévision +{(next / hist - 1) * 100:0} % par rapport aux 3 derniers mois",
+                    $"Moyenne des 3 prochains mois : {Q(next)} contre {Q(hist)} {p.Unit}/mois. Vérifier la capacité et les approvisionnements.",
+                    "Confirmer les approvisionnements et la capacité de production", null, null));
             }
         }
 
         foreach (var l in lines.Where(l => l.IsOpen && l.Assessment.Level >= EtaRiskLevel.SupplyRisk))
         {
             var atPort = l.Line.Status.IsAtPort();
-            var category = !atPort ? "Supply Delay" : l.Line.Status == SupplyStatus.Customs ? "Customs" : "Port Delay";
-            result.Add(new DetectedRisk(category, l.Assessment.Level == EtaRiskLevel.Critical ? "Critical" : "High",
+            var category = Labels.Of(!atPort ? RiskCategory.SupplyDelay : l.Line.Status == SupplyStatus.Customs ? RiskCategory.Customs : RiskCategory.PortDelay);
+            result.Add(new DetectedRisk(category, l.Assessment.Level == EtaRiskLevel.Critical ? Labels.Of(ImpactLevel.Critical) : Labels.Of(ImpactLevel.High),
                 l.Product.CArtSap, l.Product.Description,
-                $"PO {l.Line.PoNumber} — {l.Line.SupplierName}",
+                $"Commande {l.Line.PoNumber} — {l.Line.SupplierName}",
                 l.Assessment.Reason ?? "",
-                l.Assessment.Level == EtaRiskLevel.Critical ? "Expedite shipment / find alternative supply" : atPort ? "Escalate clearing with the transit agent" : "Obtain a firm ETA from the supplier",
+                l.Assessment.Level == EtaRiskLevel.Critical ? "Accélérer l'expédition / trouver une source alternative" : atPort ? "Relancer le dédouanement avec le transitaire" : "Obtenir une ETA ferme du fournisseur",
                 l.Line.PoNumber, l.StockoutDate ?? l.Line.RequiredDate));
         }
 
@@ -92,14 +92,9 @@ public static class RiskDetector
             .ToList();
     }
 
-    public static int SeverityRank(string severity) => severity switch
-    {
-        "Critical" => 0,
-        "High" => 1,
-        "Medium" => 2,
-        _ => 3,
-    };
+    public static int SeverityRank(string severity) =>
+        Labels.TryParse<ImpactLevel>(severity, out var level) ? ImpactLevel.Critical - level : 3;
 
     private static string Q(double v) => v.ToString("#,0", Fr);
-    private static string Months(double? m) => m is { } v ? $"{v:0.0} months" : "n/a";
+    private static string Months(double? m) => m is { } v ? $"{v.ToString("0.0", Fr)} mois" : "n.d.";
 }

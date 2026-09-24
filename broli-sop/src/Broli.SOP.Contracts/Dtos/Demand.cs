@@ -22,7 +22,8 @@ public record DemandDashboard(
     IReadOnlyList<ChartPoint> WorstAccuracyByProduct,
     IReadOnlyList<ChartPoint> BiasByFamily,
     double TolerancePct,
-    double AccuracyTargetPct);
+    double AccuracyTargetPct,
+    IReadOnlyList<int>? TrendMonthKeys = null);
 
 public record DemandRow(
     string CArtSap,

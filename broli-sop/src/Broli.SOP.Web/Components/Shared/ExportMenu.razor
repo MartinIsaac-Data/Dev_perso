@@ -5,10 +5,10 @@
 
 @if (Session.Can(Permissions.DataExport))
 {
-    <button class="btn sm" disabled="@_busy" @onclick="@(() => Export("xlsx"))" title="Export the filtered rows (all pages) to Excel">⤓ Excel</button>
-    <button class="btn sm" disabled="@_busy" @onclick="@(() => Export("csv"))" title="Export the filtered rows (all pages) to CSV">⤓ CSV</button>
+    <button class="btn sm" disabled="@_busy" @onclick="@(() => Export("xlsx"))" title="Exporter les lignes filtrées (toutes les pages) vers Excel">⤓ Excel</button>
+    <button class="btn sm" disabled="@_busy" @onclick="@(() => Export("csv"))" title="Exporter les lignes filtrées (toutes les pages) en CSV">⤓ CSV</button>
 }
-<button class="btn sm" @onclick="Print" title="Print or save as PDF">⎙ Print / PDF</button>
+<button class="btn sm" @onclick="Print" title="Imprimer ou enregistrer en PDF">⎙ Imprimer / PDF</button>
 @if (_error is not null) { <span class="muted" style="color:var(--critical-ink)">@_error</span> }
 
 @code {

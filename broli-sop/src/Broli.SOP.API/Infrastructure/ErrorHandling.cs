@@ -13,7 +13,7 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
         {
             case ValidationException v:
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsJsonAsync(new ApiError("Validation failed.", v.Errors), ct);
+                await context.Response.WriteAsJsonAsync(new ApiError("Validation échouée.", v.Errors), ct);
                 return true;
             case ArgumentException a:
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -25,7 +25,7 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             default:
                 logger.LogError(exception, "Unhandled error on {Method} {Path} ({TraceId})", context.Request.Method, context.Request.Path, context.TraceIdentifier);
                 context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                await context.Response.WriteAsJsonAsync(new ApiError($"An unexpected error occurred. Reference: {context.TraceIdentifier}"), ct);
+                await context.Response.WriteAsJsonAsync(new ApiError($"Une erreur inattendue s'est produite. Référence : {context.TraceIdentifier}"), ct);
                 return true;
         }
     }

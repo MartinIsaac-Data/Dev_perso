@@ -3,15 +3,15 @@
 @inject NavigationManager Nav
 
 <div class="user-chip">
-    <button class="icon-btn" title="Notifications" aria-label="Notifications, @_feed.Unread unread" @onclick="Toggle" style="position:relative">
+    <button class="icon-btn" title="Notifications" aria-label="Notifications, @_feed.Unread non lues" @onclick="Toggle" style="position:relative">
         🔔@if (_feed.Unread > 0) {<span class="bell-count">@(_feed.Unread > 99 ? "99+" : _feed.Unread.ToString())</span>}
     </button>
     @if (_open)
     {
         <div class="backdrop" @onclick="() => _open = false"></div>
         <div class="dropdown notif-panel">
-            <div class="notif-head"><b>Notifications</b>@if (_feed.Unread > 0) {<button class="link-btn" @onclick="ReadAll">Mark all as read</button>}</div>
-            @if (_feed.Items.Count == 0) { <div class="empty" style="padding:18px">No notification yet.</div> }
+            <div class="notif-head"><b>Notifications</b>@if (_feed.Unread > 0) {<button class="link-btn" @onclick="ReadAll">Tout marquer comme lu</button>}</div>
+            @if (_feed.Items.Count == 0) { <div class="empty" style="padding:18px">Aucune notification pour le moment.</div> }
             @foreach (var n in _feed.Items)
             {
                 <button class="notif @(n.IsRead ? "" : "unread")" @onclick="() => Open(n)">

@@ -104,14 +104,14 @@ public sealed class DatabaseInitializer(
         }
         var descriptions = new Dictionary<string, string>
         {
-            ["ADMIN"] = "Users, data, parameters and configuration",
-            ["MANAGEMENT"] = "DG / DGA / Direction — executive and strategic views",
-            ["SUPPLY"] = "MRP, stock, orders, transit, coverage, forecast, risks",
-            ["SALES"] = "Sales, forecast vs actual, service level, stock",
-            ["FINANCE"] = "Financial values, costs, stock and financial impacts",
-            ["WAREHOUSE"] = "Stock, shelf life, unloading, warehouse situation",
-            ["LOGISTICS"] = "Orders, containers, ETD/ETA, port, transit, customs",
-            ["PRODUCTION"] = "Raw-material requirements, production, availability",
+            ["ADMIN"] = "Utilisateurs, données, paramètres et configuration",
+            ["MANAGEMENT"] = "DG / DGA / Direction — vues de synthèse et stratégiques",
+            ["SUPPLY"] = "MRP, stock, commandes, transit, couverture, prévision, risques",
+            ["SALES"] = "Ventes, prévision vs réel, taux de service, stock",
+            ["FINANCE"] = "Valeurs financières, coûts, stock et impacts financiers",
+            ["WAREHOUSE"] = "Stock, péremption, déchargement, situation de l'entrepôt",
+            ["LOGISTICS"] = "Commandes, conteneurs, ETD/ETA, port, transit, douane",
+            ["PRODUCTION"] = "Besoins en matières premières, production, disponibilité",
         };
         foreach (var (name, permissions) in Permissions.DefaultRoles)
         {
@@ -154,7 +154,7 @@ public sealed class DatabaseInitializer(
     private async Task SeedCountriesAsync(CancellationToken ct)
     {
         var existing = await db.Countries.Select(c => c.Code).ToListAsync(ct);
-        foreach (var (code, name, days) in ReferenceData.Countries.Where(c => !existing.Contains(c.Code)))
+        foreach (var (code, name, _, days) in ReferenceData.Countries.Where(c => !existing.Contains(c.Code)))
             db.Countries.Add(new Country { Code = code, Name = name, DefaultTransitDays = days });
         await db.SaveChangesAsync(ct);
     }
@@ -218,7 +218,7 @@ public sealed class DatabaseInitializer(
         db.Users.Add(new AppUser
         {
             Username = username,
-            DisplayName = "Administrator",
+            DisplayName = "Administrateur",
             Department = "IT",
             PasswordHash = hasher.Hash(password),
             CreatedAtUtc = clock.UtcNow,
@@ -236,13 +236,13 @@ public sealed class DatabaseInitializer(
         var roles = await db.Roles.ToDictionaryAsync(r => r.Name, ct);
         (string User, string Name, string Dept, string Role)[] demo =
         [
-            ("dg", "Directeur Général (DEMO)", "Direction", "MANAGEMENT"),
-            ("supply", "Supply Planner (DEMO)", "Supply Chain", "SUPPLY"),
-            ("sales", "Sales Manager (DEMO)", "Sales", "SALES"),
-            ("finance", "Finance Controller (DEMO)", "Finance", "FINANCE"),
-            ("warehouse", "Warehouse Manager (DEMO)", "Warehouse", "WAREHOUSE"),
-            ("logistics", "Logistics Officer (DEMO)", "Logistics", "LOGISTICS"),
-            ("production", "Production Manager (DEMO)", "Production", "PRODUCTION"),
+            ("dg", "Directeur général (DÉMO)", "Direction", "MANAGEMENT"),
+            ("supply", "Planificateur appro (DÉMO)", "Supply Chain", "SUPPLY"),
+            ("sales", "Responsable commercial (DÉMO)", "Commercial", "SALES"),
+            ("finance", "Contrôleur financier (DÉMO)", "Finance", "FINANCE"),
+            ("warehouse", "Responsable entrepôt (DÉMO)", "Entrepôt", "WAREHOUSE"),
+            ("logistics", "Chargé logistique (DÉMO)", "Logistique", "LOGISTICS"),
+            ("production", "Responsable production (DÉMO)", "Production", "PRODUCTION"),
         ];
         foreach (var d in demo.Where(d => !db.Users.Any(u => u.Username == d.User)))
             db.Users.Add(new AppUser

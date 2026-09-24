@@ -1,10 +1,10 @@
 @page "/suppliers"
 @inherits SopPage
 
-<PageTitle>Suppliers · Broli S&amp;OP</PageTitle>
+<PageTitle>Fournisseurs · Broli S&amp;OP</PageTitle>
 
 <RequirePermission Permission="@Permissions.SupplyView">
-    <PageHeader Title="Supplier Performance" Question="Which supplier delivers late most often — and what is still on order with them?" Period="_d?.Period">
+    <PageHeader Title="Performance fournisseurs" Question="Quel fournisseur livre le plus souvent en retard — et que reste-t-il en commande chez lui ?" Period="_d?.Period">
         <Actions><ExportMenu Dataset="suppliers" Query="_exportQuery" /></Actions>
     </PageHeader>
 
@@ -12,21 +12,21 @@
         @if (_d is { } d)
         {
             <div class="kpis k6">
-                @Tile("On time delivery", Fmt.Pct(d.OnTimePct), $"alert below {d.AlertPct:0}%", d.OnTimePct is null ? "neutral" : d.OnTimePct >= 90 ? "good" : d.OnTimePct >= d.AlertPct ? "watch" : "bad")
-                @Tile("Average delay", Fmt.Num(d.AvgDelayDays, 1) + " d", "delivered vs required date", "neutral")
-                @Tile("Open orders", d.OpenOrders.ToString("N0"), "PO lines", "neutral")
-                @Tile("In transit", Fmt.Num(d.InTransitTc, 1) + " TC", "shipped, port, customs", "neutral")
-                @Tile("Avg transit time", Fmt.Num(d.AvgTransitDays, 1) + " d", "ETD → arrival", "neutral")
-                @Tile("Partial deliveries", d.PartialDeliveries.ToString(), "quality proxy: short deliveries", d.PartialDeliveries > 0 ? "watch" : "good")
+                @Tile("Livraisons à l'heure", Fmt.Pct(d.OnTimePct), $"alerte sous {d.AlertPct:0} %", d.OnTimePct is null ? "neutral" : d.OnTimePct >= 90 ? "good" : d.OnTimePct >= d.AlertPct ? "watch" : "bad")
+                @Tile("Retard moyen", Fmt.Num(d.AvgDelayDays, 1) + " j", "livraison vs date de besoin", "neutral")
+                @Tile("Commandes ouvertes", d.OpenOrders.ToString("N0"), "lignes de commande", "neutral")
+                @Tile("En transit", Fmt.Num(d.InTransitTc, 1) + " TC", "expédiés, port, douane", "neutral")
+                @Tile("Transit moyen", Fmt.Num(d.AvgTransitDays, 1) + " j", "ETD → arrivée", "neutral")
+                @Tile("Livraisons partielles", d.PartialDeliveries.ToString(), "indicateur qualité : livraisons incomplètes", d.PartialDeliveries > 0 ? "watch" : "good")
             </div>
 
             <div class="card mb">
-                <div class="card-head"><h2>On-time delivery by supplier</h2><span class="hint">% · @d.Window.ToLowerInvariant() · click a bar for its orders</span></div>
+                <div class="card-head"><h2>Livraisons à l'heure par fournisseur</h2><span class="hint">% · @d.Window.ToLowerInvariant() · cliquer sur une barre pour ses commandes</span></div>
                 <div class="card-body">
                     @{ var ranked = _rows.Where(r => r.OnTimePct.HasValue).OrderBy(r => r.OnTimePct).ToList(); }
                     <SopChart Type="bar" Horizontal="true" Height="@(Math.Max(180, ranked.Count * 24 + 50))" Unit="%" Max="100"
-                              Labels="ranked.Select(r => r.Name).ToList()" AriaLabel="On-time delivery rate by supplier"
-                              Datasets="@([new ChartDataset("On time", ranked.Select(r => r.OnTimePct).ToList(), "--series-1",
+                              Labels="ranked.Select(r => r.Name).ToList()" AriaLabel="Taux de livraison à l'heure par fournisseur"
+                              Datasets="@([new ChartDataset("À l'heure", ranked.Select(r => r.OnTimePct).ToList(), "--series-1",
                                           PointColors: ranked.Select(r => r.OnTimePct < d.AlertPct ? "--critical" : r.OnTimePct < 90 ? "--warning" : "--series-1").ToList())])"
                               OnClick="c => Open(ranked[c.Index].Code)" />
                 </div>
@@ -34,32 +34,32 @@
 
             <div class="card">
                 <div class="table-tools">
-                    <input type="search" placeholder="Search supplier or country…" @bind="_search" @bind:event="oninput" @bind:after="() => _exportQuery.Search = _search" />
-                    <span class="muted">Quality data is not in the Phase 1 model: partial (short) deliveries are shown as the quality indicator.</span>
+                    <input type="search" placeholder="Rechercher un fournisseur ou un pays…" @bind="_search" @bind:event="oninput" @bind:after="() => _exportQuery.Search = _search" />
+                    <span class="muted">Les données qualité ne font pas partie du modèle : les livraisons partielles servent d'indicateur qualité.</span>
                 </div>
                 <div class="table-wrap">
                     <table class="data">
-                        <thead><tr><th>Supplier</th><th class="num">Orders</th><th class="num">On time</th><th class="num">Avg delay</th><th class="num">Partial</th>
-                            <th class="num">Open</th><th class="num">In transit</th><th class="num">Transit</th><th class="num">Late open</th><th>Risk</th></tr></thead>
+                        <thead><tr><th>Fournisseur</th><th class="num">Commandes</th><th class="num">À l'heure</th><th class="num">Retard moyen</th><th class="num">Partielles</th>
+                            <th class="num">Ouvertes</th><th class="num">En transit</th><th class="num">Transit</th><th class="num">Ouvertes en retard</th><th>Risque</th></tr></thead>
                         <tbody>
                             @foreach (var r in _rows.Where(r => _search.Length == 0 || $"{r.Code} {r.Name} {r.Country}".Contains(_search, StringComparison.OrdinalIgnoreCase)))
                             {
                                 <tr class="click" @onclick="() => Open(r.Code)">
                                     <td><b>@r.Name</b><span class="sub">@r.Code · @r.Country</span></td>
-                                    <td class="num">@r.Orders<span class="sub">@r.Delivered delivered</span></td>
+                                    <td class="num">@r.Orders<span class="sub">@r.Delivered livrées</span></td>
                                     <td class="num"><div class="bar-cell">@Fmt.Pct(r.OnTimePct, 0)<span class="track"><span class="fill" style="width:@(Math.Clamp(r.OnTimePct ?? 0, 0, 100).ToString(System.Globalization.CultureInfo.InvariantCulture))%;background:var(@(r.OnTimePct < d.AlertPct ? "--critical" : r.OnTimePct < 90 ? "--warning" : "--good"))"></span></span></div></td>
-                                    <td class="num">@(r.AvgDelayDays is { } ad ? $"{ad:0.0} d" : Fmt.Empty)</td>
+                                    <td class="num">@(r.AvgDelayDays is { } ad ? $"{ad:0.0} j" : Fmt.Empty)</td>
                                     <td class="num">@(r.PartialDeliveries > 0 ? r.PartialDeliveries : Fmt.Empty)</td>
                                     <td class="num">@r.OpenOrders</td>
                                     <td class="num">@Fmt.Num(r.InTransitTc, 1) TC</td>
-                                    <td class="num">@(r.AvgTransitDays is { } t ? $"{t:0} d" : Fmt.Empty)<span class="sub">std @(r.StandardTransitDays?.ToString() ?? "—") d</span></td>
-                                    <td class="num">@(r.LateOpen > 0 ? $"{r.LateOpen} ({r.CriticalOpen} crit.)" : Fmt.Empty)</td>
+                                    <td class="num">@(r.AvgTransitDays is { } t ? $"{t:0} j" : Fmt.Empty)<span class="sub">std @(r.StandardTransitDays?.ToString() ?? "—") j</span></td>
+                                    <td class="num">@(r.LateOpen > 0 ? $"{r.LateOpen} ({r.CriticalOpen} critiques)" : Fmt.Empty)</td>
                                     <td><StatusBadge Status="@r.Risk" /></td>
                                 </tr>
                             }
                         </tbody>
                     </table>
-                    @if (_rows.Count == 0) { <div class="empty">No supplier activity for this filter.</div> }
+                    @if (_rows.Count == 0) { <div class="empty">Aucune activité fournisseur pour ces filtres.</div> }
                 </div>
             </div>
         }

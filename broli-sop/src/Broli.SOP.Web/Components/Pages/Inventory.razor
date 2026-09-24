@@ -1,10 +1,10 @@
 @page "/inventory"
 @inherits SopPage
 
-<PageTitle>Inventory · Broli S&amp;OP</PageTitle>
+<PageTitle>Stocks · Broli S&amp;OP</PageTitle>
 
 <RequirePermission Permission="@Permissions.InventoryView">
-    <PageHeader Title="Inventory &amp; Coverage" Question="Do we have enough stock — and which products will run out first?" Period="_d?.Period">
+    <PageHeader Title="Stock et couverture" Question="Avons-nous assez de stock — et quels articles seront en rupture en premier ?" Period="_d?.Period">
         <Actions><ExportMenu Dataset="inventory" Query="_q" /></Actions>
     </PageHeader>
 
@@ -13,30 +13,30 @@
         {
             var s = d.Summary;
             <div class="kpis k4">
-                @Tile("Opening Stock", Fmt.Num(s.OpeningTc, 1), "TC", "Closing stock of the previous month", "neutral", null)
-                @Tile("Receipts", Fmt.Num(s.ReceiptsTc, 1), "TC", "Deliveries + production in the month", "neutral", null)
-                @Tile("Consumption", Fmt.Num(s.ConsumptionTc, 1), "TC", "Sales + plant consumption", "neutral", null)
-                @Tile("Closing Stock", Fmt.Num(s.ClosingTc, 1), "TC", s.StockValue is { } v ? $"Value {Fmt.Num(v)} {d.Currency}" : $"{s.SkuCount} SKUs", "neutral", "all")
-                @Tile("Stock Coverage", Fmt.Months(s.CoverageMonths).Replace(" mo", ""), "months", $"Basis {d.CoverageBasis}, avg of {d.CoverageAverageMonths} months", "neutral", "coverage")
-                @Tile("Safety Stock", Fmt.Num(s.SafetyStockTc, 1), "TC", $"{s.SkusBelowSafety} SKUs below safety stock", s.SkusBelowSafety > 0 ? "watch" : "good", "below-safety")
-                @Tile("Excess Stock", Fmt.Num(s.ExcessTc, 1), "TC", s.ExcessValue is { } ev ? $"{s.SkusExcess} SKUs · {Fmt.Num(ev)} {d.Currency}" : $"{s.SkusExcess} SKUs above the excess threshold", s.SkusExcess > 0 ? "watch" : "good", "excess")
-                @Tile("Stock at Risk", s.SkusAtRisk.ToString(), "SKUs", "Coverage in Critical or Risk band", s.SkusAtRisk > 0 ? "bad" : "good", "at-risk")
+                @Tile("Stock initial", Fmt.Num(s.OpeningTc, 1), "TC", "Stock final du mois précédent", "neutral", null)
+                @Tile("Réceptions", Fmt.Num(s.ReceiptsTc, 1), "TC", "Livraisons + production du mois", "neutral", null)
+                @Tile("Consommation", Fmt.Num(s.ConsumptionTc, 1), "TC", "Ventes + consommation usine", "neutral", null)
+                @Tile("Stock final", Fmt.Num(s.ClosingTc, 1), "TC", s.StockValue is { } v ? $"Valeur {Fmt.Num(v)} {d.Currency}" : $"{s.SkuCount} articles", "neutral", "all")
+                @Tile("Couverture de stock", Fmt.Months(s.CoverageMonths).Replace(" mois", ""), "mois", $"Base : {d.CoverageBasis.ToLowerInvariant()}, moyenne sur {d.CoverageAverageMonths} mois", "neutral", "coverage")
+                @Tile("Stock de sécurité", Fmt.Num(s.SafetyStockTc, 1), "TC", $"{s.SkusBelowSafety} articles sous le stock de sécurité", s.SkusBelowSafety > 0 ? "watch" : "good", "below-safety")
+                @Tile("Stock excédentaire", Fmt.Num(s.ExcessTc, 1), "TC", s.ExcessValue is { } ev ? $"{s.SkusExcess} articles · {Fmt.Num(ev)} {d.Currency}" : $"{s.SkusExcess} articles au-dessus du seuil d'excédent", s.SkusExcess > 0 ? "watch" : "good", "excess")
+                @Tile("Stock à risque", s.SkusAtRisk.ToString(), "articles", "Couverture en zone Critique ou Risque", s.SkusAtRisk > 0 ? "bad" : "good", "at-risk")
             </div>
 
             <div class="grid g-32 mb">
                 <div class="card">
-                    <div class="card-head"><h2>Stock evolution</h2><span class="hint">TC per month</span></div>
+                    <div class="card-head"><h2>Évolution du stock</h2><span class="hint">TC par mois</span></div>
                     <div class="card-body">
-                        <SopChart Type="bar" Height="270" Labels="d.Months" Unit="TC" AriaLabel="Receipts, consumption and closing stock by month"
-                                  Datasets="@([new ChartDataset("Receipts", d.ReceiptsTc, "--series-3"), new ChartDataset("Consumption", d.ConsumptionTc, "--series-2"),
-                                              new ChartDataset("Closing stock", d.ClosingTc, "--series-1", Type: "line")])" />
+                        <SopChart Type="bar" Height="270" Labels="d.Months" Unit="TC" AriaLabel="Réceptions, consommation et stock final par mois"
+                                  Datasets="@([new ChartDataset("Réceptions", d.ReceiptsTc, "--series-3"), new ChartDataset("Consommation", d.ConsumptionTc, "--series-2"),
+                                              new ChartDataset("Stock final", d.ClosingTc, "--series-1", Type: "line")])" />
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-head"><h2>Coverage status</h2><span class="hint">SKUs · click to list</span></div>
+                    <div class="card-head"><h2>Statut de couverture</h2><span class="hint">Articles · cliquer pour la liste</span></div>
                     <div class="card-body">
-                        <SopChart Type="bar" Height="270" Labels="d.CoverageDistribution.Select(p => p.Label).ToList()" Unit="SKUs" AriaLabel="Products per coverage status"
-                                  Datasets="@([new ChartDataset("Products", d.CoverageDistribution.Select(p => p.Value).ToList(), "--series-1",
+                        <SopChart Type="bar" Height="270" Labels="d.CoverageDistribution.Select(p => p.Label).ToList()" Unit="articles" AriaLabel="Articles par statut de couverture"
+                                  Datasets="@([new ChartDataset("Articles", d.CoverageDistribution.Select(p => p.Value).ToList(), "--series-1",
                                               PointColors: d.CoverageDistribution.Select(p => StatusColors.For(p.Label)).ToList())])"
                                   OnClick="c => SetView(StatusView(d.CoverageDistribution[c.Index].Key))" />
                     </div>
@@ -45,26 +45,26 @@
 
             <div class="card">
                 <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView"
-                          Items="@([("", "All"), ("at-risk", "At risk"), ("critical", "Critical"), ("risk", "Risk"), ("watch", "Watch"), ("normal", "Normal"), ("excess", "Excess"), ("below-safety", "Below safety"), ("nodemand", "No demand")])" />
+                          Items="@([("", "Tous"), ("at-risk", "À risque"), ("critical", "Critique"), ("risk", "Risque"), ("watch", "À surveiller"), ("normal", "Normal"), ("excess", "Excédent"), ("below-safety", "Sous stock de sécurité"), ("nodemand", "Sans demande")])" />
                 <div class="table-tools">
-                    <input type="search" placeholder="Search CArtSAP, product, family, brand…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
-                    <span class="muted">Coverage = available stock ÷ average monthly consumption (@d.CoverageBasis, @d.CoverageAverageMonths months). Quantities in each product's unit.</span>
+                    <input type="search" placeholder="Rechercher CArtSAP, article, famille, marque…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
+                    <span class="muted">Couverture = stock disponible ÷ consommation mensuelle moyenne (@d.CoverageBasis.ToLowerInvariant(), @d.CoverageAverageMonths mois). Quantités dans l'unité de chaque article.</span>
                 </div>
                 <div class="table-wrap">
                     <table class="data">
                         <thead>
                             <tr>
-                                <Th Query="_q" Field="CArtSap" OnChanged="LoadRows">Product</Th>
-                                <Th Query="_q" Field="OpeningStock" Numeric OnChanged="LoadRows">Opening</Th>
-                                <Th Query="_q" Field="Receipts" Numeric OnChanged="LoadRows">Receipts</Th>
-                                <Th Query="_q" Field="Consumption" Numeric OnChanged="LoadRows">Consumption</Th>
-                                <Th Query="_q" Field="ClosingStock" Numeric OnChanged="LoadRows">Closing</Th>
-                                <Th Query="_q" Field="SafetyStock" Numeric OnChanged="LoadRows">Safety</Th>
-                                <Th Query="_q" Field="CoverageMonths" Numeric OnChanged="LoadRows">Coverage</Th>
-                                <Th Query="_q" Field="ExcessStock" Numeric OnChanged="LoadRows">Excess</Th>
-                                <Th Query="_q" Field="StockoutDate" OnChanged="LoadRows">Stockout</Th>
-                                <Th Query="_q" Field="NextEta" OnChanged="LoadRows">Next ETA</Th>
-                                @if (_rows?.Items.Any(r => r.StockValue.HasValue) == true) { <Th Query="_q" Field="StockValue" Numeric OnChanged="LoadRows">Value</Th> }
+                                <Th Query="_q" Field="CArtSap" OnChanged="LoadRows">Article</Th>
+                                <Th Query="_q" Field="OpeningStock" Numeric OnChanged="LoadRows">Initial</Th>
+                                <Th Query="_q" Field="Receipts" Numeric OnChanged="LoadRows">Réceptions</Th>
+                                <Th Query="_q" Field="Consumption" Numeric OnChanged="LoadRows">Consommation</Th>
+                                <Th Query="_q" Field="ClosingStock" Numeric OnChanged="LoadRows">Final</Th>
+                                <Th Query="_q" Field="SafetyStock" Numeric OnChanged="LoadRows">Sécurité</Th>
+                                <Th Query="_q" Field="CoverageMonths" Numeric OnChanged="LoadRows">Couverture</Th>
+                                <Th Query="_q" Field="ExcessStock" Numeric OnChanged="LoadRows">Excédent</Th>
+                                <Th Query="_q" Field="StockoutDate" OnChanged="LoadRows">Rupture</Th>
+                                <Th Query="_q" Field="NextEta" OnChanged="LoadRows">Prochaine ETA</Th>
+                                @if (_rows?.Items.Any(r => r.StockValue.HasValue) == true) { <Th Query="_q" Field="StockValue" Numeric OnChanged="LoadRows">Valeur</Th> }
                             </tr>
                         </thead>
                         <tbody>
@@ -76,7 +76,7 @@
                                     <td class="num">@Fmt.Num(r.Receipts)</td>
                                     <td class="num">@Fmt.Num(r.Consumption)</td>
                                     <td class="num"><b>@Fmt.Num(r.ClosingStock)</b> <span class="muted">@r.Unit</span></td>
-                                    <td class="num">@Fmt.Num(r.SafetyStock) @if (r.BelowSafety) {<span title="Below safety stock" style="color:var(--serious-ink)"> ▲</span>}</td>
+                                    <td class="num">@Fmt.Num(r.SafetyStock) @if (r.BelowSafety) {<span title="Sous le stock de sécurité" style="color:var(--serious-ink)"> ▲</span>}</td>
                                     <td class="num"><StatusBadge Status="@r.CoverageStatus" Text="@(r.CoverageMonths is null ? r.CoverageStatus : $"{Fmt.Months(r.CoverageMonths)} · {r.CoverageStatus}")" /></td>
                                     <td class="num">@(r.ExcessStock > 0 ? Fmt.Num(r.ExcessStock) : Fmt.Empty)</td>
                                     <td class="nowrap">@Fmt.Date(r.StockoutDate)</td>
@@ -86,7 +86,7 @@
                             }
                         </tbody>
                     </table>
-                    @if (_rows is { Total: 0 }) { <div class="empty">No product matches this view and filter.</div> }
+                    @if (_rows is { Total: 0 }) { <div class="empty">Aucun article ne correspond à cette vue et à ces filtres.</div> }
                 </div>
                 <Pager Query="_q" Total="@(_rows?.Total ?? 0)" OnChanged="LoadRows" />
             </div>

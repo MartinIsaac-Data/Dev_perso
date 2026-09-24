@@ -26,21 +26,21 @@ public static class Permissions
 
     public static readonly IReadOnlyList<(string Code, string Description)> All =
     [
-        (ExecutiveView, "Executive dashboard"),
-        (DemandView, "Demand / Forecast vs Actual"),
-        (InventoryView, "Inventory & coverage"),
-        (SupplyView, "Supply, open orders, transit"),
-        (SupplyEdit, "Edit supply data (ETA, status)"),
-        (RisksView, "Risks & opportunities"),
-        (RisksEdit, "Create and update risks"),
-        (FinanceView, "Financial values (costs, stock value)"),
-        (DataExport, "Export tables to Excel / CSV"),
-        (DataImport, "Import Excel files, purge demo data"),
-        (ConfigEdit, "Edit business configuration"),
-        (UsersManage, "Manage users, roles and permissions"),
-        (AuditView, "Read the audit log"),
-        (ActionsView, "S&OP action plan and meeting view"),
-        (ActionsEdit, "Create and update S&OP actions"),
+        (ExecutiveView, "Tableau de bord de synthèse"),
+        (DemandView, "Demande / prévision vs réel"),
+        (InventoryView, "Stock et couverture"),
+        (SupplyView, "Approvisionnement, commandes ouvertes, transit"),
+        (SupplyEdit, "Modifier les données d'approvisionnement (ETA, statut)"),
+        (RisksView, "Risques et opportunités"),
+        (RisksEdit, "Créer et modifier les risques"),
+        (FinanceView, "Valeurs financières (coûts, valeur du stock)"),
+        (DataExport, "Exporter les tableaux vers Excel / CSV"),
+        (DataImport, "Importer les fichiers Excel, supprimer les données de démo"),
+        (ConfigEdit, "Modifier la configuration métier"),
+        (UsersManage, "Gérer les utilisateurs, rôles et permissions"),
+        (AuditView, "Consulter le journal d'audit"),
+        (ActionsView, "Plan d'actions S&OP et vue réunion"),
+        (ActionsEdit, "Créer et modifier les actions S&OP"),
     ];
 
     /// <summary>Default permission bundles used when the database is first created.</summary>

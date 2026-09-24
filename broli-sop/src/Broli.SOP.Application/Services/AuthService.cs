@@ -41,7 +41,7 @@ public sealed class AuthService(
             {
                 user.LockoutEndUtc = now.Add(LockoutDuration);
                 user.FailedLoginCount = 0;
-                await audit.LogAsync("Account locked", "Security", user.Username, null, $"until {user.LockoutEndUtc:u}", ct);
+                await audit.LogAsync("Compte verrouillé", "Sécurité", user.Username, null, $"jusqu'au {user.LockoutEndUtc:u}", ct);
             }
             await users.SaveChangesAsync(ct);
             logger.LogWarning("Failed login for {Username}", user.Username);
@@ -55,7 +55,7 @@ public sealed class AuthService(
 
         var info = await GetUserInfoAsync(user, ct);
         var token = tokens.Issue(user.Username, user.DisplayName, info.Roles, info.Permissions, info.ScopeAgencies, info.ScopeCategories);
-        await audit.LogAsync("Login", "Security", user.Username, null, null, ct);
+        await audit.LogAsync("Connexion", "Sécurité", user.Username, null, null, ct);
         return new LoginResponse(token.Token, token.ExpiresAtUtc, info);
     }
 
@@ -74,12 +74,12 @@ public sealed class AuthService(
 
     public async Task ChangePasswordAsync(string username, ChangePasswordRequest request, CancellationToken ct)
     {
-        var user = await users.FindByUsernameAsync(username, ct) ?? throw new ValidationException(["Unknown user."]);
-        if (!hasher.Verify(user.PasswordHash, request.CurrentPassword)) throw new ValidationException(["Current password is incorrect."]);
+        var user = await users.FindByUsernameAsync(username, ct) ?? throw new ValidationException(["Utilisateur inconnu."]);
+        if (!hasher.Verify(user.PasswordHash, request.CurrentPassword)) throw new ValidationException(["Le mot de passe actuel est incorrect."]);
         ValidatePassword(request.NewPassword);
         user.PasswordHash = hasher.Hash(request.NewPassword);
         await users.SaveChangesAsync(ct);
-        await audit.LogAsync("Changed password", "Security", user.Username, null, null, ct);
+        await audit.LogAsync("Mot de passe modifié", "Sécurité", user.Username, null, null, ct);
     }
 
     public static IReadOnlyList<string> Split(string? csv) =>
@@ -95,9 +95,9 @@ public sealed class AuthService(
     {
         var errors = new List<string>();
         if (string.IsNullOrEmpty(password) || password.Length < MinPasswordLength)
-            errors.Add($"Password must be at least {MinPasswordLength} characters.");
+            errors.Add($"Le mot de passe doit comporter au moins {MinPasswordLength} caractères.");
         else if (!password.Any(char.IsLetter) || !password.Any(char.IsDigit))
-            errors.Add("Password must contain letters and digits.");
+            errors.Add("Le mot de passe doit contenir des lettres et des chiffres.");
         if (errors.Count > 0) throw new ValidationException(errors);
     }
 }

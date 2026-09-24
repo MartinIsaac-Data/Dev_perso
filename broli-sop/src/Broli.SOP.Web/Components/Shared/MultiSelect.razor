@@ -12,7 +12,7 @@
         <div class="fpanel">
             @if (Options.Count > 8)
             {
-                <input type="search" placeholder="Search @Label.ToLowerInvariant()…" @bind="_q" @bind:event="oninput" />
+                <input type="search" placeholder="Rechercher : @Label.ToLowerInvariant()…" @bind="_q" @bind:event="oninput" />
             }
             <div class="opts">
                 @foreach (var group in Visible.GroupBy(o => o.Group))
@@ -26,11 +26,11 @@
                         </label>
                     }
                 }
-                @if (!Visible.Any()) { <div class="empty" style="padding:10px">No match</div> }
+                @if (!Visible.Any()) { <div class="empty" style="padding:10px">Aucun résultat</div> }
             </div>
             <div class="actions">
-                <button type="button" @onclick="Clear">Clear</button>
-                <button type="button" @onclick="() => _open = false">Done</button>
+                <button type="button" @onclick="Clear">Effacer</button>
+                <button type="button" @onclick="() => _open = false">OK</button>
             </div>
         </div>
     }

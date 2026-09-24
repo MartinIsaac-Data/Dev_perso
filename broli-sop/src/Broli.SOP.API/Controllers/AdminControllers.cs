@@ -19,7 +19,7 @@ public sealed class AuthController(AuthService auth) : ControllerBase
     public async Task<ActionResult<LoginResponse>> Login(LoginRequest request, CancellationToken ct) =>
         await auth.LoginAsync(request, ct) is { } response
             ? response
-            : Unauthorized(new ApiError("Invalid username or password, or the account is locked."));
+            : Unauthorized(new ApiError("Identifiant ou mot de passe incorrect, ou compte verrouillé."));
 
     [HttpGet("me")]
     public async Task<ActionResult<UserInfo>> Me(CancellationToken ct) =>
@@ -47,15 +47,15 @@ public sealed class ImportsController(ImportService imports) : ControllerBase
     public IActionResult Template(string type) =>
         imports.GetTemplateFile(type) is { } t
             ? File(t.Content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", t.FileName)
-            : NotFound(new ApiError($"Unknown template '{type}'."));
+            : NotFound(new ApiError($"Modèle inconnu : « {type} »."));
 
     [HttpPost("preview/{type}")]
     [RequestSizeLimit(MaxFileBytes)]
     public async Task<ActionResult<ImportPreview>> Preview(string type, IFormFile file, CancellationToken ct)
     {
-        if (file.Length == 0) return BadRequest(new ApiError("The file is empty."));
+        if (file.Length == 0) return BadRequest(new ApiError("Le fichier est vide."));
         if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new ApiError("Only .xlsx files are accepted. Save the workbook as Excel Workbook (.xlsx)."));
+            return BadRequest(new ApiError("Seuls les fichiers .xlsx sont acceptés. Enregistrez le classeur au format Classeur Excel (.xlsx)."));
         await using var buffer = new MemoryStream();
         await file.CopyToAsync(buffer, ct);
         buffer.Position = 0;

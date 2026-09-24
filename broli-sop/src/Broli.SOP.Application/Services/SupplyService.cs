@@ -33,14 +33,14 @@ public sealed class SupplyService(
         var weekStart = s.Today.AddDays(-(((int)s.Today.DayOfWeek + 6) % 7));
         var arrivals = new List<ChartPoint>
         {
-            new("Overdue", Mapping.R(open.Where(l => l.Line.Eta is { } e && e < s.Today).Sum(l => l.Tc ?? 0)), "overdue"),
+            new("En retard", Mapping.R(open.Where(l => l.Line.Eta is { } e && e < s.Today).Sum(l => l.Tc ?? 0)), "overdue"),
         };
         for (var w = 0; w < 12; w++)
         {
             var from = weekStart.AddDays(7 * w);
             var to = from.AddDays(7);
             var tc = open.Where(l => l.Line.Eta is { } e && e >= from && e < to && e >= s.Today).Sum(l => l.Tc ?? 0);
-            arrivals.Add(new($"W{ISOWeek.GetWeekOfYear(from.ToDateTime(TimeOnly.MinValue)):00}", Mapping.R(tc), from.ToString("yyyy-MM-dd")));
+            arrivals.Add(new($"S{ISOWeek.GetWeekOfYear(from.ToDateTime(TimeOnly.MinValue)):00}", Mapping.R(tc), from.ToString("yyyy-MM-dd")));
         }
 
         var levels = new[] { EtaRiskLevel.Critical, EtaRiskLevel.SupplyRisk, EtaRiskLevel.Watch, EtaRiskLevel.None }
@@ -100,7 +100,7 @@ public sealed class SupplyService(
         ["DelayDays"] = r => r.DelayDays,
         ["TransitDays"] = r => r.TransitDays,
         ["StockoutDate"] = r => r.StockoutDate,
-        ["Risk"] = r => r.RiskLevel switch { "Critical" => 3, "Supply Risk" => 2, "Watch" => 1, _ => 0 },
+        ["Risk"] = r => Labels.Rank<EtaRiskLevel>(r.RiskLevel),
     };
 
     /// <summary>Updates ETA / status of a line. Every changed field is written to the audit log.</summary>
@@ -119,20 +119,20 @@ public sealed class SupplyService(
 
         if (request.Etd is { } etd) Track("ETD", line.Etd, etd, () => line.Etd = etd);
         if (request.Eta is { } eta) Track("ETA", line.Eta, eta, () => line.Eta = eta);
-        if (request.ActualArrival is { } arr) Track("Actual arrival", line.ActualArrival, arr, () => line.ActualArrival = arr);
-        if (request.CustomsStatus is { } cs) Track("Customs status", line.CustomsStatus, cs, () => line.CustomsStatus = cs);
+        if (request.ActualArrival is { } arr) Track("Arrivée réelle", line.ActualArrival, arr, () => line.ActualArrival = arr);
+        if (request.CustomsStatus is { } cs) Track("Statut douane", line.CustomsStatus, cs, () => line.CustomsStatus = cs);
         if (request.Status is { } st)
         {
-            if (!Labels.TryParse<SupplyStatus>(st, out var status)) throw new ArgumentException($"Unknown status '{st}'.");
-            Track("Status", line.Status, status, () => line.Status = status);
+            if (!Labels.TryParse<SupplyStatus>(st, out var status)) throw new ArgumentException($"Statut inconnu : « {st} ».");
+            Track("Statut", line.Status, status, () => line.Status = status);
         }
-        if (line.Etd is { } d1 && line.Eta is { } d2 && d2 < d1) throw new ArgumentException("ETA cannot be before ETD.");
-        if (line.Status == SupplyStatus.Delivered && line.ActualArrival is null) throw new ArgumentException("A delivered line needs an actual arrival date.");
+        if (line.Etd is { } d1 && line.Eta is { } d2 && d2 < d1) throw new ArgumentException("L'ETA ne peut pas précéder l'ETD.");
+        if (line.Status == SupplyStatus.Delivered && line.ActualArrival is null) throw new ArgumentException("Une ligne livrée doit avoir une date d'arrivée réelle.");
 
         if (changes.Count == 0) return true;
         await repository.SaveChangesAsync(ct);
         foreach (var c in changes)
-            await audit.LogAsync($"Updated {c.Field}", "Supply", $"PO {line.PoNumber}", c.Old, c.New, ct);
+            await audit.LogAsync($"Modification : {c.Field}", "Approvisionnement", $"Commande {line.PoNumber}", c.Old, c.New, ct);
         version.Bump();
         return true;
     }

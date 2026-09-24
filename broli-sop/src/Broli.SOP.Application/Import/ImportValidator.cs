@@ -32,7 +32,7 @@ public static class ImportValidator
             var names = new[] { col.Name }.Concat(col.Aliases).Select(CellParser.Normalize).ToHashSet();
             var i = normalizedHeaders.FindIndex(h => names.Contains(h));
             if (i >= 0) index[col.Name] = i;
-            else if (col.Required) issues.Add(new ImportIssue(0, col.Name, $"Missing required column '{col.Name}'.", "Error"));
+            else if (col.Required) issues.Add(new ImportIssue(0, col.Name, $"Colonne obligatoire manquante : « {col.Name} ».", "Error"));
         }
 
         var samples = sheet.Rows.Take(20).Select(r =>
@@ -42,7 +42,7 @@ public static class ImportValidator
         if (issues.Count > 0) return new ValidationOutcome(issues, rows, sheet.Rows.Count, sheet.Headers, samples);
         if (sheet.Rows.Count == 0)
         {
-            issues.Add(new ImportIssue(0, null, "The sheet contains no data rows.", "Error"));
+            issues.Add(new ImportIssue(0, null, "La feuille ne contient aucune ligne de données.", "Error"));
             return new ValidationOutcome(issues, rows, 0, sheet.Headers, samples);
         }
 
@@ -72,7 +72,7 @@ public static class ImportValidator
             var key = Key(row);
             if (seen.TryGetValue(key, out var firstRow))
             {
-                issues.Add(new ImportIssue(raw.ExcelRow, null, $"Duplicate of row {firstRow} (same key: {key}).", "Error"));
+                issues.Add(new ImportIssue(raw.ExcelRow, null, $"Doublon de la ligne {firstRow} (même clé : {key}).", "Error"));
                 continue;
             }
             seen[key] = raw.ExcelRow;
@@ -80,13 +80,13 @@ public static class ImportValidator
         }
 
         foreach (var (code, _) in newCategories)
-            issues.Add(new ImportIssue(0, "Category", $"New category '{code}' will be created.", "Warning"));
+            issues.Add(new ImportIssue(0, "Category", $"La nouvelle catégorie « {code} » sera créée.", "Warning"));
         foreach (var a in newAgencies)
-            issues.Add(new ImportIssue(0, "Agency", $"New agency '{a}' will be created.", "Warning"));
+            issues.Add(new ImportIssue(0, "Agency", $"La nouvelle agence « {a} » sera créée.", "Warning"));
         foreach (var w in newWarehouses)
-            issues.Add(new ImportIssue(0, "Warehouse", $"New warehouse '{w}' will be created.", "Warning"));
+            issues.Add(new ImportIssue(0, "Warehouse", $"Le nouvel entrepôt « {w} » sera créé.", "Warning"));
         if (issues.Count >= MaxIssues)
-            issues.Add(new ImportIssue(0, null, $"Validation stopped after {MaxIssues} issues. Fix these first.", "Error"));
+            issues.Add(new ImportIssue(0, null, $"Validation arrêtée après {MaxIssues} anomalies. Corrigez d'abord celles-ci.", "Error"));
 
         return new ValidationOutcome(issues, rows, sheet.Rows.Count, sheet.Headers, samples);
     }
@@ -113,7 +113,7 @@ public static class ImportValidator
         if (country is not null)
         {
             countryCode = ResolveCountry(country, l);
-            if (countryCode is null) c.Error("Country", $"Unknown country '{country}'. Use an ISO code (e.g. TR, CN) or a known country name.");
+            if (countryCode is null) c.Error("Country", $"Pays inconnu : « {country} ». Utilisez un code ISO (ex. TR, CN) ou un nom de pays connu.");
         }
         return c.HasError ? null : new SupplierImportRow(code!, name!, countryCode!, transit, lead);
     }
@@ -126,7 +126,7 @@ public static class ImportValidator
         var typeText = c.Text("Material Type");
         var type = CellParser.ParseMaterialType(typeText);
         if (typeText is not null && type is null)
-            c.Error("Material Type", $"Unknown material type '{typeText}'. Use Finished Good, Raw Material or Packaging.");
+            c.Error("Material Type", $"Type d'article inconnu : « {typeText} ». Utilisez Produit fini, Matière première ou Emballage.");
 
         string? categoryCode = null;
         MaterialType? newCategoryType = null;
@@ -135,7 +135,7 @@ public static class ImportValidator
             var key = category.Trim().ToUpperInvariant();
             if (l.CategoryCodes.Contains(key)) categoryCode = key;
             else if (l.CategoryNameToCode.TryGetValue(category.Trim(), out var byName)) categoryCode = byName;
-            else if (type is null) c.Error("Category", $"New category '{category}' needs a Material Type on this row.");
+            else if (type is null) c.Error("Category", $"La nouvelle catégorie « {category} » nécessite un Material Type sur cette ligne.");
             else
             {
                 categoryCode = key;
@@ -149,7 +149,7 @@ public static class ImportValidator
         if (supplier is not null)
         {
             supplierCode = ResolveSupplier(supplier, l);
-            if (supplierCode is null) c.Error("Main Supplier", $"Unknown supplier '{supplier}'. Import SUPPLIER MASTER first.");
+            if (supplierCode is null) c.Error("Main Supplier", $"Fournisseur inconnu : « {supplier} ». Importez d'abord le référentiel fournisseurs.");
         }
 
         var unit = c.Text("Unit")?.ToUpperInvariant();
@@ -193,7 +193,7 @@ public static class ImportValidator
         if (supplierText is not null)
         {
             supplier = ResolveSupplier(supplierText, l);
-            if (supplier is null) c.Error("Supplier", $"Unknown supplier '{supplierText}'. Import SUPPLIER MASTER first.");
+            if (supplier is null) c.Error("Supplier", $"Fournisseur inconnu : « {supplierText} ». Importez d'abord le référentiel fournisseurs.");
         }
         var qty = c.Number("Quantity", positive: true);
         var countryText = c.Text("Country");
@@ -201,25 +201,25 @@ public static class ImportValidator
         if (countryText is not null)
         {
             country = ResolveCountry(countryText, l);
-            if (country is null) c.Error("Country", $"Unknown country '{countryText}'.");
+            if (country is null) c.Error("Country", $"Pays inconnu : « {countryText} ».");
         }
         var etd = c.Date("ETD");
         var eta = c.Date("ETA");
         var statusText = c.Text("Status");
         var status = CellParser.ParseStatus(statusText);
         if (statusText is not null && status is null)
-            c.Error("Status", $"Unknown status '{statusText}'. Expected: {string.Join(", ", Enum.GetValues<SupplyStatus>().Select(Labels.Of))}.");
+            c.Error("Status", $"Statut inconnu : « {statusText} ». Valeurs attendues : {string.Join(", ", Enum.GetValues<SupplyStatus>().Select(Labels.Of))}.");
         var orderDate = c.Date("Order Date");
         var required = c.Date("Required Date");
         var arrival = c.Date("Actual Arrival");
         var delivered = c.Number("Delivered Qty");
         var containers = c.Number("TC");
 
-        if (etd is { } d1 && eta is { } d2 && d2 < d1) c.Error("ETA", $"ETA {d2:dd/MM/yyyy} is before ETD {d1:dd/MM/yyyy}.");
-        if (orderDate is { } o && etd is { } e && e < o) c.Error("ETD", "ETD is before the order date.");
-        if (status == SupplyStatus.Delivered && arrival is null) c.Error("Actual Arrival", "A Delivered line needs an Actual Arrival date.");
+        if (etd is { } d1 && eta is { } d2 && d2 < d1) c.Error("ETA", $"L'ETA du {d2:dd/MM/yyyy} précède l'ETD du {d1:dd/MM/yyyy}.");
+        if (orderDate is { } o && etd is { } e && e < o) c.Error("ETD", "L'ETD précède la date de commande.");
+        if (status == SupplyStatus.Delivered && arrival is null) c.Error("Actual Arrival", "Une ligne livrée doit avoir une date Actual Arrival.");
         if (status is { } st && st != SupplyStatus.Delivered && st != SupplyStatus.Cancelled && eta is null && etd is null)
-            c.Warn("ETA", "Open line without ETD/ETA: its risk cannot be assessed.");
+            c.Warn("ETA", "Ligne ouverte sans ETD/ETA : son risque ne peut pas être évalué.");
 
         return c.HasError ? null : new SupplyImportRow(po!, cartSap!, supplier!, qty!.Value, country,
             orderDate ?? etd ?? eta ?? DateOnly.FromDateTime(DateTime.UtcNow), required, etd, eta, arrival, status!.Value, delivered, containers,
@@ -269,7 +269,7 @@ public static class ImportValidator
         private bool MissingRequired(string column)
         {
             if (!CellParser.IsBlank(Raw(column)) || !Col(column).Required) return false;
-            Error(column, $"Missing value for '{column}'.");
+            Error(column, $"Valeur manquante pour « {column} ».");
             return true;
         }
 
@@ -277,7 +277,7 @@ public static class ImportValidator
         {
             if (MissingRequired(column)) return null;
             var t = CellParser.Text(Raw(column));
-            if (t is { Length: > 200 }) { Error(column, "Value too long (max 200 characters)."); return null; }
+            if (t is { Length: > 200 }) { Error(column, "Valeur trop longue (200 caractères maximum)."); return null; }
             return t;
         }
 
@@ -286,9 +286,9 @@ public static class ImportValidator
             if (MissingRequired(column)) return null;
             var raw = Raw(column);
             if (CellParser.IsBlank(raw)) return null;
-            if (!CellParser.TryNumber(raw, out var v)) { Error(column, $"'{CellParser.Text(raw)}' is not a number."); return null; }
-            if (v < 0) { Error(column, $"Negative value {v} is not allowed."); return null; }
-            if (positive && v == 0) { Error(column, "Value must be greater than zero."); return null; }
+            if (!CellParser.TryNumber(raw, out var v)) { Error(column, $"« {CellParser.Text(raw)} » n'est pas un nombre."); return null; }
+            if (v < 0) { Error(column, $"La valeur négative {v} n'est pas autorisée."); return null; }
+            if (positive && v == 0) { Error(column, "La valeur doit être supérieure à zéro."); return null; }
             return v;
         }
 
@@ -296,7 +296,7 @@ public static class ImportValidator
         {
             var v = Number(column);
             if (v is null) return null;
-            if (v != Math.Floor(v.Value) || v < min || v > max) { Error(column, $"Expected a whole number between {min} and {max}."); return null; }
+            if (v != Math.Floor(v.Value) || v < min || v > max) { Error(column, $"Nombre entier attendu entre {min} et {max}."); return null; }
             return (int)v.Value;
         }
 
@@ -305,7 +305,7 @@ public static class ImportValidator
             if (MissingRequired(column)) return null;
             var raw = Raw(column);
             if (CellParser.IsBlank(raw)) return null;
-            if (!CellParser.TryDate(raw, out var d)) { Error(column, $"Invalid date '{CellParser.Text(raw)}'. Use dd/mm/yyyy."); return null; }
+            if (!CellParser.TryDate(raw, out var d)) { Error(column, $"Date invalide : « {CellParser.Text(raw)} ». Utilisez jj/mm/aaaa."); return null; }
             return d;
         }
 
@@ -314,7 +314,7 @@ public static class ImportValidator
             if (MissingRequired(column)) return null;
             var raw = Raw(column);
             if (CellParser.IsBlank(raw)) return null;
-            if (!CellParser.TryMonth(raw, out var d)) { Error(column, $"Invalid month '{CellParser.Text(raw)}'. Use a date or mm/yyyy."); return null; }
+            if (!CellParser.TryMonth(raw, out var d)) { Error(column, $"Mois invalide : « {CellParser.Text(raw)} ». Utilisez une date ou mm/aaaa."); return null; }
             return d;
         }
 
@@ -325,8 +325,8 @@ public static class ImportValidator
             if (!l.ProductCodes.Contains(cartSap))
             {
                 Error("CArtSAP", l.HasDemoData && l.ProductCodes.Count == 0
-                    ? $"Unknown CArtSAP '{cartSap}'. Only DEMO products exist: import PRODUCT MASTER first."
-                    : $"Unknown CArtSAP '{cartSap}'.");
+                    ? $"CArtSAP inconnu : « {cartSap} ». Seuls des produits de DÉMO existent : importez d'abord le référentiel produits."
+                    : $"CArtSAP inconnu : « {cartSap} ».");
                 return null;
             }
             return cartSap;

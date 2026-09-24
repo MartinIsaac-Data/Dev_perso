@@ -51,9 +51,9 @@ public sealed class ExecutiveService(IAnalyticsEngine engine, ICurrentUser user)
 
         var kpis = new List<KpiCard>
         {
-            Card("TOTAL_STOCK", "Total Stock", totalTc, "number", "TC", prevTc, true, "neutral",
-                stockValue is { } v ? $"Value {v:#,0} {set.General.Currency}" : $"{pos.Count(p => p.Closing > 0)} SKUs in stock", "/inventory"),
-            Card("COVERAGE", "Stock Coverage", coverage, "months", "months", prevCoverage, true,
+            Card("TOTAL_STOCK", "Stock total", totalTc, "number", "TC", prevTc, true, "neutral",
+                stockValue is { } v ? $"Valeur {v:#,0} {set.General.Currency}" : $"{pos.Count(p => p.Closing > 0)} articles en stock", "/inventory"),
+            Card("COVERAGE", "Couverture de stock", coverage, "months", "mois", prevCoverage, true,
                 coverageStatus switch
                 {
                     CoverageStatus.Critical or CoverageStatus.Risk => "bad",
@@ -61,27 +61,27 @@ public sealed class ExecutiveService(IAnalyticsEngine engine, ICurrentUser user)
                     CoverageStatus.Normal => "good",
                     _ => "neutral",
                 },
-                $"Basis: {Labels.Of(set.Coverage.Basis)}, {set.Coverage.AverageMonths} months", "/inventory?view=coverage"),
-            Card("STOCK_AT_RISK", "Stock at Risk", atRisk, "integer", "SKUs", prevAtRisk, false,
+                $"Base : {Labels.Of(set.Coverage.Basis).ToLowerInvariant()}, {set.Coverage.AverageMonths} mois", "/inventory?view=coverage"),
+            Card("STOCK_AT_RISK", "Stock à risque", atRisk, "integer", "articles", prevAtRisk, false,
                 atRisk == 0 ? "good" : atRisk * 10 >= skuCount ? "bad" : "watch",
-                $"{atRiskTc:#,0.#} TC below {set.Coverage.RiskBelowMonths:0.#} months of cover", "/inventory?view=at-risk"),
-            Card("OPEN_ORDERS", "Open Orders", open.Count, "integer", "PO lines", null, true,
-                lateOpen > 0 ? "watch" : "neutral", $"{open.Sum(l => l.Tc ?? 0):#,0.#} TC · {lateOpen} late", "/supply?view=open"),
-            Card("TC_TRANSIT", "TC in Transit", transitTc, "number", "TC", null, true, "neutral",
-                $"{open.Count(l => l.Line.Status.IsInTransit())} shipments on the way", "/supply?view=transit"),
-            Card("TC_PORT", "TC at Port", portTc, "number", "TC", null, false,
+                $"{atRiskTc:#,0.#} TC sous {set.Coverage.RiskBelowMonths:0.#} mois de couverture", "/inventory?view=at-risk"),
+            Card("OPEN_ORDERS", "Commandes ouvertes", open.Count, "integer", "lignes", null, true,
+                lateOpen > 0 ? "watch" : "neutral", $"{open.Sum(l => l.Tc ?? 0):#,0.#} TC · {lateOpen} en retard", "/supply?view=open"),
+            Card("TC_TRANSIT", "TC en transit", transitTc, "number", "TC", null, true, "neutral",
+                $"{open.Count(l => l.Line.Status.IsInTransit())} expéditions en route", "/supply?view=transit"),
+            Card("TC_PORT", "TC au port", portTc, "number", "TC", null, false,
                 open.Any(l => l.Line.Status.IsAtPort() && l.Assessment.Level >= EtaRiskLevel.SupplyRisk) ? "watch" : "neutral",
-                $"{open.Count(l => l.Line.Status.IsAtPort())} shipments at port / customs", "/supply?view=port"),
-            Card("FORECAST_ACCURACY", "Forecast Accuracy", accuracy, "percent", "%", prevAccuracy, true,
-                Traffic(accuracy, set.Forecast.AccuracyTargetPct, 10), $"Target {set.Forecast.AccuracyTargetPct:0}%", "/demand"),
-            Card("SERVICE_LEVEL", "Service Level", service, "percent", "%", prevService, true,
-                Traffic(service, set.Forecast.ServiceLevelTargetPct, 5), $"Target {set.Forecast.ServiceLevelTargetPct:0}%", "/demand?view=under"),
+                $"{open.Count(l => l.Line.Status.IsAtPort())} expéditions au port / en douane", "/supply?view=port"),
+            Card("FORECAST_ACCURACY", "Précision des prévisions", accuracy, "percent", "%", prevAccuracy, true,
+                Traffic(accuracy, set.Forecast.AccuracyTargetPct, 10), $"Objectif {set.Forecast.AccuracyTargetPct:0} %", "/demand"),
+            Card("SERVICE_LEVEL", "Taux de service", service, "percent", "%", prevService, true,
+                Traffic(service, set.Forecast.ServiceLevelTargetPct, 5), $"Objectif {set.Forecast.ServiceLevelTargetPct:0} %", "/demand?view=under"),
             Card("OTIF", "OTIF", otif, "percent", "%", prevOtif, true,
-                Traffic(otif, set.Supply.OtifTargetPct, 10), $"Target {set.Supply.OtifTargetPct:0}% · supplier deliveries", "/supply?view=delivered"),
-            Card("FVA", "Forecast vs Actual", fva, "signedPercent", "%", prevFva, false,
+                Traffic(otif, set.Supply.OtifTargetPct, 10), $"Objectif {set.Supply.OtifTargetPct:0} % · livraisons fournisseurs", "/supply?view=delivered"),
+            Card("FVA", "Écart prévision / réel", fva, "signedPercent", "%", prevFva, false,
                 fva is null ? "neutral" : Math.Abs(fva.Value) <= set.Forecast.OnTrackTolerancePct ? "good"
                     : Math.Abs(fva.Value) <= 2 * set.Forecast.OnTrackTolerancePct ? "watch" : "bad",
-                fva is null ? "No demand in period" : fva > 0 ? "Demand above forecast" : "Demand below forecast", "/demand"),
+                fva is null ? "Aucune demande sur la période" : fva > 0 ? "Demande supérieure à la prévision" : "Demande inférieure à la prévision", "/demand"),
         };
         // "Forecast vs Actual" is better when closer to zero: compare absolute values for the trend arrow.
         kpis[^1] = kpis[^1] with { ChangePct = fva is { } a && prevFva is { } b ? KpiMath.ChangePct(Math.Abs(a), Math.Abs(b)) : null };
@@ -99,8 +99,8 @@ public sealed class ExecutiveService(IAnalyticsEngine engine, ICurrentUser user)
             kpis,
             StockByCategory(pos),
             trendUnit,
-            Trend("Forecast", d => d.Forecast),
-            Trend("Actual", d => d.Actual),
+            Trend("Prévision", d => d.Forecast),
+            Trend("Réel", d => d.Actual),
             CoverageDistribution(pos),
             pos.Where(p => p.AtRisk).OrderBy(p => p.CoverageMonths ?? 0).ThenByDescending(p => p.AvgConsumption)
                 .Take(8).Select(p => p.ToRow(finance)).ToList(),

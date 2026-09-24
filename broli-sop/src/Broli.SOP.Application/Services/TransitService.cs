@@ -9,7 +9,7 @@ public sealed class TransitService(IAnalyticsEngine engine)
         var lines = s.FilterLines(filter).ToList();
         var open = lines.Where(l => l.IsOpen).ToList();
         var rows = lines.Select(l => Row(l, set)).ToList();
-        var shipped = rows.Where(r => r.TransitDays.HasValue && (r.ActualArrival.HasValue || r.Status is "Shipped" or "At Port" or "Customs")).ToList();
+        var shipped = rows.Where(r => r.TransitDays.HasValue && (r.ActualArrival.HasValue || Labels.Is(r.Status, SupplyStatus.Shipped) || Labels.Is(r.Status, SupplyStatus.AtPort) || Labels.Is(r.Status, SupplyStatus.Customs))).ToList();
 
         var lanes = lines.Where(l => l.TransitDays.HasValue && l.Line.ActualArrival.HasValue)
             .GroupBy(l => (l.Line.CountryCode, l.Line.CountryName, l.Line.DefaultTransitDays))
@@ -75,12 +75,12 @@ public sealed class TransitService(IAnalyticsEngine engine)
         var std = LeadTimes.StandardTransitDays(l.SupplierTransitDays, l.CountryCode, l.DefaultTransitDays, set);
         var clearing = l.Status switch
         {
-            SupplyStatus.Delivered => "Cleared",
-            SupplyStatus.Customs => l.CustomsStatus ?? "In clearance",
-            SupplyStatus.AtPort => "Awaiting clearance",
-            SupplyStatus.Shipped => l.Port is null ? "Road — no clearance" : "Not arrived",
+            SupplyStatus.Delivered => "Dédouané",
+            SupplyStatus.Customs => l.CustomsStatus ?? "En dédouanement",
+            SupplyStatus.AtPort => "En attente de dédouanement",
+            SupplyStatus.Shipped => l.Port is null ? "Route — sans dédouanement" : "Pas encore arrivé",
             SupplyStatus.Cancelled => "—",
-            _ => "Not shipped",
+            _ => "Non expédié",
         };
         return new TransitRow(l.Id, l.PoNumber, l.SupplierName, l.SupplierCode, a.Product.CArtSap, a.Product.Description, Mapping.R(l.Quantity),
             a.Product.Unit, Mapping.R(a.Tc), l.CountryName, l.Port, l.Booking, l.BillOfLading, l.Etd, l.Eta, l.ActualArrival, Labels.Of(l.Status),
@@ -105,13 +105,13 @@ public sealed class TransitService(IAnalyticsEngine engine)
         ["TransitDays"] = r => r.TransitDays,
         ["TransitGapDays"] = r => r.TransitGapDays,
         ["DelayDays"] = r => r.DelayDays,
-        ["Risk"] = r => r.Risk switch { "Critical" => 3, "Supply Risk" => 2, "Watch" => 1, _ => 0 },
+        ["Risk"] = r => Labels.Rank<EtaRiskLevel>(r.Risk),
     };
 }
 
 public sealed class SupplierService(IAnalyticsEngine engine)
 {
-    public const string Window = "Deliveries of the last 12 months + open orders";
+    public const string Window = "Livraisons des 12 derniers mois + commandes ouvertes";
 
     public async Task<SupplierDashboard> GetDashboardAsync(SopFilter filter, CancellationToken ct)
     {
@@ -121,7 +121,7 @@ public sealed class SupplierService(IAnalyticsEngine engine)
         var rows = Build(s, lines);
         return new SupplierDashboard(s.Period.Info, rows.Count, Mapping.R(total.OnTimePct), Mapping.R(total.AvgDelayDays), total.OpenOrders,
             Mapping.R(total.InTransitTc), Mapping.R(total.AvgTransitDays), total.PartialDeliveries,
-            rows.Count(r => r.Risk is "Critical" or "High"), s.Settings.Supply.SupplierOnTimeAlertPct, Window);
+            rows.Count(r => Labels.Rank<ImpactLevel>(r.Risk) >= (int)ImpactLevel.High), s.Settings.Supply.SupplierOnTimeAlertPct, Window);
     }
 
     public async Task<IReadOnlyList<SupplierRow>> GetRowsAsync(SopFilter filter, CancellationToken ct)
@@ -141,7 +141,7 @@ public sealed class SupplierService(IAnalyticsEngine engine)
                     Mapping.R(sc.AvgDelayDays), sc.PartialDeliveries, sc.OpenOrders, Mapping.R(sc.InTransitTc), Mapping.R(sc.AvgTransitDays), std,
                     sc.LateOpen, sc.CriticalOpen, sc.Risk);
             })
-            .OrderByDescending(r => r.Risk switch { "Critical" => 3, "High" => 2, "Medium" => 1, _ => 0 })
+            .OrderByDescending(r => Labels.Rank<ImpactLevel>(r.Risk))
             .ThenBy(r => r.OnTimePct ?? 100)
             .ToList();
 }

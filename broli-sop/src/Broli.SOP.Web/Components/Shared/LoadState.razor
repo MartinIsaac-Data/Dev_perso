@@ -1,7 +1,7 @@
 @* Wraps page content: skeleton while the first load runs, a clear error with retry, otherwise the content. *@
 @if (Error is not null)
 {
-    <div class="alert error" role="alert"><span>✖</span><div><b>Could not load the data.</b> @Error <button class="link-btn" @onclick="OnRetry">Retry</button></div></div>
+    <div class="alert error" role="alert"><span>✖</span><div><b>Impossible de charger les données.</b> @Error <button class="link-btn" @onclick="OnRetry">Réessayer</button></div></div>
 }
 else if (!HasData)
 {

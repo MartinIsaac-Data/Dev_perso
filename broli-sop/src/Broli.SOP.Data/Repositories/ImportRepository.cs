@@ -23,7 +23,9 @@ public sealed class ImportRepository(SopDbContext db, IClock clock, ILogger<Impo
             products.ToHashSet(ci),
             suppliers.Select(s => s.Code).ToHashSet(ci),
             suppliers.GroupBy(s => s.Name, ci).ToDictionary(g => g.Key, g => g.First().Code, ci),
-            countries.GroupBy(c => c.Name, ci).ToDictionary(g => g.Key, g => g.First().Code, ci),
+            countries.Select(c => (c.Name, c.Code))
+                .Concat(Seeding.ReferenceData.Countries.Select(c => (Name: c.EnglishName, c.Code)))
+                .GroupBy(c => c.Name, ci).ToDictionary(g => g.Key, g => g.First().Code, ci),
             countries.Select(c => c.Code).ToHashSet(ci),
             categories.GroupBy(c => c.Name, ci).ToDictionary(g => g.Key, g => g.First().Code, ci),
             categories.Select(c => c.Code).ToHashSet(ci),
@@ -33,7 +35,7 @@ public sealed class ImportRepository(SopDbContext db, IClock clock, ILogger<Impo
     }
 
     public async Task<ImportResult> CommitAsync(ImportType type, string fileName, string username, IReadOnlyList<object> rows, int warningCount,
-        bool purgeDemo, CancellationToken ct, string source = "Manual upload")
+        bool purgeDemo, CancellationToken ct, string source = "Chargement manuel")
     {
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>

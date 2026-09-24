@@ -1,11 +1,11 @@
 <div class="pager">
-    <span>@(Total == 0 ? "No rows" : $"{(Query.SafePage - 1) * Query.SafePageSize + 1:N0}–{Math.Min(Query.SafePage * Query.SafePageSize, Total):N0} of {Total:N0}")</span>
-    <select aria-label="Rows per page" value="@Query.PageSize" @onchange="SetSize">
+    <span>@(Total == 0 ? "Aucune ligne" : $"{(Query.SafePage - 1) * Query.SafePageSize + 1:N0}–{Math.Min(Query.SafePage * Query.SafePageSize, Total):N0} sur {Total:N0}")</span>
+    <select aria-label="Lignes par page" value="@Query.PageSize" @onchange="SetSize">
         @foreach (var s in new[] { 10, 25, 50, 100 }) { <option value="@s">@s / page</option> }
     </select>
-    <button class="btn sm" disabled="@(Query.SafePage <= 1)" @onclick="() => Go(Query.SafePage - 1)">‹ Prev</button>
+    <button class="btn sm" disabled="@(Query.SafePage <= 1)" @onclick="() => Go(Query.SafePage - 1)">‹ Préc.</button>
     <span>Page @Query.SafePage / @Math.Max(1, Pages)</span>
-    <button class="btn sm" disabled="@(Query.SafePage >= Pages)" @onclick="() => Go(Query.SafePage + 1)">Next ›</button>
+    <button class="btn sm" disabled="@(Query.SafePage >= Pages)" @onclick="() => Go(Query.SafePage + 1)">Suiv. ›</button>
 </div>
 
 @code {

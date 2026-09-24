@@ -215,16 +215,16 @@ public sealed class SopReadRepository(SopDbContext db) : ISopReadRepository
             .Where(l => EF.Functions.Like(l.PoNumber, pattern))
             .OrderByDescending(l => l.OrderDate).Take(5)
             .Select(l => new { l.PoNumber, Product = l.Product!.Description, l.Status, Supplier = l.Supplier!.Name }).ToListAsync(ct);
-        results.AddRange(pos.Select(p => new SearchResult("PO", p.PoNumber, $"PO {p.PoNumber}", $"{p.Product} · {p.Supplier} · {Application.Labels.Of(p.Status)}",
+        results.AddRange(pos.Select(p => new SearchResult("PO", p.PoNumber, $"Commande {p.PoNumber}", $"{p.Product} · {p.Supplier} · {Application.Labels.Of(p.Status)}",
             $"/supply?view=all&search={Uri.EscapeDataString(p.PoNumber)}")));
 
         var brands = await db.Brands.AsNoTracking().Where(b => EF.Functions.Like(b.Name, pattern)).Take(5).Select(b => b.Name).ToListAsync(ct);
-        results.AddRange(brands.Select(b => new SearchResult("Brand", b, b, "Brand — filter all pages", $"/inventory?brand={Uri.EscapeDataString(b)}")));
+        results.AddRange(brands.Select(b => new SearchResult("Brand", b, b, "Marque — filtre sur toutes les pages", $"/inventory?brand={Uri.EscapeDataString(b)}")));
 
         var families = await db.Categories.AsNoTracking().Where(c => !scoped || cats.Contains(c.Code))
             .Where(c => EF.Functions.Like(c.Name, pattern) || EF.Functions.Like(c.Code, pattern))
             .Take(5).Select(c => new { c.Code, c.Name, c.MaterialType }).ToListAsync(ct);
-        results.AddRange(families.Select(c => new SearchResult("Material", c.Code, c.Name, $"{Application.Labels.Of(c.MaterialType)} family",
+        results.AddRange(families.Select(c => new SearchResult("Material", c.Code, c.Name, $"Famille {Application.Labels.Of(c.MaterialType).ToLowerInvariant()}",
             $"/inventory?category={Uri.EscapeDataString(c.Code)}")));
 
         return results;

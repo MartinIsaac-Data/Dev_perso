@@ -16,13 +16,13 @@ public record ImportDefinition(
     public IEnumerable<ColumnDef> OptionalColumns => Columns.Where(c => !c.Required);
 }
 
-/// <summary>The standard Excel templates. Column names are matched case/space/accent-insensitively, with aliases.</summary>
+/// <summary>The standard Excel templates. Column names are matched case/space/accent-insensitively, with aliases (French and English).</summary>
 public static class ImportDefinitions
 {
     public static readonly IReadOnlyList<ImportDefinition> All =
     [
         new(ImportType.SupplierMaster, "supplier-master", "SUPPLIER MASTER",
-            "Suppliers and their origin country. Import before PRODUCT MASTER and SUPPLY.",
+            "Fournisseurs et pays d'origine. À importer avant PRODUCT MASTER et SUPPLY.",
             [
                 new("Supplier Code", CellKind.Text, true, "code", "supplier id", "code fournisseur"),
                 new("Supplier Name", CellKind.Text, true, "name", "supplier", "fournisseur", "nom"),
@@ -33,7 +33,7 @@ public static class ImportDefinitions
             [["SUP-001", "Anatolia Films Ltd", "TR", 30, 20]]),
 
         new(ImportType.ProductMaster, "product-master", "PRODUCT MASTER",
-            "Articles (CArtSAP). The first real master import removes all DEMO data.",
+            "Articles (CArtSAP). Le premier import réel du référentiel supprime toutes les données de DÉMO.",
             [
                 new("CArtSAP", CellKind.Text, true, "cart sap", "code article", "article", "sku", "material code"),
                 new("Description", CellKind.Text, true, "designation", "libelle", "product"),
@@ -53,7 +53,7 @@ public static class ImportDefinitions
             [["100245", "SPAGHETTI RAHMA 500G", "SPAGHETTI", "Rahma", 0.5, 20, 2400, "Finished Good", "CTN", 8500, null, null, "500g", null]]),
 
         new(ImportType.Sales, "sales", "FACT_SALES",
-            "Monthly demand per product and agency: forecast, actual and (optionally) ordered quantities.",
+            "Demande mensuelle par article et agence : prévision, réel et (en option) quantités commandées.",
             [
                 new("Date", CellKind.Month, true, "month", "period", "mois"),
                 new("CArtSAP", CellKind.Text, true, "cart sap", "code article", "article", "sku"),
@@ -67,7 +67,7 @@ public static class ImportDefinitions
             [[new DateTime(2026, 9, 1), "100245", "SPAGHETTI RAHMA 500G", "Rahma", "Douala", 1200, 1130, 1180]]),
 
         new(ImportType.Inventory, "inventory", "INVENTORY",
-            "Stock snapshot per product and warehouse (month-end recommended).",
+            "Photo du stock par article et entrepôt (fin de mois recommandée).",
             [
                 new("Date", CellKind.Date, true, "snapshot date", "date stock"),
                 new("CArtSAP", CellKind.Text, true, "cart sap", "code article", "article", "sku"),
@@ -78,7 +78,7 @@ public static class ImportDefinitions
             [[new DateTime(2026, 9, 30), "100245", "SPAGHETTI RAHMA 500G", 5400, "Douala Central"]]),
 
         new(ImportType.Supply, "supply", "SUPPLY",
-            "Purchase-order lines and shipment tracking. Key: PO + CArtSAP.",
+            "Lignes de commande d'achat et suivi des expéditions. Clé : PO + CArtSAP.",
             [
                 new("PO", CellKind.Text, true, "po number", "purchase order", "commande", "bon de commande"),
                 new("CArtSAP", CellKind.Text, true, "cart sap", "code article", "article", "sku"),
@@ -103,7 +103,7 @@ public static class ImportDefinitions
               new DateTime(2026, 9, 5), new DateTime(2026, 10, 8), "Shipped", new DateTime(2026, 8, 10), new DateTime(2026, 10, 10), null, null, 1, "Douala", "BK12345", "MEDU1234567", null]]),
 
         new(ImportType.Forecast, "forecast", "FORECAST",
-            "Forward forecast per product and month. Replaces the forecast for the months supplied.",
+            "Prévision future par article et par mois. Remplace la prévision des mois fournis.",
             [
                 new("CArtSAP", CellKind.Text, true, "cart sap", "code article", "article", "sku"),
                 new("Month", CellKind.Month, true, "date", "period", "mois"),

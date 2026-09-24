@@ -16,7 +16,7 @@ public class PeriodResolverTests
     public void Default_period_is_the_latest_stock_month()
     {
         var p = PeriodResolver.Resolve(new SopFilter(), 20260901, Today);
-        Assert.Equal("September 2026", p.Info.Label);
+        Assert.Equal("Septembre 2026", p.Info.Label);
         Assert.Equal(20260901, p.AsOfMonthKey);
         Assert.Equal(Today, p.AsOfDate);
         Assert.Equal([20260801], p.PreviousMonthKeys);
@@ -26,7 +26,7 @@ public class PeriodResolverTests
     public void Multi_month_selection_compares_with_the_preceding_block()
     {
         var p = PeriodResolver.Resolve(new SopFilter { Year = 2026, Months = [7, 8, 9] }, 20260901, Today);
-        Assert.Equal("Jul – Sep 2026", p.Info.Label);
+        Assert.Equal("Juil. – sept. 2026", p.Info.Label);
         Assert.Equal([20260401, 20260501, 20260601], p.PreviousMonthKeys);
     }
 
@@ -67,8 +67,8 @@ public class ActionAdvisorTests
         var actions = ActionAdvisor.Advise(pos, [line], SopSettings.Defaults(), new DateOnly(2026, 9, 23));
 
         Assert.Equal("critical", actions[0].Severity);
-        Assert.StartsWith("Expedite PO 45000232", actions[0].Title);
-        Assert.Contains(actions, a => a.Title.StartsWith("Place a purchase order"));
+        Assert.StartsWith("Accélérer la commande 45000232", actions[0].Title);
+        Assert.Contains(actions, a => a.Title.StartsWith("Passer une commande"));
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class ActionAdvisorTests
     [Fact]
     public void Labels_round_trip()
     {
-        Assert.Equal("In Production", Labels.Of(SupplyStatus.InProduction));
+        Assert.Equal("En production", Labels.Of(SupplyStatus.InProduction));
         Assert.True(Labels.TryParse<SupplyStatus>("at port", out var s));
         Assert.Equal(SupplyStatus.AtPort, s);
         Assert.False(Labels.TryParse<SupplyStatus>("teleported", out _));

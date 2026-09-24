@@ -72,7 +72,7 @@ public class MaterialFlagTests
     {
         var f = MaterialFlags.Compute(Pos(CoverageStatus.Critical, 500, new DateOnly(2026, 10, 1)), 3000, hasLateSupply: true, Alert);
         Assert.Equal([MaterialFlags.Shortage, MaterialFlags.LateSupply], f);
-        Assert.Equal("Critical", MaterialFlags.Risk(f));
+        Assert.Equal("Critique", MaterialFlags.Risk(f));
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class MaterialFlagTests
     {
         var f = MaterialFlags.Compute(Pos(CoverageStatus.Excess, 40000, null), 100, false, Alert);
         Assert.Equal([MaterialFlags.Excess, MaterialFlags.SlowMoving], f);
-        Assert.Equal("Medium", MaterialFlags.Risk(f));
+        Assert.Equal("Moyen", MaterialFlags.Risk(f));
         Assert.Equal("OK", MaterialFlags.Risk([]));
     }
 
@@ -149,7 +149,7 @@ public class LeadTimeAndSupplierTests
         Assert.Equal(1, score.PartialDeliveries);
         Assert.Equal(1, score.OpenOrders);
         Assert.Equal(1, score.InTransitTc);
-        Assert.Equal("Critical", score.Risk);
+        Assert.Equal("Critique", score.Risk);
     }
 }
 
@@ -185,7 +185,7 @@ public class Phase2ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var rows = await c.Get<PagedResult<MaterialRow>>($"api/materials/{kind}/rows?pageSize=500");
         Assert.Equal(d.Skus, rows.Total);
         Assert.Equal(d.Skus, d.Families.Sum(f => f.Skus));
-        Assert.All(rows.Items, r => Assert.Equal(kind == "finished-goods", r.MaterialType == "Finished Good"));
+        Assert.All(rows.Items, r => Assert.Equal(kind == "finished-goods", r.MaterialType == "Produit fini"));
         if (kind == "films") Assert.All(rows.Items, r => Assert.Equal("Films", r.Category));
         foreach (var flag in d.FlagCounts)
             Assert.Equal(flag.Value, rows.Items.Count(r => r.Flags.Contains(flag.Label)));
@@ -195,9 +195,9 @@ public class Phase2ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     public async Task Rahma_films_scenario_is_flagged_as_shortage_with_late_supply()
     {
         var c = await factory.ClientAsync("dg");
-        var rows = await c.Get<PagedResult<MaterialRow>>("api/materials/films/rows?brands=Rahma&view=Shortage&pageSize=50");
+        var rows = await c.Get<PagedResult<MaterialRow>>("api/materials/films/rows?brands=Rahma&view=P%C3%A9nurie&pageSize=50");
         Assert.NotEmpty(rows.Items);
-        Assert.Contains(rows.Items, r => r.Flags.Contains("Late supply") && r.Risk == "Critical");
+        Assert.Contains(rows.Items, r => r.Flags.Contains("Appro en retard") && r.Risk == "Critique");
         Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync("api/materials/unknown")).StatusCode);
     }
 
@@ -211,7 +211,7 @@ public class Phase2ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var rows = await c.Get<PagedResult<TransitRow>>("api/transit/rows?view=water&pageSize=100");
         Assert.All(rows.Items, r =>
         {
-            Assert.Equal("Shipped", r.Status);
+            Assert.Equal("Expédié", r.Status);
             if (r.Port is not null && r.Eta is { } eta) Assert.Equal(eta.AddDays(t.PortToWarehouseDays), r.EstimatedDelivery);
         });
 

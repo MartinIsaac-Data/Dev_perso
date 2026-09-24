@@ -45,11 +45,11 @@ public static class MrpCalculator
 
 public static class MaterialFlags
 {
-    public const string Shortage = "Shortage";
-    public const string StockoutRisk = "Stockout risk";
-    public const string Excess = "Excess";
-    public const string SlowMoving = "Slow moving";
-    public const string LateSupply = "Late supply";
+    public const string Shortage = "Pénurie";
+    public const string StockoutRisk = "Risque de rupture";
+    public const string Excess = "Excédent";
+    public const string SlowMoving = "Rotation lente";
+    public const string LateSupply = "Appro en retard";
 
     public static readonly string[] All = [Shortage, StockoutRisk, LateSupply, Excess, SlowMoving];
 
@@ -79,9 +79,9 @@ public static class MaterialFlags
         asOf.AddDays(Math.Max(leadTimeDays ?? 0, (int)Math.Round(s.RiskBelowMonths * 30.4)));
 
     public static string Risk(IReadOnlyList<string> flags) =>
-        flags.Contains(Shortage) ? "Critical"
-        : flags.Contains(StockoutRisk) || flags.Contains(LateSupply) ? "High"
-        : flags.Contains(Excess) || flags.Contains(SlowMoving) ? "Medium"
+        flags.Contains(Shortage) ? Labels.Of(ImpactLevel.Critical)
+        : flags.Contains(StockoutRisk) || flags.Contains(LateSupply) ? Labels.Of(ImpactLevel.High)
+        : flags.Contains(Excess) || flags.Contains(SlowMoving) ? Labels.Of(ImpactLevel.Medium)
         : "OK";
 }
 
@@ -113,9 +113,9 @@ public static class SupplierScoring
         var critical = open.Count(l => l.Assessment.Level == EtaRiskLevel.Critical);
         var otd = delivered.Count == 0 ? null : KpiMath.Pct(onTime, delivered.Count);
 
-        var risk = critical > 0 ? "Critical"
-            : otd is { } o && o < s.SupplierOnTimeAlertPct || late > 0 ? "High"
-            : otd is { } o2 && o2 < s.OtifTargetPct ? "Medium"
+        var risk = critical > 0 ? Labels.Of(ImpactLevel.Critical)
+            : otd is { } o && o < s.SupplierOnTimeAlertPct || late > 0 ? Labels.Of(ImpactLevel.High)
+            : otd is { } o2 && o2 < s.OtifTargetPct ? Labels.Of(ImpactLevel.Medium)
             : "OK";
 
         return new SupplierScore(lines.Count(l => l.Line.Status != SupplyStatus.Cancelled), delivered.Count, otd,

@@ -4,40 +4,40 @@
 @inject FilterState Filters
 @inject NavigationManager Nav
 
-<PageTitle>Sign in · Broli S&amp;OP</PageTitle>
+<PageTitle>Connexion · Broli S&amp;OP</PageTitle>
 
 <div class="login-page">
     <section class="login-hero">
-        <div class="brand" style="border:0;padding:0"><div class="brand-mark">B</div><div>Broli <small>S&amp;OP Portal</small></div></div>
+        <div class="brand" style="border:0;padding:0"><div class="brand-mark">B</div><div>Broli <small>Portail S&amp;OP</small></div></div>
         <div>
-            <h1>Sales &amp; Operations Planning,<br />one view for every team.</h1>
-            <p>Stock, coverage, supply, transit and risks — computed from the same data for Management, Supply, Sales, Finance, Production, Warehouse and Logistics.</p>
+            <h1>Planification S&amp;OP,<br />une seule vue pour toutes les équipes.</h1>
+            <p>Stock, couverture, approvisionnement, transit et risques — calculés à partir des mêmes données pour la Direction, la Supply, le Commercial, la Finance, la Production, l'Entrepôt et la Logistique.</p>
             <ul>
-                <li>Do we have enough stock?</li>
-                <li>Which products are at risk of stockout?</li>
-                <li>Which orders are late, and what must we decide?</li>
+                <li>Avons-nous assez de stock ?</li>
+                <li>Quels articles risquent la rupture ?</li>
+                <li>Quelles commandes sont en retard, et que devons-nous décider ?</li>
             </ul>
         </div>
-        <small style="color:#7f95b0">Internal use only · access is logged</small>
+        <small style="color:#7f95b0">Usage interne uniquement · les accès sont journalisés</small>
     </section>
     <section class="login-form">
         <form @onsubmit="SignIn" @onsubmit:preventDefault>
             <div>
-                <h1 style="font-size:24px">Sign in</h1>
-                <p class="muted" style="margin:4px 0 0">Use your Broli S&amp;OP account.</p>
+                <h1 style="font-size:24px">Connexion</h1>
+                <p class="muted" style="margin:4px 0 0">Utilisez votre compte S&amp;OP Broli.</p>
             </div>
-            @if (Expired) { <div class="alert warn">Your session has expired. Please sign in again.</div> }
+            @if (Expired) { <div class="alert warn">Votre session a expiré. Veuillez vous reconnecter.</div> }
             @if (_error is not null) { <div class="alert error" role="alert">@_error</div> }
             <div class="field">
-                <label for="u">Username</label>
+                <label for="u">Identifiant</label>
                 <input id="u" autocomplete="username" @bind="_username" required autofocus />
             </div>
             <div class="field">
-                <label for="p">Password</label>
+                <label for="p">Mot de passe</label>
                 <input id="p" type="password" autocomplete="current-password" @bind="_password" required />
             </div>
-            <button class="btn primary" type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
-            <p class="muted" style="font-size:12px;margin:0">5 failed attempts lock the account for 15 minutes. Contact your administrator to reset a password.</p>
+            <button class="btn primary" type="submit" disabled="@_busy">@(_busy ? "Connexion…" : "Se connecter")</button>
+            <p class="muted" style="font-size:12px;margin:0">5 échecs verrouillent le compte pendant 15 minutes. Contactez votre administrateur pour réinitialiser un mot de passe.</p>
         </form>
     </section>
 </div>
@@ -68,7 +68,7 @@
             var response = await Api.LoginAsync(new LoginRequest(_username.Trim(), _password));
             if (response is null)
             {
-                _error = "Invalid username or password, or the account is temporarily locked.";
+                _error = "Identifiant ou mot de passe incorrect, ou compte temporairement verrouillé.";
                 return;
             }
             await Session.SignInAsync(response);

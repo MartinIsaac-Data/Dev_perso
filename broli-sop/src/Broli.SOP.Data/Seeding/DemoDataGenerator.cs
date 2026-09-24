@@ -65,10 +65,10 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
         foreach (var (code, name, type) in new[]
                  {
                      ("SPAGHETTI", "Spaghetti", MaterialType.FinishedGood), ("MACARONI", "Macaroni", MaterialType.FinishedGood),
-                     ("SHORT_PASTA", "Short Pasta", MaterialType.FinishedGood), ("MAYONNAISE", "Mayonnaise", MaterialType.FinishedGood),
+                     ("SHORT_PASTA", "Pâtes courtes", MaterialType.FinishedGood), ("MAYONNAISE", "Mayonnaise", MaterialType.FinishedGood),
                      ("FILMS", "Films", MaterialType.Packaging), ("CARTONS", "Cartons", MaterialType.Packaging),
-                     ("JARS_CAPS", "Jars, Caps & Labels", MaterialType.Packaging), ("DURUM", "Durum Wheat & Semolina", MaterialType.RawMaterial),
-                     ("OILS", "Oils", MaterialType.RawMaterial), ("INGREDIENTS", "Ingredients", MaterialType.RawMaterial),
+                     ("JARS_CAPS", "Bocaux, capsules et étiquettes", MaterialType.Packaging), ("DURUM", "Blé dur et semoule", MaterialType.RawMaterial),
+                     ("OILS", "Huiles", MaterialType.RawMaterial), ("INGREDIENTS", "Ingrédients", MaterialType.RawMaterial),
                  })
         {
             cats[code] = new Category { Code = code, Name = name, MaterialType = type, IsDemo = true };
@@ -80,17 +80,17 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
         db.Brands.AddRange(brands.Values);
 
         var agencies = AgencySpecs.Select(a => new Agency { Code = a.Code, Name = a.Name, IsDemo = true }).ToList();
-        var plant = new Agency { Code = "PLANT", Name = "Plant (internal consumption)", IsInternal = true, IsDemo = true };
+        var plant = new Agency { Code = "PLANT", Name = "Usine (consommation interne)", IsInternal = true, IsDemo = true };
         db.Agencies.AddRange(agencies);
         db.Agencies.Add(plant);
 
         var whDouala = new Warehouse { Code = "WH-DLA", Name = "Douala Central", IsDemo = true };
         var whYaounde = new Warehouse { Code = "WH-YDE", Name = "Yaoundé DC", IsDemo = true };
-        var whPlant = new Warehouse { Code = "WH-PLANT", Name = "Plant RM & Packaging", IsDemo = true };
+        var whPlant = new Warehouse { Code = "WH-PLANT", Name = "Usine MP et emballages", IsDemo = true };
         db.Warehouses.AddRange(whDouala, whYaounde, whPlant);
 
         for (var i = 1; i <= 10; i++)
-            db.Customers.Add(new Customer { Code = $"DEMO-C{i:00}", Name = $"Demo Distributor {i:00}", IsDemo = true });
+            db.Customers.Add(new Customer { Code = $"DEMO-C{i:00}", Name = $"Distributeur démo {i:00}", IsDemo = true });
 
         db.ChangeTracker.DetectChanges();
         await db.SaveChangesAsync(ct);
@@ -123,7 +123,7 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
             Bias = Math.Round(_rnd.NextDouble() * 0.35 - 0.15, 3), Growth = _rnd.NextDouble() < 0.12 ? 0.45 : _rnd.NextDouble() * 0.1 - 0.03,
         });
 
-        var colors = new Dictionary<string, string> { ["Fiona"] = "Red", ["Rahma"] = "Green", ["Armanti"] = "Blue", ["Spaghetto"] = "Yellow", ["Pasta d'Or"] = "Gold" };
+        var colors = new Dictionary<string, string> { ["Fiona"] = "Rouge", ["Rahma"] = "Vert", ["Armanti"] = "Bleu", ["Spaghetto"] = "Jaune", ["Pasta d'Or"] = "Or" };
         var pastaItems = new (string Cat, string Name, string Format, double Weight, double Colisage, double Volume)[]
         {
             ("SPAGHETTI", "Spaghetti", "500g", 0.5, 20, 2400), ("SPAGHETTI", "Spaghetti", "1kg", 1, 10, 1500),
@@ -392,7 +392,7 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
                 if (_today >= po.RevisedEtd && po.RevisedEtd > plannedEtd) { l.Etd = po.RevisedEtd; l.Eta = po.Arrival; }
                 if (l.Status == SupplyStatus.Delayed) l.Eta = po.Arrival;
                 if (l.Status is SupplyStatus.AtPort or SupplyStatus.Customs)
-                    l.CustomsStatus = l.Status == SupplyStatus.Customs ? Pick("Declaration filed", "Physical inspection", "Awaiting duty payment") : "Awaiting unloading";
+                    l.CustomsStatus = l.Status == SupplyStatus.Customs ? Pick("Déclaration déposée", "Inspection physique", "Paiement des droits en attente") : "Déchargement en attente";
                 if (l.Status is SupplyStatus.Planned or SupplyStatus.Confirmed or SupplyStatus.InProduction) { l.Booking = null; l.BillOfLading = null; }
             }
             db.SupplyLines.Add(l);
@@ -449,7 +449,7 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
 
     private void AddRiskRegister(List<Spec> specs, Dictionary<string, Supplier> suppliers)
     {
-        var owners = new[] { "Supply Chain Manager", "Procurement Lead", "Logistics Manager", "Sales Director", "Plant Manager", "Finance Controller" };
+        var owners = new[] { "Responsable supply chain", "Responsable achats", "Responsable logistique", "Directeur commercial", "Directeur d'usine", "Contrôleur financier" };
         Spec Pick(Profile profile, MaterialType? type = null) =>
             specs.Where(s => s.Profile == profile && (type is null || s.Product.MaterialType == type)).OrderBy(_ => _rnd.Next()).FirstOrDefault() ?? specs[0];
 
@@ -516,28 +516,28 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
         var dormant = specs.First(s => s.Profile == Profile.Dormant);
 
         Action("Films Rahma", "Obtenir d'Anatolia Films une expédition partielle par avion (2 t) pour couvrir la rupture du 08/10",
-            "Supply Planner (DEMO)", "Supply Chain", 2, ActionPriority.Critical, ActionStatus.InProgress, risk: "R-0001", spec: rahma, comment: "Devis fret aérien demandé", ageDays: 4);
-        Action("Films Rahma", "Valider le surcoût du fret aérien pour les films Rahma 500g", "Directeur Général (DEMO)", "Direction", 1,
+            "Planificateur appro (DÉMO)", "Supply Chain", 2, ActionPriority.Critical, ActionStatus.InProgress, risk: "R-0001", spec: rahma, comment: "Devis fret aérien demandé", ageDays: 4);
+        Action("Films Rahma", "Valider le surcoût du fret aérien pour les films Rahma 500g", "Directeur général (DÉMO)", "Direction", 1,
             ActionPriority.Critical, ActionStatus.Open, decision: true, risk: "R-0001", spec: rahma, ageDays: 2);
-        Action("Blé dur", "Basculer 30 % du besoin d'octobre sur le blé canadien", "Supply Planner (DEMO)", "Supply Chain", 5,
+        Action("Blé dur", "Basculer 30 % du besoin d'octobre sur le blé canadien", "Planificateur appro (DÉMO)", "Supply Chain", 5,
             ActionPriority.High, ActionStatus.Open, risk: "R-0005", spec: wheat, ageDays: 6);
-        Action("Blé dur", "Arbitrer : achat spot de blé à prix majoré ou arrêt ligne 2 pendant 5 jours", "Directeur Général (DEMO)", "Direction", 3,
+        Action("Blé dur", "Arbitrer : achat spot de blé à prix majoré ou arrêt ligne 2 pendant 5 jours", "Directeur général (DÉMO)", "Direction", 3,
             ActionPriority.High, ActionStatus.Open, decision: true, risk: "R-0005", spec: wheat, ageDays: 2);
-        Action("Port de Douala", "Négocier la franchise de surestaries avec le transitaire", "Logistics Officer (DEMO)", "Logistics", -3,
+        Action("Port de Douala", "Négocier la franchise de surestaries avec le transitaire", "Chargé logistique (DÉMO)", "Logistique", -3,
             ActionPriority.High, ActionStatus.InProgress, risk: "R-0003", comment: "Relance envoyée", ageDays: 20);
-        Action("Forecast", "Revue du forecast Armanti avec l'équipe commerciale", "Sales Manager (DEMO)", "Sales", -6,
+        Action("Forecast", "Revue du forecast Armanti avec l'équipe commerciale", "Responsable commercial (DÉMO)", "Commercial", -6,
             ActionPriority.Medium, ActionStatus.Open, risk: "R-0007", ageDays: 25);
-        Action("Projet Mayonnaise", "Confirmer la capacité bocaux 500 ml et jaune d'oeuf pour le nouveau référencement", "Production Manager (DEMO)",
+        Action("Projet Mayonnaise", "Confirmer la capacité bocaux 500 ml et jaune d'oeuf pour le nouveau référencement", "Responsable production (DÉMO)",
             "Production", 12, ActionPriority.High, ActionStatus.Open, risk: "R-0010", spec: mayo, ageDays: 5);
-        Action("Projet Mayonnaise", "Go / No go du référencement Fiona 500 ml dans la nouvelle enseigne", "Directeur Général (DEMO)", "Direction", 9,
+        Action("Projet Mayonnaise", "Go / No go du référencement Fiona 500 ml dans la nouvelle enseigne", "Directeur général (DÉMO)", "Direction", 9,
             ActionPriority.Medium, ActionStatus.Open, decision: true, risk: "R-0010", spec: mayo, ageDays: 3);
-        Action("Stock dormant", "Décider réutilisation ou mise au rebut du film promo sans consommation", "Finance Controller (DEMO)", "Finance", -1,
+        Action("Stock dormant", "Décider réutilisation ou mise au rebut du film promo sans consommation", "Contrôleur financier (DÉMO)", "Finance", -1,
             ActionPriority.Medium, ActionStatus.Open, decision: true, risk: "R-0012", spec: dormant, ageDays: 15);
-        Action("Maintenance", "Constituer 10 jours de stock tampon spaghetti avant l'arrêt de la ligne 2", "Production Manager (DEMO)", "Production", 14,
+        Action("Maintenance", "Constituer 10 jours de stock tampon spaghetti avant l'arrêt de la ligne 2", "Responsable production (DÉMO)", "Production", 14,
             ActionPriority.High, ActionStatus.InProgress, risk: "R-0009", ageDays: 8);
-        Action("Fournisseurs", "Qualifier un second fournisseur de films (appel d'offres)", "Supply Planner (DEMO)", "Supply Chain", 40,
+        Action("Fournisseurs", "Qualifier un second fournisseur de films (appel d'offres)", "Planificateur appro (DÉMO)", "Supply Chain", 40,
             ActionPriority.Medium, ActionStatus.Open, risk: "R-0002", ageDays: 12);
-        Action("Transport", "Identifier des transporteurs alternatifs Douala–Yaoundé", "Logistics Officer (DEMO)", "Logistics", -10,
+        Action("Transport", "Identifier des transporteurs alternatifs Douala–Yaoundé", "Chargé logistique (DÉMO)", "Logistique", -10,
             ActionPriority.Low, ActionStatus.Done, risk: "R-0013", comment: "Deux transporteurs référencés", ageDays: 30);
     }
 

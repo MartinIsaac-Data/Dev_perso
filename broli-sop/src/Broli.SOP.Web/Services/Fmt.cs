@@ -5,28 +5,28 @@ namespace Broli.SOP.Web.Services;
 /// <summary>Display formatting. Null, NaN and Infinity always render as an em dash — never as "NaN".</summary>
 public static class Fmt
 {
-    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-US");
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("fr-FR");
     public const string Empty = "—";
 
     private static bool Ok(double? v) => v is { } x && double.IsFinite(x);
 
     public static string Num(double? v, int decimals = 0) => Ok(v) ? v!.Value.ToString("N" + decimals, Culture) : Empty;
 
-    /// <summary>Compact: 1.2k, 3.4M.</summary>
+    /// <summary>Compact: 1,2 k, 3,4 M, 1,1 Md.</summary>
     public static string Compact(double? v)
     {
         if (!Ok(v)) return Empty;
         var x = v!.Value;
         var a = Math.Abs(x);
-        return a >= 1e9 ? (x / 1e9).ToString("0.#", Culture) + "B"
-            : a >= 1e6 ? (x / 1e6).ToString("0.#", Culture) + "M"
-            : a >= 1e4 ? (x / 1e3).ToString("0.#", Culture) + "k"
+        return a >= 1e9 ? (x / 1e9).ToString("0.#", Culture) + " Md"
+            : a >= 1e6 ? (x / 1e6).ToString("0.#", Culture) + " M"
+            : a >= 1e4 ? (x / 1e3).ToString("0.#", Culture) + " k"
             : x.ToString(a >= 100 ? "N0" : "0.#", Culture);
     }
 
-    public static string Pct(double? v, int decimals = 1) => Ok(v) ? v!.Value.ToString("N" + decimals, Culture) + "%" : Empty;
-    public static string SignedPct(double? v, int decimals = 1) => Ok(v) ? (v > 0 ? "+" : "") + v!.Value.ToString("N" + decimals, Culture) + "%" : Empty;
-    public static string Months(double? v) => Ok(v) ? v!.Value.ToString("0.0", Culture) + " mo" : Empty;
+    public static string Pct(double? v, int decimals = 1) => Ok(v) ? v!.Value.ToString("N" + decimals, Culture) + " %" : Empty;
+    public static string SignedPct(double? v, int decimals = 1) => Ok(v) ? (v > 0 ? "+" : "") + v!.Value.ToString("N" + decimals, Culture) + " %" : Empty;
+    public static string Months(double? v) => Ok(v) ? v!.Value.ToString("0.0", Culture) + " mois" : Empty;
     public static string Date(DateOnly? d) => d is { } x ? x.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : Empty;
     public static string DateShort(DateOnly? d) => d is { } x ? x.ToString("dd MMM", Culture) : Empty;
     public static string DateTime(System.DateTime? d) => d is { } x ? x.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) : Empty;
@@ -40,14 +40,17 @@ public static class Fmt
         _ => Ok(v) && Math.Abs(v!.Value) < 100 ? Num(v, 1) : Num(v),
     };
 
-    /// <summary>CSS class for a business status label (coverage, risk, severity, forecast status…).</summary>
+    /// <summary>CSS class for a business status label (coverage, risk, severity, forecast status…), French or English.</summary>
     public static string StatusClass(string? status) => (status ?? "").ToLowerInvariant() switch
     {
-        "critical" => "st-critical",
-        "risk" or "supply risk" or "high" or "under forecast" or "overdue" => "st-serious",
-        "watch" or "medium" or "over forecast" or "in progress" => "st-warning",
-        "normal" or "ok" or "on track" or "good" or "delivered" or "closed" => "st-good",
-        "excess" => "st-excess",
+        "critical" or "critique" => "st-critical",
+        "risk" or "supply risk" or "high" or "under forecast" or "overdue"
+            or "risque" or "risque appro" or "élevé" or "haute" or "sous la prévision" or "en retard" or "retardé" => "st-serious",
+        "watch" or "medium" or "over forecast" or "in progress"
+            or "à surveiller" or "moyen" or "moyenne" or "au-dessus de la prévision" or "en cours" => "st-warning",
+        "normal" or "ok" or "on track" or "good" or "delivered" or "closed"
+            or "done" or "conforme" or "bon" or "livré" or "clos" or "terminée" => "st-good",
+        "excess" or "excédent" => "st-excess",
         _ => "st-neutral",
     };
 

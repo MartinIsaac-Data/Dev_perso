@@ -57,7 +57,7 @@ public sealed class ApiClient(HttpClient http, AuthSession session, ClientInfo c
         Forward(message);
         using var response = await http.SendAsync(message, ct);
         if (response.StatusCode == HttpStatusCode.Unauthorized) return null;
-        if (response.StatusCode == HttpStatusCode.TooManyRequests) throw new ApiException("Too many attempts. Wait a minute and try again.");
+        if (response.StatusCode == HttpStatusCode.TooManyRequests) throw new ApiException("Trop de tentatives. Patientez une minute puis réessayez.");
         await EnsureSuccess(response, ct);
         return await response.Content.ReadFromJsonAsync<LoginResponse>(Json, ct);
     }
@@ -83,14 +83,14 @@ public sealed class ApiClient(HttpClient http, AuthSession session, ClientInfo c
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "API unreachable: {Url}", request.RequestUri);
-            throw new ApiException("The S&OP service is unreachable. Try again in a moment.", status: HttpStatusCode.ServiceUnavailable);
+            throw new ApiException("Le service S&OP est injoignable. Réessayez dans un instant.", status: HttpStatusCode.ServiceUnavailable);
         }
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             response.Dispose();
             await session.SignOutAsync();
             nav.NavigateTo("/login?expired=1", forceLoad: false);
-            throw new ApiException("Your session has expired. Please sign in again.", status: HttpStatusCode.Unauthorized);
+            throw new ApiException("Votre session a expiré. Veuillez vous reconnecter.", status: HttpStatusCode.Unauthorized);
         }
         await EnsureSuccess(response, ct);
         return response;
@@ -110,9 +110,9 @@ public sealed class ApiClient(HttpClient http, AuthSession session, ClientInfo c
         response.Dispose();
         throw status switch
         {
-            HttpStatusCode.Forbidden => new ApiException("You do not have permission for this action.", status: status),
-            HttpStatusCode.NotFound => new ApiException(error?.Message ?? "Not found.", status: status),
-            _ => new ApiException(error?.Message ?? $"Request failed ({(int)status}).", error?.Details, status),
+            HttpStatusCode.Forbidden => new ApiException("Vous n'avez pas la permission d'effectuer cette action.", status: status),
+            HttpStatusCode.NotFound => new ApiException(error?.Message ?? "Introuvable.", status: status),
+            _ => new ApiException(error?.Message ?? $"La requête a échoué ({(int)status}).", error?.Details, status),
         };
     }
 

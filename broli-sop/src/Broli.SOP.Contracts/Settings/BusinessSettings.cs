@@ -95,7 +95,7 @@ public class GeneralSettings
     /// <summary>Product-family codes shown on the Films dashboard.</summary>
     public List<string> FilmCategories { get; set; } = ["FILMS"];
     public List<string> Departments { get; set; } =
-        ["Direction", "Supply Chain", "Sales", "Finance", "Production", "Warehouse", "Logistics", "IT"];
+        ["Direction", "Supply Chain", "Commercial", "Finance", "Production", "Entrepôt", "Logistique", "Informatique"];
 }
 
 /// <summary>Automatic alerts: which rules run and who receives them (by permission).</summary>

@@ -92,9 +92,9 @@ Le script effectue les opérations suivantes :
    schéma et les données de référence.
 6. Il vérifie la connexion `admin`, puis **efface le mot de passe de la configuration**.
 
-Ouvrir ensuite `https://sop.broli.local/`, se connecter en `admin`, créer les utilisateurs (*Administration › Users*),
-puis importer les fichiers Excel (*Data Management*). Ordre : Supplier master → Product master → Inventory, Sales,
-Forecast, Supply.
+Ouvrir ensuite `https://sop.broli.local/`, se connecter en `admin`, créer les utilisateurs (*Administration › Utilisateurs*),
+puis importer les fichiers Excel (*Gestion des données*). Ordre : SUPPLIER MASTER → PRODUCT MASTER → INVENTORY, FACT_SALES,
+FORECAST, SUPPLY.
 
 Paramètres utiles :
 
@@ -142,7 +142,7 @@ La base n'est pas modifiée. Si la version retirée avait changé le schéma, re
 | Erreurs | Observateur d'événements › Journaux Windows › Application (sources *IIS AspNetCore Module V2* et *.NET Runtime*) |
 | Sauvegardes | base `BroliSOP` : plan de maintenance SQL habituel (complète quotidienne + journaux) |
 | Recyclage | les pools redémarrent chaque nuit à 03:00 ; le cache d'analyse est reconstruit au démarrage |
-| Rafraîchissement automatique | planificateur intégré à l'API (*Data Management › Sources*) ; une seule instance de l'API doit tourner |
+| Rafraîchissement automatique | planificateur intégré à l'API (*Gestion des données › Sources automatiques*) ; une seule instance de l'API doit tourner |
 | Changer un réglage | Gestionnaire IIS › Pools d'applications › BroliSOP-API › Configuration Editor › `environmentVariables`, puis recycler le pool |
 | Clé JWT | la changer déconnecte tous les utilisateurs ; elle est générée à la première installation |
 
@@ -168,7 +168,7 @@ Réglages disponibles (variables des pools, `__` sépare les niveaux) :
 | « The SQL Server schema is not up to date » | mode B : exécuter `sql\migrations.sql` de la version installée |
 | Le portail s'affiche mais reste figé / « Reconnecting » | WebSocket Protocol non installé dans IIS |
 | Tous les utilisateurs déconnectés après un redémarrage | profil utilisateur non chargé sur le pool Web (`Load User Profile = True`, réglé par le script) |
-| « Too many attempts » pour tout le monde | le portail et l'API sont sur deux serveurs : déclarer le serveur du portail dans `ForwardedHeaders__KnownProxies__0` |
+| « Trop de tentatives » pour tout le monde | le portail et l'API sont sur deux serveurs : déclarer le serveur du portail dans `ForwardedHeaders__KnownProxies__0` |
 
 ## Ce qui a été vérifié, et ce qui reste à valider
 

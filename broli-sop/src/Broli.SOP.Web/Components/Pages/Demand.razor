@@ -1,10 +1,10 @@
 @page "/demand"
 @inherits SopPage
 
-<PageTitle>Demand · Broli S&amp;OP</PageTitle>
+<PageTitle>Demande · Broli S&amp;OP</PageTitle>
 
 <RequirePermission Permission="@Permissions.DemandView">
-    <PageHeader Title="Forecast vs Actual" Question="How good is our forecast, and where does it mislead supply?" Period="_d?.Period">
+    <PageHeader Title="Prévision vs réel" Question="Notre prévision est-elle fiable, et où induit-elle l'approvisionnement en erreur ?" Period="_d?.Period">
         <Actions><ExportMenu Dataset="demand" Query="_q" /></Actions>
     </PageHeader>
 
@@ -13,57 +13,57 @@
         {
             var s = d.Summary;
             <div class="kpis k6">
-                @Tile("Forecast", Fmt.Num(s.Forecast), d.Unit, null, "neutral")
-                @Tile("Actual", Fmt.Num(s.Actual), d.Unit, null, "neutral")
-                @Tile("Variance", (s.Variance > 0 ? "+" : "") + Fmt.Num(s.Variance), d.Unit, "Actual − Forecast", "neutral")
-                @Tile("Variance %", Fmt.SignedPct(s.VariancePct), null, $"Tolerance ±{d.TolerancePct:0}%", Band(s.VariancePct, d.TolerancePct))
-                @Tile("Forecast Accuracy", Fmt.Pct(s.AccuracyPct), null, $"Target {d.AccuracyTargetPct:0}% · 1 − Σ|A−F| / ΣA",
+                @Tile("Prévision", Fmt.Num(s.Forecast), d.Unit, null, "neutral")
+                @Tile("Réel", Fmt.Num(s.Actual), d.Unit, null, "neutral")
+                @Tile("Écart", (s.Variance > 0 ? "+" : "") + Fmt.Num(s.Variance), d.Unit, "Réel − prévision", "neutral")
+                @Tile("Écart %", Fmt.SignedPct(s.VariancePct), null, $"Tolérance ±{d.TolerancePct:0} %", Band(s.VariancePct, d.TolerancePct))
+                @Tile("Précision des prévisions", Fmt.Pct(s.AccuracyPct), null, $"Objectif {d.AccuracyTargetPct:0} % · 1 − Σ|R−P| / ΣR",
                       s.AccuracyPct is null ? "neutral" : s.AccuracyPct >= d.AccuracyTargetPct ? "good" : s.AccuracyPct >= d.AccuracyTargetPct - 10 ? "watch" : "bad")
-                @Tile("BIAS", Fmt.SignedPct(s.BiasPct), null, "(ΣF − ΣA) / ΣA · + = over-forecast", Band(s.BiasPct, d.TolerancePct))
+                @Tile("Biais", Fmt.SignedPct(s.BiasPct), null, "(ΣP − ΣR) / ΣR · + = surprévision", Band(s.BiasPct, d.TolerancePct))
             </div>
 
             <div class="grid g-2 mb">
                 <div class="card">
-                    <div class="card-head"><h2>Forecast vs Actual by month</h2><span class="hint">@d.Unit · click a month to select it</span></div>
+                    <div class="card-head"><h2>Prévision vs réel par mois</h2><span class="hint">@d.Unit · cliquer sur un mois pour le sélectionner</span></div>
                     <div class="card-body">
-                        <SopChart Type="bar" Height="260" Labels="d.TrendMonths" Unit="@d.Unit" AriaLabel="Forecast and actual by month"
-                                  Datasets="@([new ChartDataset("Forecast", d.TrendForecast, "--series-1"), new ChartDataset("Actual", d.TrendActual, "--series-2")])"
+                        <SopChart Type="bar" Height="260" Labels="d.TrendMonths" Unit="@d.Unit" AriaLabel="Prévision et réel par mois"
+                                  Datasets="@([new ChartDataset("Prévision", d.TrendForecast, "--series-1"), new ChartDataset("Réel", d.TrendActual, "--series-2")])"
                                   OnClick="c => SelectMonth(c.Index)" />
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-head"><h2>Forecast accuracy by month</h2><span class="hint">% · target @d.AccuracyTargetPct.ToString("0")%</span></div>
+                    <div class="card-head"><h2>Précision des prévisions par mois</h2><span class="hint">% · objectif @d.AccuracyTargetPct.ToString("0") %</span></div>
                     <div class="card-body">
-                        <SopChart Type="line" Height="260" Labels="d.TrendMonths" Unit="%" Max="100" AriaLabel="Forecast accuracy by month"
-                                  Datasets="@([new ChartDataset("Accuracy", d.TrendAccuracy, "--series-3"),
-                                              new ChartDataset("Target", d.TrendMonths.Select(_ => (double?)d.AccuracyTargetPct).ToList(), "--text-muted", Dashed: true)])" />
+                        <SopChart Type="line" Height="260" Labels="d.TrendMonths" Unit="%" Max="100" AriaLabel="Précision des prévisions par mois"
+                                  Datasets="@([new ChartDataset("Précision", d.TrendAccuracy, "--series-3"),
+                                              new ChartDataset("Objectif", d.TrendMonths.Select(_ => (double?)d.AccuracyTargetPct).ToList(), "--text-muted", Dashed: true)])" />
                     </div>
                 </div>
             </div>
             <div class="grid g-2 mb">
                 <div class="card">
-                    <div class="card-head"><h2>Accuracy of the 15 largest products</h2><span class="hint">% · worst first · click for detail</span></div>
+                    <div class="card-head"><h2>Précision des 15 plus gros articles</h2><span class="hint">% · les moins bons d'abord · cliquer pour le détail</span></div>
                     <div class="card-body">
-                        @if (d.WorstAccuracyByProduct.Count == 0) { <div class="empty">No demand in the period.</div> }
+                        @if (d.WorstAccuracyByProduct.Count == 0) { <div class="empty">Aucune demande sur la période.</div> }
                         else
                         {
                             <SopChart Type="bar" Horizontal="true" Height="@(d.WorstAccuracyByProduct.Count * 24 + 50)" Unit="%" Max="100"
-                                      Labels="d.WorstAccuracyByProduct.Select(p => p.Label).ToList()" AriaLabel="Forecast accuracy by product"
-                                      Datasets="@([new ChartDataset("Accuracy", d.WorstAccuracyByProduct.Select(p => p.Value).ToList(), "--series-1",
+                                      Labels="d.WorstAccuracyByProduct.Select(p => p.Label).ToList()" AriaLabel="Précision des prévisions par article"
+                                      Datasets="@([new ChartDataset("Précision", d.WorstAccuracyByProduct.Select(p => p.Value).ToList(), "--series-1",
                                                   PointColors: d.WorstAccuracyByProduct.Select(p => p.Value >= d.AccuracyTargetPct ? "--series-1" : "--serious").ToList())])"
                                       OnClick="c => Go(ProductUrl(d.WorstAccuracyByProduct[c.Index].Key))" />
                         }
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-head"><h2>BIAS by product family</h2><span class="hint">% · blue = over-forecast, red = under-forecast</span></div>
+                    <div class="card-head"><h2>Biais par famille de produits</h2><span class="hint">% · bleu = surprévision, rouge = sous-prévision</span></div>
                     <div class="card-body">
-                        @if (d.BiasByFamily.Count == 0) { <div class="empty">No demand in the period.</div> }
+                        @if (d.BiasByFamily.Count == 0) { <div class="empty">Aucune demande sur la période.</div> }
                         else
                         {
                             <SopChart Type="bar" Horizontal="true" Height="@(d.BiasByFamily.Count * 30 + 50)" Unit="%"
-                                      Labels="d.BiasByFamily.Select(p => p.Label).ToList()" AriaLabel="Forecast bias by product family"
-                                      Datasets="@([new ChartDataset("BIAS", d.BiasByFamily.Select(p => p.Value).ToList(), "--series-1",
+                                      Labels="d.BiasByFamily.Select(p => p.Label).ToList()" AriaLabel="Biais de prévision par famille de produits"
+                                      Datasets="@([new ChartDataset("Biais", d.BiasByFamily.Select(p => p.Value).ToList(), "--series-1",
                                                   PointColors: d.BiasByFamily.Select(p => p.Value >= 0 ? "--series-1" : "--series-8").ToList())])"
                                       OnClick="c => FilterFamily(d.BiasByFamily[c.Index].Key)" />
                         }
@@ -72,24 +72,24 @@
             </div>
 
             <div class="card">
-                <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView" Items="@([("", $"All products"), ("under", $"Under forecast ({s.UnderForecast})"), ("over", $"Over forecast ({s.OverForecast})"), ("ontrack", $"On track ({s.OnTrack})")])" />
+                <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView" Items="@([("", "Tous les articles"), ("under", $"Sous la prévision ({s.UnderForecast})"), ("over", $"Au-dessus de la prévision ({s.OverForecast})"), ("ontrack", $"Conformes ({s.OnTrack})")])" />
                 <div class="table-tools">
-                    <input type="search" placeholder="Search CArtSAP, product, family, brand…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
-                    <span class="muted">Status uses a ±@d.TolerancePct.ToString("0")% tolerance (Configuration).</span>
+                    <input type="search" placeholder="Rechercher CArtSAP, article, famille, marque…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
+                    <span class="muted">Le statut applique une tolérance de ±@d.TolerancePct.ToString("0") % (Configuration).</span>
                 </div>
                 <div class="table-wrap">
                     <table class="data">
                         <thead>
                             <tr>
-                                <Th Query="_q" Field="CArtSap" OnChanged="LoadRows">Product</Th>
-                                <Th Query="_q" Field="Category" OnChanged="LoadRows">Family</Th>
-                                <Th Query="_q" Field="Forecast" Numeric OnChanged="LoadRows">Forecast</Th>
-                                <Th Query="_q" Field="Actual" Numeric OnChanged="LoadRows">Actual</Th>
-                                <Th Query="_q" Field="Variance" Numeric OnChanged="LoadRows">Variance</Th>
-                                <Th Query="_q" Field="VariancePct" Numeric OnChanged="LoadRows">Variance %</Th>
-                                <Th Query="_q" Field="AccuracyPct" Numeric OnChanged="LoadRows">Accuracy</Th>
-                                <Th Query="_q" Field="BiasPct" Numeric OnChanged="LoadRows">BIAS</Th>
-                                <Th Query="_q" Field="Status" OnChanged="LoadRows">Status</Th>
+                                <Th Query="_q" Field="CArtSap" OnChanged="LoadRows">Article</Th>
+                                <Th Query="_q" Field="Category" OnChanged="LoadRows">Famille</Th>
+                                <Th Query="_q" Field="Forecast" Numeric OnChanged="LoadRows">Prévision</Th>
+                                <Th Query="_q" Field="Actual" Numeric OnChanged="LoadRows">Réel</Th>
+                                <Th Query="_q" Field="Variance" Numeric OnChanged="LoadRows">Écart</Th>
+                                <Th Query="_q" Field="VariancePct" Numeric OnChanged="LoadRows">Écart %</Th>
+                                <Th Query="_q" Field="AccuracyPct" Numeric OnChanged="LoadRows">Précision</Th>
+                                <Th Query="_q" Field="BiasPct" Numeric OnChanged="LoadRows">Biais</Th>
+                                <Th Query="_q" Field="Status" OnChanged="LoadRows">Statut</Th>
                             </tr>
                         </thead>
                         <tbody>
@@ -109,7 +109,7 @@
                             }
                         </tbody>
                     </table>
-                    @if (_rows is { Total: 0 }) { <div class="empty">No product matches.</div> }
+                    @if (_rows is { Total: 0 }) { <div class="empty">Aucun article ne correspond.</div> }
                 </div>
                 <Pager Query="_q" Total="@(_rows?.Total ?? 0)" OnChanged="LoadRows" />
             </div>
@@ -148,9 +148,9 @@
 
     private async Task SelectMonth(int index)
     {
-        if (_d is null || index >= _d.TrendMonths.Count) return;
-        var date = DateTime.ParseExact(_d.TrendMonths[index], "MMM yy", System.Globalization.CultureInfo.GetCultureInfo("en-US"));
-        await Filters.UpdateAsync(f => { f.Year = date.Year; f.Months = [date.Month]; });
+        if (_d?.TrendMonthKeys is not { } keys || index >= keys.Count) return;
+        var key = keys[index];
+        await Filters.UpdateAsync(f => { f.Year = key / 100; f.Months = [key % 100]; });
     }
 
     private Task FilterFamily(string? code) => code is null ? Task.CompletedTask : Filters.UpdateAsync(f => f.Categories = [code]);

@@ -11,7 +11,7 @@ public sealed class MeetingService(
     ICurrentUser user,
     IClock clock)
 {
-    private static readonly CultureInfo En = CultureInfo.GetCultureInfo("en-US");
+    private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
 
     public async Task<MeetingView> GetAsync(SopFilter filter, CancellationToken ct)
     {
@@ -24,11 +24,11 @@ public sealed class MeetingService(
             var k = K(code);
             var value = k.Value is not { } v ? "—" : k.Format switch
             {
-                "percent" => $"{v:0.0}%",
-                "signedPercent" => $"{(v > 0 ? "+" : "")}{v:0.0}%",
-                "months" => $"{v:0.0} mo",
-                "integer" => v.ToString("N0", En),
-                _ => $"{v.ToString(v < 100 ? "N1" : "N0", En)} {k.Unit}",
+                "percent" => $"{v:0.0} %",
+                "signedPercent" => $"{(v > 0 ? "+" : "")}{v:0.0} %",
+                "months" => $"{v:0.0} mois",
+                "integer" => v.ToString("N0", Fr),
+                _ => $"{v.ToString(v < 100 ? "N1" : "N0", Fr)} {k.Unit}",
             };
             return new MeetingKpi(label ?? k.Title, value, k.Subtitle, k.Status, k.DrillUrl);
         }
@@ -41,7 +41,7 @@ public sealed class MeetingService(
             .OrderByDescending(x => Math.Abs(x.A - x.F) * (x.Pos!.Product.UnitCost ?? 1))
             .Take(4)
             .Select(x => new MeetingItem(x.Pos!.Product.Description,
-                $"Forecast {x.F.ToString("N0", En)} vs actual {x.A.ToString("N0", En)} {x.Pos.Product.Unit} ({KpiMath.VariancePct(x.F, x.A):+0;-0}%)",
+                $"Prévision {x.F.ToString("N0", Fr)} pour un réel de {x.A.ToString("N0", Fr)} {x.Pos.Product.Unit} ({KpiMath.VariancePct(x.F, x.A):+0;-0} %)",
                 x.A > x.F ? "high" : "medium", $"products/{Uri.EscapeDataString(x.Pos.Product.CArtSap)}"))
             .ToList();
 
@@ -64,42 +64,42 @@ public sealed class MeetingService(
         return new MeetingView(
             s.Period.Info,
             clock.UtcNow,
-            new MeetingSection("Demand", "Is demand where we planned it?",
-                [FromCard("FORECAST_ACCURACY"), FromCard("FVA", "Actual vs forecast"), FromCard("SERVICE_LEVEL")], demandItems, "demand"),
-            new MeetingSection("Supply", "Can supply and production follow?",
+            new MeetingSection("Demande", "La demande est-elle conforme au plan ?",
+                [FromCard("FORECAST_ACCURACY"), FromCard("FVA", "Réel / prévision"), FromCard("SERVICE_LEVEL")], demandItems, "demand"),
+            new MeetingSection("Approvisionnement", "Les achats et la production peuvent-ils suivre ?",
                 [FromCard("TOTAL_STOCK"),
-                 new("Production (period)", $"{productionTc.ToString("N1", En)} TC", "finished goods produced", "neutral", "finished-goods"),
-                 new("Imports ≤ 30 days", $"{arriving.ToString("N1", En)} TC", $"{open.Count(l => l.Line.Eta is { } e && e <= today.AddDays(30))} shipments", "neutral", "transit?view=arriving"),
-                 new("Orders already late", lateOrders.Count.ToString(En), "MRP order-by date passed", lateOrders.Count > 0 ? "bad" : "good", "mrp?view=late")],
+                 new("Production (période)", $"{productionTc.ToString("N1", Fr)} TC", "produits finis fabriqués", "neutral", "finished-goods"),
+                 new("Imports ≤ 30 jours", $"{arriving.ToString("N1", Fr)} TC", $"{open.Count(l => l.Line.Eta is { } e && e <= today.AddDays(30))} expéditions", "neutral", "transit?view=arriving"),
+                 new("Commandes déjà en retard", lateOrders.Count.ToString(Fr), "date limite de commande MRP dépassée", lateOrders.Count > 0 ? "bad" : "good", "mrp?view=late")],
                 lateOrders.Take(4).Select(r => new MeetingItem(r.Description,
-                    $"Order {r.RecommendedOrder.ToString("N0", En)} {r.Unit} — {r.DaysLate} d late, needed {r.NeedDate:dd/MM}", "critical",
+                    $"Commander {r.RecommendedOrder.ToString("N0", Fr)} {r.Unit} — {r.DaysLate} j de retard, besoin le {r.NeedDate:dd/MM}", "critical",
                     $"products/{Uri.EscapeDataString(r.CArtSap)}")).ToList(), "mrp"),
-            new MeetingSection("Inventory", "Do we have the right stock?",
-                [FromCard("COVERAGE"), FromCard("STOCK_AT_RISK", "Shortage / at risk"),
-                 new("Excess", $"{excess.Count} SKUs", $"{excess.Sum(p => p.Tc(p.Excess) ?? 0).ToString("N1", En)} TC above {s.Settings.Coverage.ExcessAboveMonths:0.#} months",
+            new MeetingSection("Stock", "Avons-nous le bon stock ?",
+                [FromCard("COVERAGE"), FromCard("STOCK_AT_RISK", "Pénurie / à risque"),
+                 new("Excédent", $"{excess.Count} article{(excess.Count > 1 ? "s" : "")}", $"{excess.Sum(p => p.Tc(p.Excess) ?? 0).ToString("N1", Fr)} TC au-delà de {s.Settings.Coverage.ExcessAboveMonths:0.#} mois",
                      excess.Count > 0 ? "watch" : "good", "inventory?view=excess")],
                 d.TopRisks.Take(4).Select(r => new MeetingItem(r.Description,
-                    $"{r.CoverageMonths:0.0} months of cover" + (r.StockoutDate is { } so ? $", stockout {so:dd/MM}" : "") + (r.NextEta is { } eta ? $", next ETA {eta:dd/MM}" : ", no inbound"),
-                    r.CoverageStatus == "Critical" ? "critical" : "high", $"products/{Uri.EscapeDataString(r.CArtSap)}")).ToList(), "inventory?view=at-risk"),
-            new MeetingSection("Logistics", "Are imports arriving on time?",
+                    $"{r.CoverageMonths:0.0} mois de couverture" + (r.StockoutDate is { } so ? $", rupture le {so:dd/MM}" : "") + (r.NextEta is { } eta ? $", prochaine ETA le {eta:dd/MM}" : ", aucun arrivage"),
+                    r.CoverageStatus == Labels.Of(CoverageStatus.Critical) ? "critical" : "high", $"products/{Uri.EscapeDataString(r.CArtSap)}")).ToList(), "inventory?view=at-risk"),
+            new MeetingSection("Logistique", "Les imports arrivent-ils à temps ?",
                 [FromCard("TC_TRANSIT"), FromCard("TC_PORT"),
-                 new("Late shipments", open.Count(l => l.Assessment.Level >= EtaRiskLevel.SupplyRisk).ToString(En),
-                     $"{open.Count(l => l.Assessment.Level == EtaRiskLevel.Critical)} arrive after the stockout",
+                 new("Expéditions en retard", open.Count(l => l.Assessment.Level >= EtaRiskLevel.SupplyRisk).ToString(Fr),
+                     $"{open.Count(l => l.Assessment.Level == EtaRiskLevel.Critical)} arrivent après la rupture",
                      open.Any(l => l.Assessment.Level == EtaRiskLevel.Critical) ? "bad" : "neutral", "transit?view=late")],
-                d.LateSupply.Take(4).Select(l => new MeetingItem($"PO {l.PoNumber} · {l.Product}", l.RiskReason, l.RiskLevel == "Critical" ? "critical" : "high",
+                d.LateSupply.Take(4).Select(l => new MeetingItem($"Commande {l.PoNumber} · {l.Product}", l.RiskReason, l.RiskLevel == Labels.Of(EtaRiskLevel.Critical) ? "critical" : "high",
                     $"products/{Uri.EscapeDataString(l.CArtSap)}")).ToList(), "transit"),
-            new MeetingSection("Risks", "What could hurt service or cash?",
-                [new("Critical detected", detected.Count(x => x.Severity == "Critical").ToString(En), "found in the current data", detected.Any(x => x.Severity == "Critical") ? "bad" : "good", "risks"),
-                 new("Open in register", register.Count(r => !r.IsOpportunity).ToString(En), $"{register.Count(r => !r.IsOpportunity && r.IsOverdue)} overdue", "neutral", "risks")],
+            new MeetingSection("Risques", "Qu'est-ce qui menace le service ou la trésorerie ?",
+                [new("Critiques détectés", detected.Count(x => x.Severity == Labels.Of(ImpactLevel.Critical)).ToString(Fr), "dans les données actuelles", detected.Any(x => x.Severity == Labels.Of(ImpactLevel.Critical)) ? "bad" : "good", "risks"),
+                 new("Ouverts au registre", register.Count(r => !r.IsOpportunity).ToString(Fr), $"{register.Count(r => !r.IsOpportunity && r.IsOverdue)} en retard", "neutral", "risks")],
                 register.Where(r => !r.IsOpportunity).OrderByDescending(r => r.Score).Take(5)
-                    .Select(r => new MeetingItem($"{r.Code} · {r.Description}", $"{r.Category} · impact {r.Impact} · {r.Probability}% · {r.Owner}" + (r.DueDate is { } due ? $" · due {due:dd/MM}" : ""),
+                    .Select(r => new MeetingItem($"{r.Code} · {r.Description}", $"{r.Category} · impact {r.Impact.ToLowerInvariant()} · {r.Probability} % · {r.Owner}" + (r.DueDate is { } due ? $" · échéance {due:dd/MM}" : ""),
                         r.Score >= 12 ? "critical" : r.Score >= 8 ? "high" : "medium", "risks")).ToList(), "risks"),
-            new MeetingSection("Opportunities", "Where can we win?",
-                [new("Open opportunities", register.Count(r => r.IsOpportunity).ToString(En), "in the register", "neutral", "risks"),
-                 new("Demand increases", detected.Count(x => x.Category == "Demand Increase").ToString(En), "forecast well above recent sales", "neutral", "risks")],
+            new MeetingSection("Opportunités", "Où pouvons-nous gagner ?",
+                [new("Opportunités ouvertes", register.Count(r => r.IsOpportunity).ToString(Fr), "au registre", "neutral", "risks"),
+                 new("Hausses de demande", detected.Count(x => x.Category == Labels.Of(RiskCategory.DemandIncrease)).ToString(Fr), "prévision nettement au-dessus des ventes récentes", "neutral", "risks")],
                 register.Where(r => r.IsOpportunity).OrderByDescending(r => r.Score).Take(3)
                     .Select(r => new MeetingItem($"{r.Code} · {r.Description}", $"{r.Owner}" + (r.Action is null ? "" : $" · {r.Action}"), "good", "risks"))
-                    .Concat(detected.Where(x => x.Category == "Demand Increase").Take(2)
+                    .Concat(detected.Where(x => x.Category == Labels.Of(RiskCategory.DemandIncrease)).Take(2)
                         .Select(x => new MeetingItem(x.Product, x.Title, "good", $"products/{Uri.EscapeDataString(x.CArtSap)}"))).ToList(), "risks"),
             allActions.Where(a => a.IsDecision).OrderBy(a => a.DueDate ?? DateOnly.MaxValue).ToList(),
             allActions.Where(a => a.IsOverdue && !a.IsDecision).OrderBy(a => a.DueDate).Take(10).ToList());

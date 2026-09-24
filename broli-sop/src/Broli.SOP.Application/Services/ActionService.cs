@@ -24,9 +24,9 @@ public sealed class ActionService(
     {
         var all = (await repository.ListAsync(ct)).Select(ToDto).ToList();
         var today = clock.Today;
-        var active = all.Where(a => a.Status is "Open" or "In Progress").ToList();
+        var active = all.Where(a => IsActive(a.Status)).ToList();
         return new ActionSummary(
-            all.Count(a => a.Status == "Open"), all.Count(a => a.Status == "In Progress"), active.Count(a => a.IsOverdue),
+            all.Count(a => Labels.Is(a.Status, ActionStatus.Open)), all.Count(a => Labels.Is(a.Status, ActionStatus.InProgress)), active.Count(a => a.IsOverdue),
             active.Count(a => a.DueDate is { } d && d >= today && d <= today.AddDays(7)), active.Count(a => a.IsDecision),
             all.Select(a => a.Owner).Distinct().Order().Select(o => new Option(o, o)).ToList(),
             all.Select(a => a.Department).Distinct().Order().ToList());
@@ -37,22 +37,24 @@ public sealed class ActionService(
         IEnumerable<ActionDto> rows = (await repository.ListAsync(ct)).Select(ToDto).ToList();
         if (!string.IsNullOrWhiteSpace(q.Department)) rows = rows.Where(a => a.Department.Equals(q.Department, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrWhiteSpace(q.Owner)) rows = rows.Where(a => a.Owner.Equals(q.Owner, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(q.Status)) rows = rows.Where(a => Same(a.Status, q.Status));
-        if (!string.IsNullOrWhiteSpace(q.Priority)) rows = rows.Where(a => Same(a.Priority, q.Priority));
+        if (!string.IsNullOrWhiteSpace(q.Status)) rows = rows.Where(a => Same<ActionStatus>(a.Status, q.Status));
+        if (!string.IsNullOrWhiteSpace(q.Priority)) rows = rows.Where(a => Same<ActionPriority>(a.Priority, q.Priority));
         if (q.DueBefore is { } due) rows = rows.Where(a => a.DueDate is { } d && d <= due);
         return q.View?.ToLowerInvariant() switch
         {
-            "active" => rows.Where(a => a.Status is "Open" or "In Progress"),
+            "active" => rows.Where(a => IsActive(a.Status)),
             "overdue" => rows.Where(a => a.IsOverdue),
-            "decisions" => rows.Where(a => a.IsDecision && a.Status is "Open" or "In Progress"),
+            "decisions" => rows.Where(a => a.IsDecision && IsActive(a.Status)),
             "mine" => rows.Where(a => a.Owner.Equals(user.Username, StringComparison.OrdinalIgnoreCase) || a.CreatedBy.Equals(user.Username, StringComparison.OrdinalIgnoreCase)),
-            "done" => rows.Where(a => a.Status is "Done" or "Cancelled"),
+            "done" => rows.Where(a => Labels.Is(a.Status, ActionStatus.Done) || Labels.Is(a.Status, ActionStatus.Cancelled)),
             _ => rows,
         };
     }
 
-    private static bool Same(string label, string value) =>
-        string.Equals(label.Replace(" ", ""), value.Replace(" ", ""), StringComparison.OrdinalIgnoreCase);
+    private static bool IsActive(string status) => Labels.Is(status, ActionStatus.Open) || Labels.Is(status, ActionStatus.InProgress);
+
+    private static bool Same<T>(string label, string value) where T : struct, Enum =>
+        Labels.TryParse<T>(value, out var wanted) && Labels.Is(label, wanted);
 
     public async Task<ActionDto> CreateAsync(ActionUpsert request, CancellationToken ct)
     {
@@ -66,8 +68,8 @@ public sealed class ActionService(
         await ApplyAsync(action, request, ct);
         repository.Add(action);
         await repository.SaveChangesAsync(ct);
-        await audit.LogAsync("Created action", "S&OP Actions", action.Code, null, Describe(action), ct);
-        await NotifyOwnerAsync(action, "assigned to you", ct);
+        await audit.LogAsync("Action créée", "Actions S&OP", action.Code, null, Describe(action), ct);
+        await NotifyOwnerAsync(action, "vous a été attribuée", ct);
         return ToDto((await repository.FindAsync(action.Id, ct))!);
     }
 
@@ -83,26 +85,26 @@ public sealed class ActionService(
         action.UpdatedBy = user.Username;
         await repository.SaveChangesAsync(ct);
         var after = Describe(action);
-        if (before != after) await audit.LogAsync("Updated action", "S&OP Actions", action.Code, before, after, ct);
-        if (!string.Equals(previousOwner, action.Owner, StringComparison.OrdinalIgnoreCase)) await NotifyOwnerAsync(action, "assigned to you", ct);
+        if (before != after) await audit.LogAsync("Action modifiée", "Actions S&OP", action.Code, before, after, ct);
+        if (!string.Equals(previousOwner, action.Owner, StringComparison.OrdinalIgnoreCase)) await NotifyOwnerAsync(action, "vous a été attribuée", ct);
         return ToDto((await repository.FindAsync(id, ct))!);
     }
 
     private async Task ApplyAsync(SopAction a, ActionUpsert r, CancellationToken ct)
     {
         var errors = new List<string>();
-        if (string.IsNullOrWhiteSpace(r.Topic)) errors.Add("Topic is required.");
-        if (string.IsNullOrWhiteSpace(r.Description)) errors.Add("Description is required.");
-        if (string.IsNullOrWhiteSpace(r.Owner)) errors.Add("Owner is required.");
-        if (string.IsNullOrWhiteSpace(r.Department)) errors.Add("Department is required.");
-        if (!Labels.TryParse<ActionPriority>(r.Priority, out var priority)) errors.Add($"Unknown priority '{r.Priority}'.");
-        if (!Labels.TryParse<ActionStatus>(r.Status, out var status)) errors.Add($"Unknown status '{r.Status}'.");
-        if (r.Description?.Length > 2000 || r.Comment?.Length > 2000) errors.Add("Description and comment are limited to 2000 characters.");
+        if (string.IsNullOrWhiteSpace(r.Topic)) errors.Add("Le sujet est obligatoire.");
+        if (string.IsNullOrWhiteSpace(r.Description)) errors.Add("La description est obligatoire.");
+        if (string.IsNullOrWhiteSpace(r.Owner)) errors.Add("Le responsable est obligatoire.");
+        if (string.IsNullOrWhiteSpace(r.Department)) errors.Add("Le service est obligatoire.");
+        if (!Labels.TryParse<ActionPriority>(r.Priority, out var priority)) errors.Add($"Priorité inconnue : « {r.Priority} ».");
+        if (!Labels.TryParse<ActionStatus>(r.Status, out var status)) errors.Add($"Statut inconnu : « {r.Status} ».");
+        if (r.Description?.Length > 2000 || r.Comment?.Length > 2000) errors.Add("La description et le commentaire sont limités à 2 000 caractères.");
         int? riskId = null;
         if (!string.IsNullOrWhiteSpace(r.RiskCode))
         {
             riskId = await repository.RiskIdAsync(r.RiskCode.Trim(), ct);
-            if (riskId is null) errors.Add($"Unknown risk '{r.RiskCode}'.");
+            if (riskId is null) errors.Add($"Risque inconnu : « {r.RiskCode} ».");
         }
         if (errors.Count > 0) throw new ValidationException(errors);
 
@@ -123,8 +125,8 @@ public sealed class ActionService(
     {
         if (a.Status is ActionStatus.Done or ActionStatus.Cancelled) return;
         await notifications.NotifyPersonAsync(a.Owner, "action", a.Priority >= ActionPriority.High ? "high" : "info",
-            $"{(a.IsDecision ? "Decision" : "Action")} {a.Code} {what}",
-            $"{a.Topic}: {a.Description}" + (a.DueDate is { } d ? $" — due {d:dd/MM/yyyy}" : ""), "actions?view=mine", ct);
+            $"{(a.IsDecision ? "La décision" : "L'action")} {a.Code} {what}",
+            $"{a.Topic} : {a.Description}" + (a.DueDate is { } d ? $" — échéance le {d:dd/MM/yyyy}" : ""), "actions?view=mine", ct);
     }
 
     internal ActionDto ToDto(SopAction a) => new(
@@ -133,8 +135,8 @@ public sealed class ActionService(
         a.Status is ActionStatus.Open or ActionStatus.InProgress && a.DueDate is { } d && d < clock.Today, a.CreatedBy, a.UpdatedAtUtc);
 
     private static string Describe(SopAction a) =>
-        $"{a.Topic} | {a.Description} | owner {a.Owner} ({a.Department}) | due {a.DueDate:dd/MM/yyyy} | {Labels.Of(a.Priority)} | {Labels.Of(a.Status)}"
-        + (a.IsDecision ? " | decision" : "") + (a.Comment is null ? "" : $" | {a.Comment}");
+        $"{a.Topic} | {a.Description} | responsable {a.Owner} ({a.Department}) | échéance {a.DueDate:dd/MM/yyyy} | {Labels.Of(a.Priority)} | {Labels.Of(a.Status)}"
+        + (a.IsDecision ? " | décision" : "") + (a.Comment is null ? "" : $" | {a.Comment}");
 
     private static string Search(ActionDto a) => $"{a.Code} {a.Topic} {a.Description} {a.Owner} {a.Department} {a.Comment} {a.RiskCode} {a.CArtSap}";
 
@@ -146,7 +148,7 @@ public sealed class ActionService(
         ["Owner"] = a => a.Owner,
         ["Department"] = a => a.Department,
         ["DueDate"] = a => a.DueDate,
-        ["Priority"] = a => a.Priority switch { "Critical" => 4, "High" => 3, "Medium" => 2, _ => 1 },
+        ["Priority"] = a => Labels.Rank<ActionPriority>(a.Priority, 1),
         ["Status"] = a => a.Status,
     };
 }

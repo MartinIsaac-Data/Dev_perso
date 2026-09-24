@@ -141,11 +141,11 @@ public class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.NotEmpty(atRisk.Items);
         Assert.All(atRisk.Items, r => { Assert.Equal("Films", r.Category); Assert.Equal("Rahma", r.Brand); Assert.True(r.AtRisk); });
 
-        var critical = atRisk.Items.First(r => r.CoverageStatus == "Critical");
+        var critical = atRisk.Items.First(r => r.CoverageStatus == "Critique");
         var detail = await c.Get<ProductDetail>($"api/products/{critical.CArtSap}?{q}");
         Assert.NotEmpty(detail.OpenOrders);
-        Assert.Contains(detail.OpenOrders, o => o.Eta.HasValue && o.RiskLevel == "Critical");
-        Assert.StartsWith("Expedite PO", detail.Actions[0].Title);
+        Assert.Contains(detail.OpenOrders, o => o.Eta.HasValue && o.RiskLevel == "Critique");
+        Assert.StartsWith("Accélérer la commande", detail.Actions[0].Title);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var ok = await c.PutAsJsonAsync($"api/supply/{line.Id}", new SupplyUpdateRequest(null, newEta, null, null, null), ApiFactory.Json);
         Assert.Equal(HttpStatusCode.NoContent, ok.StatusCode);
         var audit = await c.Get<PagedResult<AuditEntryDto>>($"api/admin/audit?search={line.PoNumber}");
-        Assert.Contains(audit.Items, a => a.Action == "Updated ETA" && a.NewValue == newEta.ToString("dd/MM/yyyy"));
+        Assert.Contains(audit.Items, a => a.Action == "Modification : ETA" && a.NewValue == newEta.ToString("dd/MM/yyyy"));
 
         var bad = await c.PutAsJsonAsync($"api/supply/{line.Id}", new SupplyUpdateRequest(newEta.AddDays(30), null, null, null, null), ApiFactory.Json);
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
@@ -226,7 +226,7 @@ public class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         s.Coverage.RiskBelowMonths = 0.2; // below Critical: thresholds no longer increase
         var r = await c.PutAsJsonAsync("api/settings", s, ApiFactory.Json);
         Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
-        Assert.Contains("must increase", await r.Content.ReadAsStringAsync());
+        Assert.Contains("doivent être croissants", await r.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -316,7 +316,7 @@ public class ImportApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var row = Assert.Single(inv.Items);
         Assert.Equal(7000, row.ClosingStock);
         Assert.Equal(9000, row.OpeningStock);
-        Assert.Equal("No Demand", row.CoverageStatus); // no sales / forecast imported yet: never NaN or Infinity
+        Assert.Equal("Sans demande", row.CoverageStatus); // no sales / forecast imported yet: never NaN or Infinity
 
         var history = await c.Get<List<ImportBatchDto>>("api/imports/history");
         Assert.Equal(3, history.Count);

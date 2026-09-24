@@ -3,12 +3,12 @@
 @inject AuthSession Session
 @inject NavigationManager Nav
 
-<PageTitle>S&amp;OP Actions · Broli S&amp;OP</PageTitle>
+<PageTitle>Actions S&amp;OP · Broli S&amp;OP</PageTitle>
 
 <RequirePermission Permission="@Permissions.ActionsView">
-    <PageHeader Title="S&amp;OP Action Plan" Question="Who does what, by when — and which decisions are still open?">
+    <PageHeader Title="Plan d'actions S&OP" Question="Qui fait quoi, pour quand — et quelles décisions restent ouvertes ?">
         <Actions>
-            @if (_canEdit) { <button class="btn sm primary" @onclick="New">+ New action</button> }
+            @if (_canEdit) { <button class="btn sm primary" @onclick="New">+ Nouvelle action</button> }
             <ExportMenu Dataset="actions" Query="_q" UseFilter="false" />
         </Actions>
     </PageHeader>
@@ -17,67 +17,67 @@
     @if (_summary is { } s)
     {
         <div class="kpis">
-            @Tile("Open", s.Open.ToString(), "not started", "neutral", "active")
-            @Tile("In progress", s.InProgress.ToString(), "being worked on", "neutral", "active")
-            @Tile("Overdue", s.Overdue.ToString(), "due date passed", s.Overdue > 0 ? "bad" : "good", "overdue")
-            @Tile("Due this week", s.DueThisWeek.ToString(), "next 7 days", s.DueThisWeek > 0 ? "watch" : "neutral", "active")
-            @Tile("Open decisions", s.OpenDecisions.ToString(), "for the S&OP meeting", s.OpenDecisions > 0 ? "watch" : "good", "decisions")
+            @Tile("Ouvertes", s.Open.ToString(), "non démarrées", "neutral", "active")
+            @Tile("En cours", s.InProgress.ToString(), "en traitement", "neutral", "active")
+            @Tile("En retard", s.Overdue.ToString(), "échéance dépassée", s.Overdue > 0 ? "bad" : "good", "overdue")
+            @Tile("Échéance cette semaine", s.DueThisWeek.ToString(), "7 prochains jours", s.DueThisWeek > 0 ? "watch" : "neutral", "active")
+            @Tile("Décisions ouvertes", s.OpenDecisions.ToString(), "pour la réunion S&OP", s.OpenDecisions > 0 ? "watch" : "good", "decisions")
         </div>
     }
 
     <div class="card">
         <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView"
-                  Items="@([("active", "Active"), ("mine", "Mine"), ("overdue", "Overdue"), ("decisions", "Decisions"), ("done", "Done / cancelled"), ("", "All")])" />
+                  Items="@([("active", "Actives"), ("mine", "Les miennes"), ("overdue", "En retard"), ("decisions", "Décisions"), ("done", "Terminées / annulées"), ("", "Toutes")])" />
         <div class="table-tools">
-            <input type="search" placeholder="Search ID, topic, description, comment…" @bind="_q.Search" @bind:event="oninput" @bind:after="Reload" />
-            <select class="btn sm" @bind="_q.Department" @bind:after="Reload" aria-label="Department">
-                <option value="">All departments</option>@foreach (var d in _summary?.Departments ?? []) { <option>@d</option> }
+            <input type="search" placeholder="Rechercher n°, sujet, description, commentaire…" @bind="_q.Search" @bind:event="oninput" @bind:after="Reload" />
+            <select class="btn sm" @bind="_q.Department" @bind:after="Reload" aria-label="Service">
+                <option value="">Tous les services</option>@foreach (var d in _summary?.Departments ?? []) { <option>@d</option> }
             </select>
-            <select class="btn sm" @bind="_q.Owner" @bind:after="Reload" aria-label="Owner">
-                <option value="">All owners</option>@foreach (var o in _summary?.Owners ?? []) { <option value="@o.Value">@o.Label</option> }
+            <select class="btn sm" @bind="_q.Owner" @bind:after="Reload" aria-label="Responsable">
+                <option value="">Tous les responsables</option>@foreach (var o in _summary?.Owners ?? []) { <option value="@o.Value">@o.Label</option> }
             </select>
-            <select class="btn sm" @bind="_q.Status" @bind:after="Reload" aria-label="Status">
-                <option value="">All statuses</option><option>Open</option><option value="InProgress">In Progress</option><option>Done</option><option>Cancelled</option>
+            <select class="btn sm" @bind="_q.Status" @bind:after="Reload" aria-label="Statut">
+                <option value="">Tous les statuts</option><option>Ouverte</option><option>En cours</option><option>Terminée</option><option>Annulée</option>
             </select>
-            <select class="btn sm" @bind="_q.Priority" @bind:after="Reload" aria-label="Priority">
-                <option value="">All priorities</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option>
+            <select class="btn sm" @bind="_q.Priority" @bind:after="Reload" aria-label="Priorité">
+                <option value="">Toutes les priorités</option><option>Critique</option><option>Haute</option><option>Moyenne</option><option>Basse</option>
             </select>
-            <label class="check">Due by <input type="date" class="btn sm" @bind="_q.DueBefore" @bind:after="Reload" /></label>
+            <label class="check">Échéance avant le <input type="date" class="btn sm" @bind="_q.DueBefore" @bind:after="Reload" /></label>
         </div>
         <div class="table-wrap">
             <table class="data dense">
                 <thead>
                     <tr>
-                        <Th Query="_q" Field="Code" OnChanged="Reload">Action ID</Th>
+                        <Th Query="_q" Field="Code" OnChanged="Reload">N° action</Th>
                         <Th Query="_q" Field="Date" OnChanged="Reload">Date</Th>
-                        <Th Query="_q" Field="Topic" OnChanged="Reload">Topic / description</Th>
-                        <Th Query="_q" Field="Owner" OnChanged="Reload">Owner</Th>
-                        <Th Query="_q" Field="Department" OnChanged="Reload">Department</Th>
-                        <Th Query="_q" Field="DueDate" OnChanged="Reload">Due</Th>
-                        <Th Query="_q" Field="Priority" OnChanged="Reload">Priority</Th>
-                        <Th Query="_q" Field="Status" OnChanged="Reload">Status</Th>
-                        <th>Comment</th>
+                        <Th Query="_q" Field="Topic" OnChanged="Reload">Sujet / description</Th>
+                        <Th Query="_q" Field="Owner" OnChanged="Reload">Responsable</Th>
+                        <Th Query="_q" Field="Department" OnChanged="Reload">Service</Th>
+                        <Th Query="_q" Field="DueDate" OnChanged="Reload">Échéance</Th>
+                        <Th Query="_q" Field="Priority" OnChanged="Reload">Priorité</Th>
+                        <Th Query="_q" Field="Status" OnChanged="Reload">Statut</Th>
+                        <th>Commentaire</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var a in _page?.Items ?? [])
                     {
                         <tr class="@(_canEdit ? "click" : "")" @onclick="() => Edit(a)">
-                            <td class="code">@a.Code@if (a.IsDecision) {<span class="sub" style="color:var(--accent)">◆ decision</span>}</td>
+                            <td class="code">@a.Code@if (a.IsDecision) {<span class="sub" style="color:var(--accent)">◆ décision</span>}</td>
                             <td class="nowrap">@Fmt.Date(a.Date)</td>
                             <td style="min-width:260px"><b>@a.Topic</b><span class="sub" style="color:var(--text-secondary)">@a.Description</span>
-                                @if (a.RiskCode is not null || a.CArtSap is not null) {<span class="sub">@(a.RiskCode is null ? "" : "Risk " + a.RiskCode)@(a.RiskCode is not null && a.CArtSap is not null ? " · " : "")@if (a.CArtSap is { } c) {<a href="@($"products/{Uri.EscapeDataString(c)}")" @onclick:stopPropagation>@c</a>}</span>}</td>
+                                @if (a.RiskCode is not null || a.CArtSap is not null) {<span class="sub">@(a.RiskCode is null ? "" : "Risque " + a.RiskCode)@(a.RiskCode is not null && a.CArtSap is not null ? " · " : "")@if (a.CArtSap is { } c) {<a href="@($"products/{Uri.EscapeDataString(c)}")" @onclick:stopPropagation>@c</a>}</span>}</td>
                             <td>@a.Owner</td>
                             <td>@a.Department</td>
-                            <td class="nowrap">@Fmt.Date(a.DueDate)@if (a.IsOverdue) {<span class="sub" style="color:var(--critical-ink)">▲ overdue</span>}</td>
-                            <td><StatusBadge Status="@(a.Priority == "Low" ? "OK" : a.Priority)" Text="@a.Priority" /></td>
-                            <td><StatusBadge Status="@(a.Status switch { "Done" => "OK", "In Progress" => "In Progress", "Cancelled" => "neutral", _ => a.IsOverdue ? "Critical" : "neutral" })" Text="@a.Status" /></td>
+                            <td class="nowrap">@Fmt.Date(a.DueDate)@if (a.IsOverdue) {<span class="sub" style="color:var(--critical-ink)">▲ en retard</span>}</td>
+                            <td><StatusBadge Status="@(a.Priority == "Basse" ? "OK" : a.Priority)" Text="@a.Priority" /></td>
+                            <td><StatusBadge Status="@(a.Status switch { "Terminée" => "OK", "En cours" => "En cours", "Annulée" => "neutral", _ => a.IsOverdue ? "Critique" : "neutral" })" Text="@a.Status" /></td>
                             <td class="muted" style="max-width:220px">@a.Comment</td>
                         </tr>
                     }
                 </tbody>
             </table>
-            @if (_page is { Total: 0 }) { <div class="empty">No action matches.</div> }
+            @if (_page is { Total: 0 }) { <div class="empty">Aucune action ne correspond.</div> }
         </div>
         <Pager Query="_q" Total="@(_page?.Total ?? 0)" OnChanged="Reload" />
     </div>
@@ -86,30 +86,30 @@
     {
         <div class="modal-back" @onclick="() => _form = null">
             <div class="modal" @onclick:stopPropagation role="dialog" aria-modal="true" aria-label="Action">
-                <div class="modal-head"><h2>@(_editId is null ? "New action" : "Edit " + _editCode)</h2><button class="icon-btn" @onclick="() => _form = null">✕</button></div>
+                <div class="modal-head"><h2>@(_editId is null ? "Nouvelle action" : "Modifier " + _editCode)</h2><button class="icon-btn" @onclick="() => _form = null">✕</button></div>
                 <div class="modal-body">
                     @if (_formError is not null) { <div class="alert error">@_formError</div> }
                     <div class="form">
-                        <div class="field"><label>Topic</label><input @bind="_form.Topic" maxlength="200" /></div>
+                        <div class="field"><label>Sujet</label><input @bind="_form.Topic" maxlength="200" /></div>
                         <div class="field"><label>Date</label><input type="date" @bind="_form.Date" /></div>
                         <div class="field full"><label>Description</label><textarea @bind="_form.Description" maxlength="2000"></textarea></div>
-                        <div class="field"><label>Owner</label><input @bind="_form.Owner" list="owners" /><div class="help">A user's name: they are notified.</div></div>
-                        <div class="field"><label>Department</label><input @bind="_form.Department" list="depts" /></div>
-                        <div class="field"><label>Due date</label><input type="date" @bind="_form.DueDate" /></div>
-                        <div class="field"><label>Priority</label><select @bind="_form.Priority"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>
-                        <div class="field"><label>Status</label><select @bind="_form.Status"><option>Open</option><option value="InProgress">In Progress</option><option>Done</option><option>Cancelled</option></select></div>
-                        <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" @bind="_form.IsDecision" /> Decision for the S&amp;OP meeting</label></div>
-                        <div class="field"><label>Linked risk (optional)</label><input @bind="_form.RiskCode" placeholder="R-0001" /></div>
-                        <div class="field"><label>CArtSAP (optional)</label><input @bind="_form.CArtSap" /></div>
-                        <div class="field full"><label>Comment</label><textarea @bind="_form.Comment" maxlength="2000"></textarea></div>
+                        <div class="field"><label>Responsable</label><input @bind="_form.Owner" list="owners" /><div class="help">Nom d'un utilisateur : il sera notifié.</div></div>
+                        <div class="field"><label>Service</label><input @bind="_form.Department" list="depts" /></div>
+                        <div class="field"><label>Échéance</label><input type="date" @bind="_form.DueDate" /></div>
+                        <div class="field"><label>Priorité</label><select @bind="_form.Priority"><option>Basse</option><option>Moyenne</option><option>Haute</option><option>Critique</option></select></div>
+                        <div class="field"><label>Statut</label><select @bind="_form.Status"><option>Ouverte</option><option>En cours</option><option>Terminée</option><option>Annulée</option></select></div>
+                        <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" @bind="_form.IsDecision" /> Décision pour la réunion S&amp;OP</label></div>
+                        <div class="field"><label>Risque lié (facultatif)</label><input @bind="_form.RiskCode" placeholder="R-0001" /></div>
+                        <div class="field"><label>CArtSAP (facultatif)</label><input @bind="_form.CArtSap" /></div>
+                        <div class="field full"><label>Commentaire</label><textarea @bind="_form.Comment" maxlength="2000"></textarea></div>
                     </div>
                 </div>
-                <div class="modal-foot"><button class="btn" @onclick="() => _form = null">Cancel</button><button class="btn primary" @onclick="Save" disabled="@_saving">Save</button></div>
+                <div class="modal-foot"><button class="btn" @onclick="() => _form = null">Annuler</button><button class="btn primary" @onclick="Save" disabled="@_saving">Enregistrer</button></div>
             </div>
         </div>
     }
     <datalist id="owners">@foreach (var o in _summary?.Owners ?? []) { <option>@o.Value</option> }</datalist>
-    <datalist id="depts">@foreach (var d in new[] { "Direction", "Supply Chain", "Sales", "Finance", "Production", "Warehouse", "Logistics", "IT" }) { <option>@d</option> }</datalist>
+    <datalist id="depts">@foreach (var d in new[] { "Direction", "Supply Chain", "Commercial", "Finance", "Production", "Entrepôt", "Logistique", "Informatique" }) { <option>@d</option> }</datalist>
 </RequirePermission>
 
 @code {
@@ -130,8 +130,8 @@
         public string Owner { get; set; } = "";
         public string Department { get; set; } = "";
         public DateOnly? DueDate { get; set; }
-        public string Priority { get; set; } = "Medium";
-        public string Status { get; set; } = "Open";
+        public string Priority { get; set; } = "Moyenne";
+        public string Status { get; set; } = "Ouverte";
         public bool IsDecision { get; set; }
         public string? RiskCode { get; set; }
         public string? CArtSap { get; set; }
@@ -172,7 +172,7 @@
         _form = new ActionForm
         {
             Topic = a.Topic, Date = a.Date, Description = a.Description, Owner = a.Owner, Department = a.Department, DueDate = a.DueDate,
-            Priority = a.Priority, Status = a.Status.Replace(" ", ""), IsDecision = a.IsDecision, RiskCode = a.RiskCode, CArtSap = a.CArtSap, Comment = a.Comment,
+            Priority = a.Priority, Status = a.Status, IsDecision = a.IsDecision, RiskCode = a.RiskCode, CArtSap = a.CArtSap, Comment = a.Comment,
         };
     }
 

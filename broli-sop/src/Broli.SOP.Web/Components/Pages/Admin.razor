@@ -6,20 +6,20 @@
 <PageTitle>Administration · Broli S&amp;OP</PageTitle>
 
 <RequirePermission Permission="@Permissions.UsersManage">
-    <PageHeader Title="Administration" Question="Who can see and change what?">
-        <Actions><button class="btn sm primary" @onclick="NewUser">+ New user</button></Actions>
+    <PageHeader Title="Administration" Question="Qui peut voir et modifier quoi ?">
+        <Actions><button class="btn sm primary" @onclick="NewUser">+ Nouvel utilisateur</button></Actions>
     </PageHeader>
     @if (_error is not null) { <div class="alert error">@_error</div> }
     @if (_ok is not null) { <div class="alert ok">✔ @_ok</div> }
 
     <div class="card mb">
-        <ViewTabs Current="@_tab" OnSelect="t => _tab = t" Items="@([("users", $"Users ({_users.Count})"), ("roles", $"Roles & permissions ({_roles.Count})")])" />
+        <ViewTabs Current="@_tab" OnSelect="t => _tab = t" Items="@([("users", $"Utilisateurs ({_users.Count})"), ("roles", $"Rôles et permissions ({_roles.Count})")])" />
         @if (_tab == "users")
         {
-            <div class="table-tools"><input type="search" placeholder="Search users…" @bind="_search" @bind:event="oninput" /></div>
+            <div class="table-tools"><input type="search" placeholder="Rechercher un utilisateur…" @bind="_search" @bind:event="oninput" /></div>
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>User</th><th>Department</th><th>Roles</th><th>Data scope</th><th>Last login</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>Utilisateur</th><th>Service</th><th>Rôles</th><th>Périmètre de données</th><th>Dernière connexion</th><th>Statut</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var u in _users.Where(u => _search.Length == 0 || $"{u.Username} {u.DisplayName} {u.Department} {string.Join(' ', u.Roles)}".Contains(_search, StringComparison.OrdinalIgnoreCase)))
                         {
@@ -30,11 +30,11 @@
                                 <td class="muted">@Scope(u)</td>
                                 <td class="nowrap">@Fmt.DateTime(u.LastLoginUtc)</td>
                                 <td>
-                                    <StatusBadge Status="@(u.IsActive ? "OK" : "Critical")" Text="@(u.IsActive ? "Active" : "Inactive")" />
-                                    @if (u.IsLockedOut) { <StatusBadge Status="High" Text="Locked" /> }
-                                    @if (u.IsDemo) { <span class="badge st-neutral">DEMO</span> }
+                                    <StatusBadge Status="@(u.IsActive ? "OK" : "Critical")" Text="@(u.IsActive ? "Actif" : "Inactif")" />
+                                    @if (u.IsLockedOut) { <StatusBadge Status="High" Text="Verrouillé" /> }
+                                    @if (u.IsDemo) { <span class="badge st-neutral">DÉMO</span> }
                                 </td>
-                                <td><button class="btn sm" @onclick="() => EditUser(u)">Edit</button></td>
+                                <td><button class="btn sm" @onclick="() => EditUser(u)">Modifier</button></td>
                             </tr>
                         }
                     </tbody>
@@ -43,11 +43,11 @@
         }
         else
         {
-            <div class="table-tools"><span class="muted">Roles are bundles of permissions. Changes apply at the user's next sign-in. New roles can be added without code changes.</span>
-                <button class="btn sm" @onclick="NewRole">+ New role</button></div>
+            <div class="table-tools"><span class="muted">Les rôles regroupent des permissions. Les modifications s'appliquent à la prochaine connexion de l'utilisateur. De nouveaux rôles peuvent être ajoutés sans modifier le code.</span>
+                <button class="btn sm" @onclick="NewRole">+ Nouveau rôle</button></div>
             <div class="table-wrap">
                 <table class="data perm-grid">
-                    <thead><tr><th>Permission</th>@foreach (var r in _roles) { <th title="@r.Description">@r.Name<span class="sub">@r.UserCount users</span></th> }</tr></thead>
+                    <thead><tr><th>Permission</th>@foreach (var r in _roles) { <th title="@r.Description">@r.Name<span class="sub">@r.UserCount utilisateurs</span></th> }</tr></thead>
                     <tbody>
                         @foreach (var p in _permissions)
                         {
@@ -62,36 +62,36 @@
                     </tbody>
                 </table>
             </div>
-            <div class="toolbar" style="padding:12px"><button class="btn primary" @onclick="SaveRoles" disabled="@(!_dirty)">Save permissions</button></div>
+            <div class="toolbar" style="padding:12px"><button class="btn primary" @onclick="SaveRoles" disabled="@(!_dirty)">Enregistrer les permissions</button></div>
         }
     </div>
 
     @if (_user is not null)
     {
         <div class="modal-back" @onclick="() => _user = null">
-            <div class="modal" @onclick:stopPropagation role="dialog" aria-modal="true" aria-label="User">
-                <div class="modal-head"><h2>@(_userId is null ? "New user" : "Edit " + _user.Username)</h2><button class="icon-btn" @onclick="() => _user = null">✕</button></div>
+            <div class="modal" @onclick:stopPropagation role="dialog" aria-modal="true" aria-label="Utilisateur">
+                <div class="modal-head"><h2>@(_userId is null ? "Nouvel utilisateur" : "Modifier " + _user.Username)</h2><button class="icon-btn" @onclick="() => _user = null">✕</button></div>
                 <div class="modal-body">
                     @if (_formError is not null) { <div class="alert error">@_formError</div> }
                     <div class="form">
-                        <div class="field"><label>Username</label><input @bind="_user.Username" disabled="@(_userId is not null)" autocomplete="off" /></div>
-                        <div class="field"><label>Display name</label><input @bind="_user.DisplayName" /></div>
+                        <div class="field"><label>Identifiant</label><input @bind="_user.Username" disabled="@(_userId is not null)" autocomplete="off" /></div>
+                        <div class="field"><label>Nom affiché</label><input @bind="_user.DisplayName" /></div>
                         <div class="field"><label>E-mail</label><input type="email" @bind="_user.Email" /></div>
-                        <div class="field"><label>Department</label><input @bind="_user.Department" list="depts" /></div>
-                        <div class="field full"><label>Roles</label>
+                        <div class="field"><label>Service</label><input @bind="_user.Department" list="depts" /></div>
+                        <div class="field full"><label>Rôles</label>
                             <div class="chips">@foreach (var r in _roles) { var name = r.Name; <label class="check chip" style="padding:4px 10px"><input type="checkbox" checked="@_user.Roles.Contains(name)" @onchange="e => ToggleRole(name, (bool)e.Value!)" /> @name</label> }</div></div>
-                        <div class="field"><label>@(_userId is null ? "Initial password" : "New password (leave empty to keep)")</label><input type="password" @bind="_user.Password" autocomplete="new-password" />
-                            <div class="help">At least 10 characters with letters and digits.</div></div>
-                        <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" @bind="_user.IsActive" /> Active</label></div>
-                        <div class="field full"><label>Data scope — agencies</label>
+                        <div class="field"><label>@(_userId is null ? "Mot de passe initial" : "Nouveau mot de passe (laisser vide pour conserver)")</label><input type="password" @bind="_user.Password" autocomplete="new-password" />
+                            <div class="help">Au moins 10 caractères, avec des lettres et des chiffres.</div></div>
+                        <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" @bind="_user.IsActive" /> Actif</label></div>
+                        <div class="field full"><label>Périmètre de données — agences</label>
                             <div class="chips">@foreach (var a in Filters.Options?.Agencies ?? []) { var code = a.Value; <label class="check chip" style="padding:4px 10px"><input type="checkbox" checked="@_user.ScopeAgencies.Contains(code)" @onchange="e => Toggle(_user.ScopeAgencies, code, (bool)e.Value!)" /> @a.Label</label> }</div>
-                            <div class="help">None ticked = all agencies. Applied by the API to every view, export and search.</div></div>
-                        <div class="field full"><label>Data scope — product families</label>
+                            <div class="help">Aucune case cochée = toutes les agences. Appliqué par l'API à chaque vue, export et recherche.</div></div>
+                        <div class="field full"><label>Périmètre de données — familles de produits</label>
                             <div class="chips">@foreach (var c in Filters.Options?.Categories ?? []) { var code = c.Value; <label class="check chip" style="padding:4px 10px"><input type="checkbox" checked="@_user.ScopeCategories.Contains(code)" @onchange="e => Toggle(_user.ScopeCategories, code, (bool)e.Value!)" /> @c.Label</label> }</div>
-                            <div class="help">None ticked = all families. Takes effect at the user's next sign-in.</div></div>
+                            <div class="help">Aucune case cochée = toutes les familles. Pris en compte à la prochaine connexion de l'utilisateur.</div></div>
                     </div>
                 </div>
-                <div class="modal-foot"><button class="btn" @onclick="() => _user = null">Cancel</button><button class="btn primary" @onclick="SaveUser">Save</button></div>
+                <div class="modal-foot"><button class="btn" @onclick="() => _user = null">Annuler</button><button class="btn primary" @onclick="SaveUser">Enregistrer</button></div>
             </div>
         </div>
     }
@@ -99,16 +99,16 @@
     {
         <div class="modal-back" @onclick="() => _newRole = null">
             <div class="modal" style="width:min(460px,100%)" @onclick:stopPropagation role="dialog" aria-modal="true">
-                <div class="modal-head"><h2>New role</h2></div>
+                <div class="modal-head"><h2>Nouveau rôle</h2></div>
                 <div class="modal-body"><div class="form">
-                    <div class="field full"><label>Name</label><input @bind="_newRole.Name" /></div>
+                    <div class="field full"><label>Nom</label><input @bind="_newRole.Name" /></div>
                     <div class="field full"><label>Description</label><input @bind="_newRole.Description" /></div>
                 </div></div>
-                <div class="modal-foot"><button class="btn" @onclick="() => _newRole = null">Cancel</button><button class="btn primary" @onclick="CreateRole">Create</button></div>
+                <div class="modal-foot"><button class="btn" @onclick="() => _newRole = null">Annuler</button><button class="btn primary" @onclick="CreateRole">Créer</button></div>
             </div>
         </div>
     }
-    <datalist id="depts"><option>Direction</option><option>Supply Chain</option><option>Sales</option><option>Finance</option><option>Production</option><option>Warehouse</option><option>Logistics</option><option>IT</option></datalist>
+    <datalist id="depts"><option>Direction</option><option>Supply Chain</option><option>Commercial</option><option>Finance</option><option>Production</option><option>Entrepôt</option><option>Logistique</option><option>Informatique</option></datalist>
 </RequirePermission>
 
 @code {
@@ -128,9 +128,9 @@
     private static void Toggle(List<string> list, string code, bool on) { if (on) { if (!list.Contains(code)) list.Add(code); } else list.Remove(code); }
 
     private static string Scope(UserDto u) =>
-        u.ScopeAgencies.Count + u.ScopeCategories.Count == 0 ? "all data"
-        : string.Join(" · ", new[] { u.ScopeAgencies.Count > 0 ? "agencies: " + string.Join(", ", u.ScopeAgencies) : null,
-                                     u.ScopeCategories.Count > 0 ? "families: " + string.Join(", ", u.ScopeCategories) : null }.Where(x => x is not null));
+        u.ScopeAgencies.Count + u.ScopeCategories.Count == 0 ? "toutes les données"
+        : string.Join(" · ", new[] { u.ScopeAgencies.Count > 0 ? "agences : " + string.Join(", ", u.ScopeAgencies) : null,
+                                     u.ScopeCategories.Count > 0 ? "familles : " + string.Join(", ", u.ScopeCategories) : null }.Where(x => x is not null));
     private sealed class RoleForm { public string Name { get; set; } = ""; public string Description { get; set; } = ""; }
 
     private string _tab = "users", _search = "";
@@ -168,7 +168,7 @@
         {
             foreach (var r in _roles.Where(r => !r.Permissions.ToHashSet().SetEquals(_matrix[r.Id])))
                 await Api.SendAsync(HttpMethod.Put, $"api/admin/roles/{r.Id}", new RoleUpsert(r.Name, r.Description, _matrix[r.Id].ToList()));
-            _ok = "Permissions saved. They apply at each user's next sign-in.";
+            _ok = "Permissions enregistrées. Elles s'appliquent à la prochaine connexion de chaque utilisateur.";
             await LoadAsync();
         }
         catch (ApiException ex) { _error = ex.Full; }
@@ -210,7 +210,7 @@
         {
             if (_userId is { } id) await Api.PutAsync<UserDto>($"api/admin/users/{id}", body);
             else await Api.PostAsync<UserDto>("api/admin/users", body);
-            _ok = $"User {_user.Username} saved.";
+            _ok = $"Utilisateur {_user.Username} enregistré.";
             _user = null;
             await LoadAsync();
         }

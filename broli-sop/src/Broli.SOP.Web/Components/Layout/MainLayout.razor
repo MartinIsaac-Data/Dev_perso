@@ -9,7 +9,7 @@
 
 @if (!_ready)
 {
-    <div class="splash">Loading Broli S&amp;OP Portal…</div>
+    <div class="splash">Chargement du portail S&amp;OP Broli…</div>
 }
 else if (IsLoginPage)
 {
@@ -19,42 +19,42 @@ else if (Session.IsAuthenticated)
 {
     @if (Ui.Busy) { <div class="loading-bar" aria-hidden="true"></div> }
     <div class="shell @(Ui.MeetingMode ? "meeting" : "") @(_navOpen ? "nav-open" : "")">
-        <aside class="sidebar" aria-label="Main navigation">
-            <div class="brand"><div class="brand-mark">B</div><div>Broli <small>S&amp;OP Portal</small></div></div>
+        <aside class="sidebar" aria-label="Navigation principale">
+            <div class="brand"><div class="brand-mark">B</div><div>Broli <small>Portail S&amp;OP</small></div></div>
             <nav class="nav" @onclick="() => _navOpen = false">
-                <div class="nav-section">Steering</div>
-                @NavItem("", "◧", "Executive", Permissions.ExecutiveView, NavLinkMatch.All)
-                @NavItem("demand", "↗", "Demand", Permissions.DemandView)
-                @NavItem("supply", "⇄", "Supply", Permissions.SupplyView)
-                @NavItem("inventory", "▦", "Inventory", Permissions.InventoryView)
-                @NavItem("risks", "⚑", "Risks", Permissions.RisksView)
+                <div class="nav-section">Pilotage</div>
+                @NavItem("", "◧", "Synthèse", Permissions.ExecutiveView, NavLinkMatch.All)
+                @NavItem("demand", "↗", "Demande", Permissions.DemandView)
+                @NavItem("supply", "⇄", "Approvisionnement", Permissions.SupplyView)
+                @NavItem("inventory", "▦", "Stocks", Permissions.InventoryView)
+                @NavItem("risks", "⚑", "Risques", Permissions.RisksView)
                 @NavItem("mrp", "∑", "MRP", Permissions.SupplyView)
-                <div class="nav-section">Materials &amp; logistics</div>
-                @NavItem("raw-materials", "⬡", "Raw Materials", Permissions.InventoryView)
-                @NavItem("finished-goods", "▣", "Finished Goods", Permissions.InventoryView)
+                <div class="nav-section">Matières et logistique</div>
+                @NavItem("raw-materials", "⬡", "Matières premières", Permissions.InventoryView)
+                @NavItem("finished-goods", "▣", "Produits finis", Permissions.InventoryView)
                 @NavItem("films", "◫", "Films", Permissions.InventoryView)
                 @NavItem("transit", "⛴", "Transit", Permissions.SupplyView)
-                @NavItem("suppliers", "⚙", "Suppliers", Permissions.SupplyView)
-                <div class="nav-section">S&amp;OP process</div>
-                @NavItem("meeting", "▣", "S&OP Meeting", Permissions.ActionsView)
-                @NavItem("actions", "☑", "S&OP Actions", Permissions.ActionsView)
+                @NavItem("suppliers", "⚙", "Fournisseurs", Permissions.SupplyView)
+                <div class="nav-section">Processus S&amp;OP</div>
+                @NavItem("meeting", "▣", "Réunion S&OP", Permissions.ActionsView)
+                @NavItem("actions", "☑", "Actions S&OP", Permissions.ActionsView)
                 <div class="nav-section">Administration</div>
-                @NavItem("data", "⤓", "Data Management", Permissions.DataImport)
+                @NavItem("data", "⤓", "Gestion des données", Permissions.DataImport)
                 @NavItem("admin", "⚿", "Administration", Permissions.UsersManage, NavLinkMatch.All)
                 @NavItem("admin/config", "⚙", "Configuration", Permissions.ConfigEdit)
-                @NavItem("admin/audit", "☰", "Audit Log", Permissions.AuditView)
+                @NavItem("admin/audit", "☰", "Journal d'audit", Permissions.AuditView)
             </nav>
-            <div class="sidebar-foot">Phase 3 · data via REST API</div>
+            <div class="sidebar-foot">Phase 3 · données via API REST</div>
         </aside>
         <div class="main">
             <header class="topbar">
                 <button class="icon-btn menu-btn" @onclick="() => _navOpen = !_navOpen" aria-label="Menu">☰</button>
-                <span class="title">Broli S&amp;OP Portal</span>
+                <span class="title">Portail S&amp;OP Broli</span>
                 <GlobalSearch />
                 <span class="spacer"></span>
                 <NotificationBell />
-                <button class="icon-btn" title="Meeting / TV mode" @onclick="Ui.ToggleMeeting">@(Ui.MeetingMode ? "⤡ Exit meeting" : "⤢ Meeting")</button>
-                <button class="icon-btn" title="Full screen" @onclick="FullScreen" aria-label="Full screen">⛶</button>
+                <button class="icon-btn" title="Mode réunion / TV" @onclick="Ui.ToggleMeeting">@(Ui.MeetingMode ? "⤡ Quitter la réunion" : "⤢ Réunion")</button>
+                <button class="icon-btn" title="Plein écran" @onclick="FullScreen" aria-label="Plein écran">⛶</button>
                 <div class="user-chip">
                     <button class="icon-btn" style="border:0;padding:0 4px" @onclick="() => _userMenu = !_userMenu" aria-haspopup="true">
                         <span class="avatar">@Initials</span>
@@ -64,19 +64,19 @@ else if (Session.IsAuthenticated)
                     {
                         <div class="backdrop" @onclick="() => _userMenu = false"></div>
                         <div class="dropdown" @onclick="() => _userMenu = false">
-                            <div style="padding:8px 10px" class="muted">Signed in as <b>@Session.User?.Username</b></div>
-                            <button @onclick="@(() => SetTheme(null))">Theme: system</button>
-                            <button @onclick="@(() => SetTheme("light"))">Theme: light</button>
-                            <button @onclick="@(() => SetTheme("dark"))">Theme: dark</button>
-                            <a href="account">Change password</a>
-                            <button @onclick="SignOut">Sign out</button>
+                            <div style="padding:8px 10px" class="muted">Connecté en tant que <b>@Session.User?.Username</b></div>
+                            <button @onclick="@(() => SetTheme(null))">Thème : système</button>
+                            <button @onclick="@(() => SetTheme("light"))">Thème : clair</button>
+                            <button @onclick="@(() => SetTheme("dark"))">Thème : sombre</button>
+                            <a href="account">Changer le mot de passe</a>
+                            <button @onclick="SignOut">Se déconnecter</button>
                         </div>
                     }
                 </div>
             </header>
             @if (_dataStatus?.HasDemoData == true)
             {
-                <div class="demo-banner" role="status"><b>DEMO DATA</b> All figures are fictitious demonstration data. They are removed automatically by the first real master-data import.</div>
+                <div class="demo-banner" role="status"><b>DONNÉES DE DÉMO</b> Tous les chiffres sont fictifs. Ils sont supprimés automatiquement au premier import réel du référentiel.</div>
             }
             <FilterBar />
             <main class="content">@Body</main>

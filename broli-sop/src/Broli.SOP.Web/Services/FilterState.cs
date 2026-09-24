@@ -78,13 +78,13 @@ public sealed class FilterState(ProtectedLocalStorage storage, ILogger<FilterSta
     {
         IEnumerable<Option>? list = dimension switch
         {
-            "Agency" => Options?.Agencies,
-            "Family" => Options?.Categories,
-            "Brand" => Options?.Brands,
-            "Supplier" => Options?.Suppliers,
-            "Country" => Options?.Countries,
-            "Material" => Options?.MaterialTypes,
-            "Status" => Options?.Statuses,
+            "Agence" => Options?.Agencies,
+            "Famille" => Options?.Categories,
+            "Marque" => Options?.Brands,
+            "Fournisseur" => Options?.Suppliers,
+            "Pays" => Options?.Countries,
+            "Type d'article" => Options?.MaterialTypes,
+            "Statut" => Options?.Statuses,
             _ => null,
         };
         return list?.FirstOrDefault(o => o.Value == value)?.Label ?? value;

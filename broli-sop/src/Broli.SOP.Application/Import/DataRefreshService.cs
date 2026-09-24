@@ -30,7 +30,7 @@ public sealed class DataRefreshService(
 
     public async Task<IReadOnlyList<DataSourceRunResult>> RunAsync(int id, CancellationToken ct)
     {
-        var source = await sources.FindAsync(id, ct) ?? throw new Services.ValidationException([$"Data source {id} not found."]);
+        var source = await sources.FindAsync(id, ct) ?? throw new Services.ValidationException([$"Source de données {id} introuvable."]);
         var results = await RunSourceAsync(source, ct);
         if (results.Any(r => r.Status == "Imported")) await alerts.RunAsync(ct);
         return results;
@@ -74,7 +74,7 @@ public sealed class DataRefreshService(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "Data source {Source} could not be read", source.Name);
-            var msg = $"Read failed: {ex.Message}";
+            var msg = $"Échec de lecture : {ex.Message}";
             await imports.RecordRejectedAsync(source.ImportType, source.Location, source.Name, 0, 1, 0, msg, ImportStatus.Failed, ct);
             await ReportFailureAsync(source, msg, ct);
             results.Add(new DataSourceRunResult(source.Name, "Failed", msg, 0, 1));
@@ -82,7 +82,7 @@ public sealed class DataRefreshService(
             return results;
         }
 
-        if (payloads.Count == 0) results.Add(new DataSourceRunResult(source.Name, "No data", "Nothing new to import.", 0, 0));
+        if (payloads.Count == 0) results.Add(new DataSourceRunResult(source.Name, "No data", "Rien de nouveau à importer.", 0, 0));
 
         foreach (var payload in payloads)
         {
@@ -90,22 +90,22 @@ public sealed class DataRefreshService(
             if (!ImportService.CanCommit(outcome))
             {
                 var report = string.Join("\n", outcome.Issues.Where(i => i.Severity == "Error").Take(50)
-                    .Select(i => $"Row {(i.Row == 0 ? "file" : i.Row.ToString())} {i.Column}: {i.Message}"));
-                if (outcome.ErrorCount == 0) report = "No valid row to import.";
+                    .Select(i => $"Ligne {(i.Row == 0 ? "fichier" : i.Row.ToString())} {i.Column} : {i.Message}"));
+                if (outcome.ErrorCount == 0) report = "Aucune ligne valide à importer.";
                 await imports.RecordRejectedAsync(source.ImportType, payload.Name, source.Name, outcome.RowCount, outcome.ErrorCount, outcome.WarningCount,
                     report, ImportStatus.Rejected, ct);
                 await payload.CompleteAsync(false, report);
-                await ReportFailureAsync(source, $"{payload.Name}: {outcome.ErrorCount} error(s), nothing imported.\n{report}", ct);
-                results.Add(new DataSourceRunResult(source.Name, "Rejected", $"{payload.Name}: {outcome.ErrorCount} error(s) — nothing imported", outcome.RowCount, outcome.ErrorCount));
+                await ReportFailureAsync(source, $"{payload.Name} : {outcome.ErrorCount} erreur(s), rien n'a été importé.\n{report}", ct);
+                results.Add(new DataSourceRunResult(source.Name, "Rejected", $"{payload.Name} : {outcome.ErrorCount} erreur(s) — rien n'a été importé", outcome.RowCount, outcome.ErrorCount));
                 continue;
             }
 
             var result = await imports.CommitAsync(def.Type, payload.Name, "scheduler", outcome.ValidRows, outcome.WarningCount, purge, ct, source.Name);
             await payload.CompleteAsync(true, null);
             version.Bump();
-            await audit.LogAsync("Automated import", "Data Management", $"{source.Name}: {payload.Name}", null,
-                $"{result.Inserted} inserted, {result.Updated} updated, {result.Warnings} warnings" + (result.PurgedDemoData ? ", DEMO data purged" : ""), ct);
-            results.Add(new DataSourceRunResult(source.Name, "Imported", $"{payload.Name}: {result.Inserted} inserted, {result.Updated} updated", outcome.RowCount, 0));
+            await audit.LogAsync("Import automatique", "Gestion des données", $"{source.Name} : {payload.Name}", null,
+                $"{result.Inserted} ajoutées, {result.Updated} mises à jour, {result.Warnings} avertissements" + (result.PurgedDemoData ? ", données de DÉMO supprimées" : ""), ct);
+            results.Add(new DataSourceRunResult(source.Name, "Imported", $"{payload.Name} : {result.Inserted} ajoutées, {result.Updated} mises à jour", outcome.RowCount, 0));
         }
 
         await FinishAsync(source, results, ct);
@@ -129,6 +129,6 @@ public sealed class DataRefreshService(
     {
         if (!(await settings.GetAsync(ct)).AlertRules.RefreshFailures) return;
         await notifications.NotifyPermissionAsync(Contracts.Security.Permissions.DataImport, "refresh", "critical",
-            $"Data refresh failed: {source.Name}", message, "data", ct);
+            $"Échec du rafraîchissement : {source.Name}", message, "data", ct);
     }
 }

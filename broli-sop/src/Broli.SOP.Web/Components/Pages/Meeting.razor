@@ -1,13 +1,13 @@
 @page "/meeting"
 @inherits SopPage
 
-<PageTitle>S&amp;OP Meeting · Broli S&amp;OP</PageTitle>
+<PageTitle>Réunion S&amp;OP · Broli S&amp;OP</PageTitle>
 
 <RequirePermission Permission="@Permissions.ActionsView">
-    <PageHeader Title="S&amp;OP Meeting" Question="Demand, supply, stock, logistics, risks — and the decisions we must take today." Period="_m?.Period">
+    <PageHeader Title="Réunion S&OP" Question="Demande, approvisionnement, stock, logistique, risques — et les décisions à prendre aujourd'hui." Period="_m?.Period">
         <Actions>
-            <button class="btn sm @(Ui.MeetingMode ? "" : "primary")" @onclick="Ui.ToggleMeeting">@(Ui.MeetingMode ? "Exit presentation" : "▶ Present")</button>
-            <button class="btn sm" @onclick="@(() => JS.InvokeVoidAsync("sop.print"))">⎙ Print / PDF</button>
+            <button class="btn sm @(Ui.MeetingMode ? "" : "primary")" @onclick="Ui.ToggleMeeting">@(Ui.MeetingMode ? "Quitter la présentation" : "▶ Présenter")</button>
+            <button class="btn sm" @onclick="@(() => JS.InvokeVoidAsync("sop.print"))">⎙ Imprimer / PDF</button>
         </Actions>
     </PageHeader>
 
@@ -21,31 +21,31 @@
 
             <div class="grid g-2">
                 <div class="card actions-panel">
-                    <div class="card-head"><h2>Decisions required (@m.Decisions.Count)</h2><a class="hint" href="actions?view=decisions">Action plan ›</a></div>
-                    @if (m.Decisions.Count == 0) { <div class="empty">✔ No decision pending.</div> }
+                    <div class="card-head"><h2>Décisions à prendre (@m.Decisions.Count)</h2><a class="hint" href="actions?view=decisions">Plan d'actions ›</a></div>
+                    @if (m.Decisions.Count == 0) { <div class="empty">✔ Aucune décision en attente.</div> }
                     <ul class="m-items decisions">
                         @foreach (var a in m.Decisions)
                         {
                             <li>
-                                <StatusBadge Status="@(a.IsOverdue ? "Critical" : a.Priority == "Low" ? "OK" : a.Priority)" Text="@(a.IsOverdue ? "Overdue" : a.Priority)" />
-                                <span><b>@a.Description</b><span class="d">@a.Code · @a.Topic · @a.Owner · due @Fmt.Date(a.DueDate)@(a.IsOverdue ? " · overdue" : "")@(a.RiskCode is null ? "" : " · risk " + a.RiskCode)</span></span>
+                                <StatusBadge Status="@(a.IsOverdue ? "Critical" : a.Priority == "Basse" ? "OK" : a.Priority)" Text="@(a.IsOverdue ? "En retard" : a.Priority)" />
+                                <span><b>@a.Description</b><span class="d">@a.Code · @a.Topic · @a.Owner · échéance @Fmt.Date(a.DueDate)@(a.IsOverdue ? " · en retard" : "")@(a.RiskCode is null ? "" : " · risque " + a.RiskCode)</span></span>
                             </li>
                         }
                     </ul>
                 </div>
                 <div class="card">
-                    <div class="card-head"><h2>Overdue actions (@m.OverdueActions.Count)</h2><a class="hint" href="actions?view=overdue">All ›</a></div>
-                    @if (m.OverdueActions.Count == 0) { <div class="empty">✔ No overdue action.</div> }
+                    <div class="card-head"><h2>Actions en retard (@m.OverdueActions.Count)</h2><a class="hint" href="actions?view=overdue">Toutes ›</a></div>
+                    @if (m.OverdueActions.Count == 0) { <div class="empty">✔ Aucune action en retard.</div> }
                     <ul class="m-items">
                         @foreach (var a in m.OverdueActions)
                         {
-                            <li><StatusBadge Status="Critical" Text="@(DaysLate(a) + " d")" />
-                                <span><b>@a.Topic</b> — @a.Description<span class="d">@a.Code · @a.Owner (@a.Department) · due @Fmt.Date(a.DueDate)</span></span></li>
+                            <li><StatusBadge Status="Critical" Text="@(DaysLate(a) + " j")" />
+                                <span><b>@a.Topic</b> — @a.Description<span class="d">@a.Code · @a.Owner (@a.Department) · échéance @Fmt.Date(a.DueDate)</span></span></li>
                         }
                     </ul>
                 </div>
             </div>
-            <p class="muted" style="margin-top:10px;font-size:12px">Generated @Fmt.DateTime(m.GeneratedAtUtc) from the same data and filters as the dashboards. Click any figure or line for the detail.</p>
+            <p class="muted" style="margin-top:10px;font-size:12px">Généré le @Fmt.DateTime(m.GeneratedAtUtc) à partir des mêmes données et filtres que les tableaux de bord. Cliquez sur un chiffre ou une ligne pour le détail.</p>
         }
     </LoadState>
 </RequirePermission>
@@ -75,7 +75,7 @@
                     <li><StatusBadge Status="@Sev(i.Severity)" Text="@("")" />
                         <span>@if (i.Link is { } l) {<a href="@l"><b>@i.Title</b></a>} else {<b>@i.Title</b>}<span class="d">@i.Detail</span></span></li>
                 }
-                @if (s.Items.Count == 0) { <li class="muted">Nothing to report.</li> }
+                @if (s.Items.Count == 0) { <li class="muted">Rien à signaler.</li> }
             </ul>
         </div>
     };

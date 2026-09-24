@@ -113,26 +113,26 @@ public sealed class AlertEngine(
             var recent = await repository.RecentAlertKeysAsync(keys, since, ct);
             var fresh = all.Where(i => !recent.Contains($"{rule}:{i.Key}")).ToList();
             if (fresh.Count == 0) return;
-            var body = string.Join("\n", fresh.Take(15).Select(i => "• " + i.Line)) + (fresh.Count > 15 ? $"\n… and {fresh.Count - 15} more" : "");
+            var body = string.Join("\n", fresh.Take(15).Select(i => "• " + i.Line)) + (fresh.Count > 15 ? $"\n… et {fresh.Count - 15} de plus" : "");
             var (n, e) = await notifications.NotifyPermissionAsync(permission, rule, severity, $"{title} ({fresh.Count})", body, link, ct);
             await repository.MarkAlertsRaisedAsync(fresh.Select(i => $"{rule}:{i.Key}").ToList(), clock.UtcNow, ct);
             alerts += fresh.Count; sent += n; emails += e;
         }
 
         var pos = s.Positions.Values.ToList();
-        await Digest(rules.StockoutRisk, "stockout", Contracts.Security.Permissions.InventoryView, "critical", "Stockout risk detected", "inventory?view=critical",
+        await Digest(rules.StockoutRisk, "stockout", Contracts.Security.Permissions.InventoryView, "critical", "Risque de rupture détecté", "inventory?view=critical",
             pos.Where(p => p.Status == CoverageStatus.Critical)
-                .Select(p => (p.Product.CArtSap, $"{p.Product.Description}: {p.CoverageMonths:0.0} months of cover" + (p.StockoutDate is { } d ? $", stockout {d:dd/MM}" : ""))));
+                .Select(p => (p.Product.CArtSap, $"{p.Product.Description} : {p.CoverageMonths:0.0} mois de couverture" + (p.StockoutDate is { } d ? $", rupture le {d:dd/MM}" : ""))));
         await Digest(rules.CoverageBelowThreshold, "coverage", Contracts.Security.Permissions.InventoryView, "high",
-            $"Coverage below {settings.Coverage.RiskBelowMonths:0.#} months", "inventory?view=risk",
-            pos.Where(p => p.Status == CoverageStatus.Risk).Select(p => (p.Product.CArtSap, $"{p.Product.Description}: {p.CoverageMonths:0.0} months")));
+            $"Couverture sous {settings.Coverage.RiskBelowMonths:0.#} mois", "inventory?view=risk",
+            pos.Where(p => p.Status == CoverageStatus.Risk).Select(p => (p.Product.CArtSap, $"{p.Product.Description} : {p.CoverageMonths:0.0} mois")));
         var open = s.OpenLines.ToList();
-        await Digest(rules.EtaDelay, "eta", Contracts.Security.Permissions.SupplyView, "high", "ETA delay", "supply?view=late",
+        await Digest(rules.EtaDelay, "eta", Contracts.Security.Permissions.SupplyView, "high", "Retard d'ETA", "supply?view=late",
             open.Where(l => l.Assessment.Level >= EtaRiskLevel.SupplyRisk && !(l.Line.Eta is { } e && e < s.Today))
-                .Select(l => ($"{l.Line.PoNumber}:{l.Product.CArtSap}:{l.Line.Eta:yyyyMMdd}", $"PO {l.Line.PoNumber} {l.Product.Description} — {l.Assessment.Reason}")));
-        await Digest(rules.OpenPoOverdue, "overdue", Contracts.Security.Permissions.SupplyView, "high", "Open PO overdue", "transit?view=late",
+                .Select(l => ($"{l.Line.PoNumber}:{l.Product.CArtSap}:{l.Line.Eta:yyyyMMdd}", $"Commande {l.Line.PoNumber} {l.Product.Description} — {l.Assessment.Reason}")));
+        await Digest(rules.OpenPoOverdue, "overdue", Contracts.Security.Permissions.SupplyView, "high", "Commande ouverte en retard", "transit?view=late",
             open.Where(l => l.Line.Eta is { } e && e < s.Today)
-                .Select(l => ($"{l.Line.PoNumber}:{l.Product.CArtSap}", $"PO {l.Line.PoNumber} {l.Product.Description} ({l.Line.SupplierName}): ETA {l.Line.Eta:dd/MM} passed, not received")));
+                .Select(l => ($"{l.Line.PoNumber}:{l.Product.CArtSap}", $"Commande {l.Line.PoNumber} {l.Product.Description} ({l.Line.SupplierName}) : ETA du {l.Line.Eta:dd/MM} dépassée, non reçue")));
 
         if (rules.ActionsOverdue)
         {
@@ -142,8 +142,8 @@ public sealed class AlertEngine(
             var recent = await repository.RecentAlertKeysAsync(keys, since, ct);
             foreach (var a in overdue.Where(a => !recent.Contains($"action:{a.Code}")))
             {
-                await notifications.NotifyPersonAsync(a.Owner, "action", "high", $"Action {a.Code} is overdue",
-                    $"{a.Topic}: {a.Description} — was due {a.DueDate:dd/MM/yyyy}", "actions?view=mine", ct);
+                await notifications.NotifyPersonAsync(a.Owner, "action", "high", $"L'action {a.Code} est en retard",
+                    $"{a.Topic} : {a.Description} — échéance dépassée ({a.DueDate:dd/MM/yyyy})", "actions?view=mine", ct);
                 alerts++;
             }
             await repository.MarkAlertsRaisedAsync(overdue.Where(a => !recent.Contains($"action:{a.Code}")).Select(a => $"action:{a.Code}").ToList(), clock.UtcNow, ct);
