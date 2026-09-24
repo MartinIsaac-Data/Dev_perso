@@ -31,8 +31,8 @@ jobs:
         run: dotnet build Broli.SOP.sln --no-restore -c Release -warnaserror
       - name: SQL Server migrations in sync with the model
         run: |
-          dotnet tool install --global dotnet-ef --version 10.0.*
-          dotnet ef migrations has-pending-model-changes --project src/Broli.SOP.Data --no-build --configuration Release
+          dotnet tool restore
+          dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/Broli.SOP.Data --no-build --configuration Release
       - name: Tests
         run: dotnet test Broli.SOP.sln --no-build -c Release --logger "trx;LogFileName=results.trx" --results-directory TestResults
       - name: Upload test results
