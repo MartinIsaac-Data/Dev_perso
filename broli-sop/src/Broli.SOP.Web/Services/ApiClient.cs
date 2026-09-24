@@ -20,7 +20,7 @@ public sealed class ApiException(string message, IReadOnlyList<string>? details 
 /// The only way the UI reaches data: typed calls to the REST API. The UI never touches
 /// Excel files or the database, so the data source can change without touching pages.
 /// </summary>
-public sealed class ApiClient(HttpClient http, AuthSession session, NavigationManager nav, ILogger<ApiClient> logger)
+public sealed class ApiClient(HttpClient http, AuthSession session, ClientInfo client, NavigationManager nav, ILogger<ApiClient> logger)
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -53,7 +53,9 @@ public sealed class ApiClient(HttpClient http, AuthSession session, NavigationMa
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request, CancellationToken ct = default)
     {
-        using var response = await http.PostAsJsonAsync("api/auth/login", request, Json, ct);
+        using var message = new HttpRequestMessage(HttpMethod.Post, "api/auth/login") { Content = JsonContent.Create(request, options: Json) };
+        Forward(message);
+        using var response = await http.SendAsync(message, ct);
         if (response.StatusCode == HttpStatusCode.Unauthorized) return null;
         if (response.StatusCode == HttpStatusCode.TooManyRequests) throw new ApiException("Too many attempts. Wait a minute and try again.");
         await EnsureSuccess(response, ct);
@@ -72,6 +74,7 @@ public sealed class ApiClient(HttpClient http, AuthSession session, NavigationMa
     private async Task<HttpResponseMessage> RawAsync(HttpRequestMessage request, CancellationToken ct)
     {
         if (session.Token is { } token) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Forward(request);
         HttpResponseMessage response;
         try
         {
@@ -91,6 +94,11 @@ public sealed class ApiClient(HttpClient http, AuthSession session, NavigationMa
         }
         await EnsureSuccess(response, ct);
         return response;
+    }
+
+    private void Forward(HttpRequestMessage request)
+    {
+        if (client.RemoteIp is { Length: > 0 } ip) request.Headers.TryAddWithoutValidation("X-Forwarded-For", ip);
     }
 
     private static async Task EnsureSuccess(HttpResponseMessage response, CancellationToken ct)

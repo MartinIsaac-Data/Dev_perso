@@ -8,23 +8,38 @@ using Broli.SOP.Contracts.Dtos;
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.SqlClient;
 
 namespace Broli.SOP.Tests;
 
-/// <summary>Runs the real API on a throw-away SQLite file with generated DEMO data.</summary>
+/// <summary>
+/// Runs the real API with generated DEMO data on a throw-away database: a SQLite file by default, or a SQL Server
+/// database created and dropped per test class when <c>BROLI_TEST_SQLSERVER</c> holds a server connection string
+/// (e.g. <c>Server=localhost,1433;User Id=sa;Password=…;TrustServerCertificate=True</c>).
+/// </summary>
 public class ApiFactory : WebApplicationFactory<Program>
 {
     public const string AdminPassword = "Admin#Test2026";
     public const string DemoPassword = "Demo#Test2026";
     private readonly string _db = Path.Combine(Path.GetTempPath(), $"broli-sop-test-{Guid.NewGuid():N}.db");
+    internal static readonly string? SqlServer = Environment.GetEnvironmentVariable("BROLI_TEST_SQLSERVER") is { Length: > 0 } cs ? cs : null;
+    private readonly string _sqlDatabase = $"broli_test_{Guid.NewGuid():N}";
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
-        builder.UseSetting("ConnectionStrings:Sop", $"Data Source={_db}");
-        builder.UseSetting("Database:Provider", "Sqlite");
+        if (SqlServer is null)
+        {
+            builder.UseSetting("ConnectionStrings:Sop", $"Data Source={_db}");
+            builder.UseSetting("Database:Provider", "Sqlite");
+        }
+        else
+        {
+            builder.UseSetting("ConnectionStrings:Sop", new SqlConnectionStringBuilder(SqlServer) { InitialCatalog = _sqlDatabase }.ConnectionString);
+            builder.UseSetting("Database:Provider", "SqlServer");
+        }
         builder.UseSetting("Demo:Enabled", "true");
         builder.UseSetting("Bootstrap:AdminUsername", "admin");
         builder.UseSetting("Bootstrap:AdminPassword", AdminPassword);
@@ -51,6 +66,17 @@ public class ApiFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         foreach (var f in new[] { _db, _db + "-wal", _db + "-shm" }) try { File.Delete(f); } catch (IOException) { }
+        if (SqlServer is not null) DropSqlDatabase();
+    }
+
+    private void DropSqlDatabase()
+    {
+        SqlConnection.ClearAllPools();
+        using var connection = new SqlConnection(new SqlConnectionStringBuilder(SqlServer) { InitialCatalog = "master" }.ConnectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"IF DB_ID('{_sqlDatabase}') IS NOT NULL BEGIN ALTER DATABASE [{_sqlDatabase}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{_sqlDatabase}]; END";
+        command.ExecuteNonQuery();
     }
 }
 

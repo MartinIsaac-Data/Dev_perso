@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -9,6 +10,7 @@ using Broli.SOP.Data;
 using Broli.SOP.Data.Seeding;
 using Broli.SOP.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,6 +56,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization(o => o.AddPermissionPolicies());
 
+// The portal calls the API server-side, so every request comes from the web server. The web server passes the browser's
+// address in X-Forwarded-For; it is trusted only from loopback (default) or the proxies listed in ForwardedHeaders:KnownProxies,
+// so the login rate limit applies per user machine instead of to the whole company at once.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+        o.KnownProxies.Add(IPAddress.Parse(proxy));
+});
+
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -75,6 +87,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync();
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {

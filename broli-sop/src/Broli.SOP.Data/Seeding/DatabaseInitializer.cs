@@ -29,8 +29,14 @@ public sealed class DatabaseInitializer(
     {
         if (db.Database.IsSqlServer())
         {
-            // Production path: versioned EF Core migrations (Migrations/SqlServer).
-            await db.Database.MigrateAsync(ct);
+            // Production path: versioned EF Core migrations (Migrations/SqlServer). With Database:ApplyMigrations=false the
+            // DBA applies sql/migrations.sql (release package) and the API runs with data rights only; it then refuses a stale schema.
+            if (config.GetValue("Database:ApplyMigrations", true))
+                await db.Database.MigrateAsync(ct);
+            else if ((await db.Database.GetPendingMigrationsAsync(ct)).ToList() is { Count: > 0 } pending)
+                throw new InvalidOperationException(
+                    $"The SQL Server schema is not up to date: {pending.Count} migration(s) missing ({string.Join(", ", pending)}). " +
+                    "Run sql/migrations.sql from this release package on the database, or set Database:ApplyMigrations=true.");
         }
         else
         {

@@ -13,6 +13,7 @@ builder.Services.AddHttpClient<ApiClient>(c =>
     c.BaseAddress = new Uri(apiBase.EndsWith('/') ? apiBase : apiBase + "/");
     c.Timeout = TimeSpan.FromSeconds(100);
 });
+builder.Services.AddScoped<ClientInfo>();
 builder.Services.AddScoped<AuthSession>();
 builder.Services.AddScoped<FilterState>();
 builder.Services.AddScoped<UiState>();

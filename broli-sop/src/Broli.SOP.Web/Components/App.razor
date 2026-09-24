@@ -12,7 +12,7 @@
     <HeadOutlet @rendermode="RenderModeServer" />
 </head>
 <body>
-    <Routes @rendermode="RenderModeServer" />
+    <Routes @rendermode="RenderModeServer" ClientIp="@HttpContext?.Connection.RemoteIpAddress?.ToString()" />
     <ReconnectModal />
     <div id="blazor-error-ui" data-nosnippet>
         An unexpected error occurred. <a href="" class="reload">Reload</a>
@@ -25,6 +25,10 @@
 </html>
 
 @code {
+    // Rendered during the page request, the only moment the browser's address is known; it reaches the circuit as a
+    // server-protected component parameter (the browser cannot alter it) and is forwarded to the API from there.
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
     // No prerendering: the session lives in protected browser storage, which is only readable once interactive.
     private static readonly IComponentRenderMode RenderModeServer = new InteractiveServerRenderMode(prerender: false);
 }
