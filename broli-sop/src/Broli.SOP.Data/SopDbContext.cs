@@ -39,6 +39,8 @@ public class SopDbContext(DbContextOptions<SopDbContext> options) : DbContext(op
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AlertState> AlertStates => Set<AlertState>();
     public DbSet<DataSource> DataSources => Set<DataSource>();
+    public DbSet<ReportDefinition> ReportDefinitions => Set<ReportDefinition>();
+    public DbSet<ReportSubmission> ReportSubmissions => Set<ReportSubmission>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -54,6 +56,8 @@ public class SopDbContext(DbContextOptions<SopDbContext> options) : DbContext(op
         builder.Properties<ActionStatus>().HaveConversion<string>().HaveMaxLength(20);
         builder.Properties<ActionPriority>().HaveConversion<string>().HaveMaxLength(20);
         builder.Properties<DataSourceKind>().HaveConversion<string>().HaveMaxLength(20);
+        builder.Properties<ReportStatus>().HaveConversion<string>().HaveMaxLength(20);
+        builder.Properties<ReportQuality>().HaveConversion<string>().HaveMaxLength(20);
     }
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -221,6 +225,23 @@ public class SopDbContext(DbContextOptions<SopDbContext> options) : DbContext(op
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.DailyAt).HasMaxLength(5);
             e.Property(x => x.LastMessage).HasMaxLength(1000);
+        });
+        b.Entity<ReportDefinition>(e =>
+        {
+            e.ToTable("SOP_REPORT_DEFINITION");
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.Code).HasMaxLength(40);
+            e.Property(x => x.MainContent).HasMaxLength(1000);
+            e.Property(x => x.FollowUpNotes).HasMaxLength(1000);
+        });
+        b.Entity<ReportSubmission>(e =>
+        {
+            e.ToTable("SOP_REPORT_SUBMISSION");
+            e.HasIndex(x => new { x.ReportDefinitionId, x.WeekStart }).IsUnique();
+            e.HasIndex(x => x.WeekStart);
+            e.Property(x => x.WeekLabel).HasMaxLength(40);
+            e.Property(x => x.Comments).HasMaxLength(1000);
+            e.HasOne(x => x.Report).WithMany().HasForeignKey(x => x.ReportDefinitionId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

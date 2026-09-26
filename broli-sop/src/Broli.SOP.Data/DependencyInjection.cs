@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<IActionRepository, ActionRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IDataSourceRepository, DataSourceRepository>();
+        services.AddScoped<IReportingRepository, ReportingRepository>();
         services.AddScoped<IDataSourceReader, Connectors.DataSourceReader>();
         services.AddScoped<DatabaseInitializer>();
         return services;

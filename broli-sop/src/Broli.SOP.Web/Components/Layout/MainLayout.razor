@@ -38,6 +38,7 @@ else if (Session.IsAuthenticated)
                 <div class="nav-section">Processus S&amp;OP</div>
                 @NavItem("meeting", "▣", "Réunion S&OP", Permissions.ActionsView)
                 @NavItem("actions", "☑", "Actions S&OP", Permissions.ActionsView)
+                @NavItem("reporting", "◷", "Suivi des reportings", Permissions.ActionsView)
                 <div class="nav-section">Administration</div>
                 @NavItem("data", "⤓", "Gestion des données", Permissions.DataImport)
                 @NavItem("admin", "⚿", "Administration", Permissions.UsersManage, NavLinkMatch.All)
@@ -78,7 +79,7 @@ else if (Session.IsAuthenticated)
             {
                 <div class="demo-banner" role="status"><b>DONNÉES DE DÉMO</b> Tous les chiffres sont fictifs. Ils sont supprimés automatiquement au premier import réel du référentiel.</div>
             }
-            <FilterBar />
+            @if (!HidesFilters) { <FilterBar /> }
             <main class="content">@Body</main>
         </div>
     </div>
@@ -89,6 +90,9 @@ else if (Session.IsAuthenticated)
     private bool _navOpen;
     private bool _userMenu;
     private DataStatus? _dataStatus;
+
+    /// <summary>Pages whose data does not depend on the global filters (period, agency, family…).</summary>
+    private bool HidesFilters => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("reporting", StringComparison.OrdinalIgnoreCase);
 
     private bool IsLoginPage => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("login", StringComparison.OrdinalIgnoreCase);
     private string Initials => string.Concat((Session.User?.DisplayName ?? "?").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));

@@ -32,10 +32,12 @@ public sealed class NotificationService(
         await NotifyAsync(await repository.RecipientsWithPermissionAsync(permission, ct), kind, severity, title, message, link, ct);
 
     /// <summary>Notifies the user whose username or display name matches <paramref name="person"/>, if there is one.</summary>
-    public async Task NotifyPersonAsync(string person, string kind, string severity, string title, string message, string? link, CancellationToken ct)
+    /// <summary>Notifies the user whose username or display name is <paramref name="person"/>; false when there is none.</summary>
+    public async Task<bool> NotifyPersonAsync(string person, string kind, string severity, string title, string message, string? link, CancellationToken ct)
     {
-        if (await repository.FindRecipientAsync(person, ct) is { } r)
-            await NotifyAsync([r], kind, severity, title, message, link, ct);
+        if (await repository.FindRecipientAsync(person, ct) is not { } r) return false;
+        await NotifyAsync([r], kind, severity, title, message, link, ct);
+        return true;
     }
 
     private async Task<(int, int)> NotifyAsync(IReadOnlyList<Recipient> recipients, string kind, string severity, string title, string message,

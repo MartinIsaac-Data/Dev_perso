@@ -358,3 +358,19 @@ table.data.dense td .badge { padding: 1px 7px 1px 5px; font-size: 11.5px; }
 .field input[type=checkbox], .field input[type=radio] { width: auto; height: auto; padding: 0; box-shadow: none; accent-color: var(--accent); }
 .field label.check { display: flex; font-weight: 500; color: var(--text); margin: 0; }
 .chips label.check.chip { cursor: pointer; }
+
+/* Reporting follow-up: weekly calendar of expected reports. */
+.cal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.cal-day { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); padding: 8px 10px; min-width: 0; }
+.cal-day h3 { margin: 0 0 6px; font-size: 13px; display: flex; justify-content: space-between; gap: 6px; }
+.cal-day h3 span { color: var(--text-muted); font-weight: 400; }
+.cal-day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cal-item { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
+.cal-item .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; background: var(--text-muted); }
+.cal-item .dot.st-good { background: var(--good); } .cal-item .dot.st-warning { background: var(--warning); }
+.cal-item .dot.st-serious { background: var(--serious); } .cal-item .dot.st-critical { background: var(--critical); }
+.cal-item b { display: block; font-weight: 600; }
+.cal-item .sub { display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend .dot-l { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }

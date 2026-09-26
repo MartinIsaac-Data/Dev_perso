@@ -179,3 +179,48 @@ public class DataSource
     public string? LastStatus { get; set; }
     public string? LastMessage { get; set; }
 }
+
+/// <summary>A recurring report the S&amp;OP process expects from a department (reporting catalogue and calendar).</summary>
+public class ReportDefinition : IDemoTagged
+{
+    public int Id { get; set; }
+    /// <summary>Reporting ID from the catalogue, e.g. COM-01.</summary>
+    public string Code { get; set; } = "";
+    public string Department { get; set; } = "";
+    public string Name { get; set; } = "";
+    /// <summary>Owner / preparer as written in the catalogue; several people are separated by "/".</summary>
+    public string Owner { get; set; } = "";
+    public string Frequency { get; set; } = "";
+    /// <summary>Expected day as written in the catalogue (Friday, Every day, To confirm…).</summary>
+    public string ExpectedDay { get; set; } = "";
+    public string? ExpectedTime { get; set; }
+    public string? MainContent { get; set; }
+    /// <summary>Catalogue status (Identified, Received, To Receive…), free text.</summary>
+    public string? CatalogueStatus { get; set; }
+    public string? Purpose { get; set; }
+    public string? FollowUpNotes { get; set; }
+    /// <summary>False when the report is no longer in the imported catalogue: kept for history, no longer expected.</summary>
+    public bool IsActive { get; set; } = true;
+    public bool IsDemo { get; set; }
+}
+
+/// <summary>One report for one S&amp;OP week (reporting tracker).</summary>
+public class ReportSubmission : IDemoTagged
+{
+    public int Id { get; set; }
+    public int ReportDefinitionId { get; set; }
+    public ReportDefinition? Report { get; set; }
+    /// <summary>Monday of the S&amp;OP week.</summary>
+    public DateOnly WeekStart { get; set; }
+    public string WeekLabel { get; set; } = "";
+    public DateOnly? ReferenceDate { get; set; }
+    public DateOnly? ExpectedDate { get; set; }
+    public DateOnly? ReceivedDate { get; set; }
+    /// <summary>Status as entered; null lets the portal derive it from the dates.</summary>
+    public ReportStatus? Status { get; set; }
+    public ReportQuality? Quality { get; set; }
+    public bool RelanceRequired { get; set; }
+    public string? Comments { get; set; }
+    public DateTime? LastReminderUtc { get; set; }
+    public bool IsDemo { get; set; }
+}

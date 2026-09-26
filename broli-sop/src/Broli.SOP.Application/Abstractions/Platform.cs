@@ -86,9 +86,14 @@ public record RawSheet(IReadOnlyList<string> Headers, IReadOnlyList<RawRow> Rows
 /// <summary>A data row with its original Excel row number. Cells are string, double, bool, DateTime or null.</summary>
 public record RawRow(int ExcelRow, IReadOnlyList<object?> Cells);
 
+public record NamedSheet(string Name, RawSheet Sheet);
+
 public interface IExcelReader
 {
     RawSheet Read(Stream stream, string? preferredSheet);
+
+    /// <summary>Every worksheet of the workbook, in order (for multi-sheet files such as the reporting catalogue).</summary>
+    IReadOnlyList<NamedSheet> ReadAll(Stream stream);
 }
 
 public record TableColumn(string Header, string Format = "text");

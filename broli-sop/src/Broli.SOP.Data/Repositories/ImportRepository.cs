@@ -331,6 +331,8 @@ public sealed class ImportRepository(SopDbContext db, IClock clock, ILogger<Impo
     private async Task<int> PurgeCoreAsync(CancellationToken ct)
     {
         var n = 0;
+        n += await db.ReportSubmissions.Where(s => s.IsDemo || s.Report!.IsDemo).ExecuteDeleteAsync(ct);
+        n += await db.ReportDefinitions.Where(d => d.IsDemo).ExecuteDeleteAsync(ct);
         n += await db.RiskItems.Where(r => r.IsDemo || (r.Product != null && r.Product.IsDemo) || (r.Supplier != null && r.Supplier.IsDemo)).ExecuteDeleteAsync(ct);
         n += await db.SupplyLines.Where(f => f.IsDemo || f.Product!.IsDemo).ExecuteDeleteAsync(ct);
         n += await db.SalesFacts.Where(f => f.IsDemo || f.Product!.IsDemo).ExecuteDeleteAsync(ct);

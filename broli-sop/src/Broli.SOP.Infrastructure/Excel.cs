@@ -15,6 +15,17 @@ public sealed class ExcelReader : IExcelReader
         using var wb = new XLWorkbook(stream);
         var ws = wb.Worksheets.FirstOrDefault(w => preferredSheet is not null && string.Equals(w.Name.Trim(), preferredSheet, StringComparison.OrdinalIgnoreCase))
                  ?? wb.Worksheets.First();
+        return ReadSheet(ws);
+    }
+
+    public IReadOnlyList<NamedSheet> ReadAll(Stream stream)
+    {
+        using var wb = new XLWorkbook(stream);
+        return wb.Worksheets.Select(ws => new NamedSheet(ws.Name.Trim(), ReadSheet(ws))).ToList();
+    }
+
+    private static RawSheet ReadSheet(IXLWorksheet ws)
+    {
         var used = ws.RangeUsed();
         if (used is null) return new RawSheet([], []);
 
@@ -22,7 +33,7 @@ public sealed class ExcelReader : IExcelReader
         var lastRow = used.LastRow().RowNumber();
         var firstCol = used.FirstColumn().ColumnNumber();
         var lastCol = used.LastColumn().ColumnNumber();
-        if (lastRow - firstRow > MaxRows) throw new InvalidDataException($"The sheet has more than {MaxRows:N0} rows.");
+        if (lastRow - firstRow > MaxRows) throw new InvalidDataException($"La feuille « {ws.Name} » dépasse {MaxRows:N0} lignes.");
 
         var headers = new List<string>();
         for (var c = firstCol; c <= lastCol; c++) headers.Add(ws.Cell(firstRow, c).GetString().Trim());
@@ -69,7 +80,7 @@ public sealed class TabularExporter : ITabularExporter
         ws.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(14);
         ws.Cell(2, 1).Value = table.Subtitle ?? "";
         ws.Cell(2, 1).Style.Font.SetItalic().Font.SetFontColor(XLColor.Gray);
-        ws.Cell(3, 1).Value = $"Exported {DateTime.Now:dd/MM/yyyy HH:mm} — Broli S&OP Portal";
+        ws.Cell(3, 1).Value = $"Exporté le {DateTime.Now:dd/MM/yyyy HH:mm} — Portail S&OP Broli";
         ws.Cell(3, 1).Style.Font.SetFontColor(XLColor.Gray);
 
         const int headerRow = 5;
@@ -93,7 +104,7 @@ public sealed class TabularExporter : ITabularExporter
                     case long l: cell.Value = l; break;
                     case DateOnly dt: cell.Value = dt.ToDateTime(TimeOnly.MinValue); break;
                     case DateTime dt: cell.Value = dt; break;
-                    case bool b: cell.Value = b ? "Yes" : "No"; break;
+                    case bool b: cell.Value = b ? "Oui" : "Non"; break;
                     default: cell.Value = row[c]!.ToString(); break;
                 }
                 cell.Style.NumberFormat.Format = table.Columns[c].Format switch
@@ -125,7 +136,7 @@ public sealed class TabularExporter : ITabularExporter
                 double => "",
                 DateOnly dt => dt.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                 DateTime dt => dt.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
-                bool b => b ? "Yes" : "No",
+                bool b => b ? "Oui" : "Non",
                 _ => Convert.ToString(v, CultureInfo.InvariantCulture) ?? "",
             }))));
         return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(sb.ToString())];

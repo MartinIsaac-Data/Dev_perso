@@ -22,7 +22,7 @@ public sealed class DatabaseInitializer(
     ILogger<DatabaseInitializer> logger)
 {
     /// <summary>Bumped whenever the schema changes. SQLite (dev / demo) databases are checked against it.</summary>
-    public const string SchemaVersion = "3";
+    public const string SchemaVersion = "4";
     private const string SchemaKey = "schemaVersion";
 
     public async Task InitializeAsync(CancellationToken ct = default)

@@ -14,12 +14,13 @@ public sealed class ExportService(
     TransitService transit,
     SupplierService suppliers,
     ActionService actions,
+    Reporting.ReportingService reporting,
     ITabularExporter exporter,
     IAuditLogger audit,
     ICurrentUser user,
     IAnalyticsEngine engine)
 {
-    public static readonly string[] Datasets = ["inventory", "demand", "supply", "risks", "risk-register", "mrp", "raw-materials", "films", "finished-goods", "transit", "suppliers", "actions"];
+    public static readonly string[] Datasets = ["inventory", "demand", "supply", "risks", "risk-register", "mrp", "raw-materials", "films", "finished-goods", "transit", "suppliers", "actions", "reporting"];
 
     public async Task<(byte[] Content, string FileName, string ContentType)?> ExportAsync(
         string dataset, string format, SopFilter filter, TableQuery q, CancellationToken ct)
@@ -178,6 +179,17 @@ public sealed class ExportService(
                      new("Priorité"), new("Statut"), new("Décision"), new("Risque"), new("CArtSAP"), new("Commentaire")],
                     rows.Select(a => new object?[] { a.Code, a.Date, a.Topic, a.Description, a.Owner, a.Department, a.DueDate, a.Priority,
                         a.Status + (a.IsOverdue ? " (en retard)" : ""), a.IsDecision ? "Oui" : "Non", a.RiskCode, a.CArtSap, a.Comment }).ToList());
+            }
+            case "reporting":
+            {
+                var (week, rows) = await reporting.GetWeekRowsAsync(q.View, ct);
+                IEnumerable<ReportingRow> filtered = TableHelper.Filter(rows, q, r => $"{r.Code} {r.Department} {r.Name} {r.Owner} {r.State} {r.Comments}");
+                return new TableData("Suivi des reportings", $"Semaine : {week?.Label ?? "aucune"}" + (string.IsNullOrWhiteSpace(q.Search) ? "" : $" · Recherche : {q.Search}"),
+                    [new("N° reporting"), new("Service"), new("Reporting"), new("Responsable"), new("Fréquence"), new("Jour attendu"), new("Heure"),
+                     new("Date attendue", "date"), new("Date de réception", "date"), new("Statut"), new("Jours de retard", "number"), new("Qualité"),
+                     new("Relance"), new("Commentaire")],
+                    filtered.Select(r => new object?[] { r.Code, r.Department, r.Name, r.Owner, r.Frequency, r.ExpectedDay, r.ExpectedTime, r.ExpectedDate,
+                        r.ReceivedDate, r.State, r.DaysLate, r.Quality, r.RelanceRequired ? "Oui" : "Non", r.Comments }).ToList());
             }
             default:
                 return null;

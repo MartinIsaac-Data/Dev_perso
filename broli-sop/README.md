@@ -97,6 +97,26 @@ alertes et déduplication, périmètre de données, synchronisation des migratio
 rejet/import → purge DEMO → historique → notifications, avec une base SQLite jouant le rôle de l'ERP et un vrai dossier de dépôt).
 Le parcours prioritaire (§42) a été rejoué après la Phase 3.
 
+## Suivi des reportings (`/reporting`)
+
+Suivi hebdomadaire des reportings que chaque service doit au processus S&OP, alimenté par le classeur
+**SOP_Reporting_Catalogue** (onglets `01_REPORTING_CATALOGUE`, `02_REPORTING_TRACKER`, `03_REPORTING_CALENDAR`).
+
+- **Import** (onglet *Importer le fichier*, permission `data.import`) : aperçu puis import, une seule erreur bloque tout.
+  Le catalogue remplace le précédent ; un reporting absent du fichier n'est plus attendu mais son historique est conservé.
+  Les lignes de suivi sont mises à jour pour les semaines présentes dans le fichier (clé : reporting + semaine) ;
+  une ligne non renseignée (seulement l'ID, le service, le nom) est ignorée. Une ligne de suivi a besoin d'une
+  *Reference Date* ou d'une *S&OP Week* avec l'année (« S39 2026 », « 2026-W39 »). Valeurs FR/EN acceptées
+  (Received/Reçu, Late/En retard, Missing/Manquant, Yes/Oui…). Le premier import remplace les données de démonstration.
+- **Statut affiché** : une date de réception l'emporte (reçu à l'heure, ou en retard si postérieure à l'échéance) ;
+  sinon le statut saisi est conservé ; sinon « en attente » avant l'échéance, « en retard » après, « manquant » une fois la
+  semaine écoulée. Échéance = *Expected Date* si saisie, sinon le jour attendu du catalogue (« Every day » : lundi ;
+  « To confirm » : pas d'échéance). Taux de réception = reçus ÷ reportings déjà dus.
+- **Page** : indicateurs de la semaine, évolution sur 12 semaines, statut par service, calendrier, retards par responsable,
+  tableau filtrable et exportable, catalogue avec le taux de réception de chaque reporting.
+- **Relances** (permission `actions.edit`) : notification au(x) responsable(s) dont le nom correspond à un utilisateur du portail
+  (« Nom 1 / Nom 2 » = deux personnes) ; les noms sans compte sont listés pour une relance par un autre moyen. Relances auditées.
+
 ### Phase 2 — vérifications
 
 **Vérifié :** la solution compile sans avertissement ; **85 tests** passent (unitaires sur KPI, couverture, projection, ETA, import,
@@ -227,6 +247,7 @@ l'API s'arrête avec un message explicite (exporter les données, puis supprimer
 
 *Gestion des données* (permission `data.import`) : **choisir le type → déposer le .xlsx → validation & aperçu → importer.**
 
+- Le classeur de suivi des reportings s'importe depuis la page *Suivi des reportings* (voir plus haut).
 - Modèles téléchargeables : SUPPLIER MASTER, PRODUCT MASTER, FACT_SALES, INVENTORY, SUPPLY, FORECAST
   (en-têtes foncés = obligatoires ; alias FR/EN acceptés, ex. « Code article », « Prévision », « Agence »).
 - Contrôles : colonnes manquantes, valeurs manquantes, doublons (même clé dans le fichier), dates invalides,

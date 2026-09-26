@@ -90,7 +90,7 @@ public sealed class ImportService(
     }
 
     public async Task<IReadOnlyList<ImportBatchDto>> GetHistoryAsync(CancellationToken ct) =>
-        (await repository.ListBatchesAsync(50, ct)).Select(b => new ImportBatchDto(b.Id, ImportDefinitions.Get(b.Type).Title, b.FileName,
+        (await repository.ListBatchesAsync(50, ct)).Select(b => new ImportBatchDto(b.Id, ImportDefinitions.All.FirstOrDefault(d => d.Type == b.Type)?.Title ?? Labels.Of(b.Type), b.FileName,
             b.UploadedBy, b.UploadedAtUtc, b.RowCount, b.InsertedCount, b.UpdatedCount, b.WarningCount, b.Status.ToString(), b.Source, b.ErrorCount, b.Message)).ToList();
 
     public async Task<int> PurgeDemoAsync(CancellationToken ct)

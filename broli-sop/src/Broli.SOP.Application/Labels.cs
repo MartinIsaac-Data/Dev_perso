@@ -48,10 +48,21 @@ public static class Labels
         {
             ["ProductMaster"] = "Référentiel produits", ["SupplierMaster"] = "Référentiel fournisseurs", ["Sales"] = "Ventes",
             ["Inventory"] = "Stocks", ["Supply"] = "Approvisionnements", ["Forecast"] = "Prévisions",
+            ["ReportingCatalogue"] = "Suivi des reportings",
         },
         [typeof(ImportStatus)] = new() { ["Validated"] = "Validé", ["Committed"] = "Importé", ["Rejected"] = "Rejeté", ["Failed"] = "Échec" },
         [typeof(ActionStatus)] = new() { ["Open"] = "Ouverte", ["InProgress"] = "En cours", ["Done"] = "Terminée", ["Cancelled"] = "Annulée" },
         [typeof(ActionPriority)] = new() { ["Low"] = "Basse", ["Medium"] = "Moyenne", ["High"] = "Haute", ["Critical"] = "Critique" },
+        [typeof(ReportStatus)] = new()
+        {
+            ["Pending"] = "En attente", ["Received"] = "Reçu", ["Late"] = "En retard", ["Missing"] = "Manquant", ["NotApplicable"] = "Non applicable",
+        },
+        [typeof(ReportQuality)] = new() { ["Ok"] = "OK", ["Issue"] = "Problème", ["Pending"] = "En attente" },
+        [typeof(ReportState)] = new()
+        {
+            ["Received"] = "Reçu", ["ReceivedLate"] = "Reçu en retard", ["Pending"] = "En attente", ["Late"] = "En retard",
+            ["Missing"] = "Manquant", ["NotApplicable"] = "Non applicable",
+        },
         [typeof(DataSourceKind)] = new() { ["ExcelFolder"] = "Dossier Excel", ["SqlStaging"] = "Table SQL de staging" },
         [typeof(Contracts.Settings.ConsumptionBasis)] = new()
         {

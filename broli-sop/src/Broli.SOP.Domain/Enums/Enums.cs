@@ -88,6 +88,8 @@ public enum ImportType
     Inventory = 4,
     Supply = 5,
     Forecast = 6,
+    /// <summary>Reporting catalogue, weekly tracker and calendar (one multi-sheet workbook).</summary>
+    ReportingCatalogue = 7,
 }
 
 public enum ImportStatus
@@ -120,4 +122,32 @@ public enum DataSourceKind
     ExcelFolder = 1,
     /// <summary>A table or view in an ERP / staging database (SAP extracts, SQL Server…).</summary>
     SqlStaging = 2,
+}
+
+/// <summary>Status of a weekly report as entered in the tracker (02_REPORTING_TRACKER).</summary>
+public enum ReportStatus
+{
+    Pending = 1,
+    Received = 2,
+    Late = 3,
+    Missing = 4,
+    NotApplicable = 5,
+}
+
+public enum ReportQuality
+{
+    Ok = 1,
+    Issue = 2,
+    Pending = 3,
+}
+
+/// <summary>What the portal shows for a report in a given week, derived from the tracker and the dates.</summary>
+public enum ReportState
+{
+    Received = 1,
+    ReceivedLate = 2,
+    Pending = 3,
+    Late = 4,
+    Missing = 5,
+    NotApplicable = 6,
 }

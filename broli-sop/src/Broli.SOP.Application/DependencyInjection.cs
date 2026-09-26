@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<AlertEngine>();
         services.AddScoped<DataRefreshService>();
         services.AddScoped<DataSourceService>();
+        services.AddScoped<Reporting.ReportingService>();
         return services;
     }
 }

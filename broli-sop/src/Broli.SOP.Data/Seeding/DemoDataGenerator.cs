@@ -226,6 +226,9 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
         AddActions(specs);
         db.ChangeTracker.DetectChanges();
         await db.SaveChangesAsync(ct);
+        AddReporting();
+        db.ChangeTracker.DetectChanges();
+        await db.SaveChangesAsync(ct);
         db.ChangeTracker.AutoDetectChangesEnabled = true;
         db.ChangeTracker.Clear();
     }
@@ -539,6 +542,98 @@ public sealed class DemoDataGenerator(SopDbContext db, IClock clock, int seed)
             ActionPriority.Medium, ActionStatus.Open, risk: "R-0002", ageDays: 12);
         Action("Transport", "Identifier des transporteurs alternatifs Douala–Yaoundé", "Chargé logistique (DÉMO)", "Logistique", -10,
             ActionPriority.Low, ActionStatus.Done, risk: "R-0013", comment: "Deux transporteurs référencés", ageDays: 30);
+    }
+
+    /// <summary>
+    /// Reporting catalogue shaped like the S&amp;OP reporting workbook (same IDs, departments and days), owned by the demo users,
+    /// with 10 weeks of history and the current week in progress. Some reports are reliably on time, others often late.
+    /// </summary>
+    private void AddReporting()
+    {
+        const string sales = "Responsable commercial (DÉMO)", warehouse = "Responsable entrepôt (DÉMO)", supply = "Planificateur appro (DÉMO)",
+            logistics = "Chargé logistique (DÉMO)", production = "Responsable production (DÉMO)", finance = "Contrôleur financier (DÉMO)";
+        (string Code, string Dept, string Name, string Owner, string Freq, string Day, string Content, string? Time, string Purpose, double Reliability)[] catalogue =
+        [
+            ("COM-01", "Commercial", "Actual Sales", sales, "Weekly", "Saturday", "Sales actuals, CA, volumes, customers, products", "10:00", "Demand", 0.9),
+            ("COM-02", "Commercial", "Sales Forecast S+1", sales, "Weekly", "Saturday", "Sales forecast for following week", "12:00", "Demand", 0.75),
+            ("WH-01", "Warehouse", "Global Stock – FG Imported", warehouse, "Weekly", "Friday", "Global stock of imported finished goods", "16:00", "Stock", 0.95),
+            ("WH-02", "Warehouse", "DLV / DLC Report", warehouse, "Weekly", "Wednesday", "DLV/DLC and expiry risks", "12:00", "Stock / Risk", 0.85),
+            ("WH-03", "Warehouse", "Unstuffing / Dépotage", warehouse, "Weekly", "Friday", "Container unstuffing and depotage status", "16:00", "Transit / Warehouse", 0.8),
+            ("WH-04", "Warehouse", "Global Warehouse Status", warehouse, "Weekly", "Friday", "Overall warehouse situation", "17:00", "Warehouse", 0.9),
+            ("WH-05", "Warehouse", "Store Report – RM/PM, Films, Cartons", warehouse, "Weekly", "Every day", "Store situation for RM/PM, films, cartons", null, "Stock", 0.7),
+            ("WH-06", "Warehouse", "Store Report – FG", warehouse, "Weekly", "Every day", "Local finished goods stock", null, "Stock", 0.8),
+            ("SUP-01", "Supply / FG Imported", "Stock Port & En Mer", supply, "Weekly", "Friday", "TC at port, in transit and ETA", "12:00", "Supply", 0.95),
+            ("SUP-02", "Supply / FG Imported", "Next 3 Months Visibility", supply, "Weekly / N3M", "Friday", "Three-month supply visibility", "15:00", "Supply", 0.85),
+            ("SUP-03", "Supply / FG Imported", "Claims", supply, "Weekly", "Friday", "Claims on imported finished goods", "17:00", "Risk / Supply", 0.6),
+            ("SUP-04", "Supply / RM-PM", "TC Visibility RM/PM", supply, "Weekly", "Friday", "TC and arrival visibility for RM/PM", "12:00", "Supply", 0.9),
+            ("SUP-07", "Supply / RM-PM", "Plastic Films Status", supply, "Weekly", "Friday", "Films in production, at sea, at port", "15:00", "Supply", 0.85),
+            ("TR-01", "Transit & Shipping", "CODIR Follow-up", logistics, "Weekly", "Saturday", "Transit, shipping, logistics and claims follow-up", "09:00", "Transit", 0.9),
+            ("TR-02", "Transit & Shipping", "État TC", logistics, "Weekly", "Saturday", "TC navigation, quay, documents, DDI, delivery status", "09:00", "Transit", 0.85),
+            ("PROD-01", "Production", "Actual Production", production, "Weekly", "Saturday", "Actual production from previous Saturday to Friday", "11:00", "Production", 0.55),
+            ("PROD-02", "Production", "Production Plan / Forecast", production, "Weekly", "Saturday", "Production plan from Sunday to Saturday", "11:00", "Production", 0.75),
+            ("LOG-01", "Logistics", "Delivery Tracking", logistics, "Weekly", "To confirm", "Delivery tracking", null, "Logistics", 0.7),
+            ("FIN-01", "Finance", "Suppliers Paid / To Be Paid", finance, "Weekly", "Friday", "Supplier payments and possible blockers", "16:00", "Finance / Supply", 0.5),
+            ("FIN-02", "Finance", "Customer Receivables", finance, "Weekly", "Friday", "Customer receivables", "16:00", "Finance / Demand", 0.6),
+        ];
+
+        var currentWeek = _today.AddDays(-(((int)_today.DayOfWeek + 6) % 7));
+        foreach (var c in catalogue)
+        {
+            var def = new ReportDefinition
+            {
+                Code = c.Code, Department = c.Dept, Name = c.Name, Owner = c.Owner, Frequency = c.Freq, ExpectedDay = c.Day, ExpectedTime = c.Time,
+                MainContent = c.Content, CatalogueStatus = c.Reliability >= 0.8 ? "Received" : "Identified", Purpose = c.Purpose, IsDemo = true,
+            };
+            db.ReportDefinitions.Add(def);
+            for (var w = 10; w >= 0; w--)
+            {
+                var week = currentWeek.AddDays(-7 * w);
+                var due = c.Day switch
+                {
+                    "Every day" => week,
+                    "To confirm" => (DateOnly?)null,
+                    var d => week.AddDays(((int)Enum.Parse<DayOfWeek>(d) + 6) % 7),
+                };
+                var s = new ReportSubmission
+                {
+                    Report = def, WeekStart = week, WeekLabel = $"S{System.Globalization.ISOWeek.GetWeekOfYear(week.ToDateTime(TimeOnly.MinValue)):00}",
+                    ReferenceDate = week.AddDays(5), IsDemo = true,
+                };
+                var roll = _rnd.NextDouble();
+                var reference = due ?? week.AddDays(4);
+                if (reference >= _today)
+                {
+                    if (roll > 0.9) s.ReceivedDate = _today.AddDays(-1) < week ? week : _today.AddDays(-1);
+                }
+                else if (roll < c.Reliability)
+                {
+                    s.ReceivedDate = reference.AddDays(_rnd.NextDouble() < 0.3 ? -1 : 0);
+                    s.Status = ReportStatus.Received;
+                }
+                else if (roll < c.Reliability + (1 - c.Reliability) * 0.6)
+                {
+                    var late = reference.AddDays(1 + _rnd.Next(3));
+                    if (late < _today)
+                    {
+                        s.ReceivedDate = late;
+                        s.Status = ReportStatus.Late;
+                        s.Comments = Pick("Envoyé après relance", "Fichier incomplet, complété le lendemain", "Retard dû à la clôture mensuelle");
+                    }
+                    else s.RelanceRequired = true;
+                }
+                else if (w > 0)
+                {
+                    s.Status = ReportStatus.Missing;
+                    s.RelanceRequired = true;
+                    s.Comments = Pick("Pas de réponse", "Responsable absent", "Source ERP indisponible");
+                }
+                else s.RelanceRequired = true;
+                if (s.ReceivedDate is not null)
+                    s.Quality = _rnd.NextDouble() switch { < 0.85 => ReportQuality.Ok, < 0.95 => ReportQuality.Issue, _ => ReportQuality.Pending };
+                if (s.Quality == ReportQuality.Issue) s.Comments ??= Pick("Colonnes manquantes", "Totaux incohérents avec la semaine précédente", "Format modifié");
+                db.ReportSubmissions.Add(s);
+            }
+        }
     }
 
     private string Pick(params string[] values) => values[_rnd.Next(values.Length)];
