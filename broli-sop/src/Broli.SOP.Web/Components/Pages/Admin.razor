@@ -1,0 +1,219 @@
+@page "/admin"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject FilterState Filters
+
+<PageTitle>Administration · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.UsersManage">
+    <PageHeader Title="Administration" Question="Qui peut voir et modifier quoi ?">
+        <Actions><button class="btn sm primary" @onclick="NewUser">+ Nouvel utilisateur</button></Actions>
+    </PageHeader>
+    @if (_error is not null) { <div class="alert error">@_error</div> }
+    @if (_ok is not null) { <div class="alert ok">✔ @_ok</div> }
+
+    <div class="card mb">
+        <ViewTabs Current="@_tab" OnSelect="t => _tab = t" Items="@([("users", $"Utilisateurs ({_users.Count})"), ("roles", $"Rôles et permissions ({_roles.Count})")])" />
+        @if (_tab == "users")
+        {
+            <div class="table-tools"><input type="search" placeholder="Rechercher un utilisateur…" @bind="_search" @bind:event="oninput" /></div>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Utilisateur</th><th>Service</th><th>Rôles</th><th>Périmètre de données</th><th>Dernière connexion</th><th>Statut</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var u in _users.Where(u => _search.Length == 0 || $"{u.Username} {u.DisplayName} {u.Department} {string.Join(' ', u.Roles)}".Contains(_search, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            <tr>
+                                <td><b>@u.DisplayName</b><span class="sub">@u.Username @(u.Email is null ? "" : "· " + u.Email)</span></td>
+                                <td>@u.Department</td>
+                                <td>@string.Join(", ", u.Roles)</td>
+                                <td class="muted">@Scope(u)</td>
+                                <td class="nowrap">@Fmt.DateTime(u.LastLoginUtc)</td>
+                                <td>
+                                    <StatusBadge Status="@(u.IsActive ? "OK" : "Critical")" Text="@(u.IsActive ? "Actif" : "Inactif")" />
+                                    @if (u.IsLockedOut) { <StatusBadge Status="High" Text="Verrouillé" /> }
+                                    @if (u.IsDemo) { <span class="badge st-neutral">DÉMO</span> }
+                                </td>
+                                <td><button class="btn sm" @onclick="() => EditUser(u)">Modifier</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="table-tools"><span class="muted">Les rôles regroupent des permissions. Les modifications s'appliquent à la prochaine connexion de l'utilisateur. De nouveaux rôles peuvent être ajoutés sans modifier le code.</span>
+                <button class="btn sm" @onclick="NewRole">+ Nouveau rôle</button></div>
+            <div class="table-wrap">
+                <table class="data perm-grid">
+                    <thead><tr><th>Permission</th>@foreach (var r in _roles) { <th title="@r.Description">@r.Name<span class="sub">@r.UserCount utilisateurs</span></th> }</tr></thead>
+                    <tbody>
+                        @foreach (var p in _permissions)
+                        {
+                            <tr><td><b>@p.Description</b><span class="sub">@p.Code</span></td>
+                                @foreach (var r in _roles)
+                                {
+                                    var role = r; var perm = p.Code;
+                                    <td><input type="checkbox" aria-label="@($"{role.Name} {perm}")" checked="@_matrix[role.Id].Contains(perm)" @onchange="e => Toggle(role.Id, perm, (bool)e.Value!)" /></td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar" style="padding:12px"><button class="btn primary" @onclick="SaveRoles" disabled="@(!_dirty)">Enregistrer les permissions</button></div>
+        }
+    </div>
+
+    @if (_user is not null)
+    {
+        <div class="modal-back" @onclick="() => _user = null">
+            <div class="modal" @onclick:stopPropagation role="dialog" aria-modal="true" aria-label="Utilisateur">
+                <div class="modal-head"><h2>@(_userId is null ? "Nouvel utilisateur" : "Modifier " + _user.Username)</h2><button class="icon-btn" @onclick="() => _user = null">✕</button></div>
+                <div class="modal-body">
+                    @if (_formError is not null) { <div class="alert error">@_formError</div> }
+                    <div class="form">
+                        <div class="field"><label>Identifiant</label><input @bind="_user.Username" disabled="@(_userId is not null)" autocomplete="off" /></div>
+                        <div class="field"><label>Nom affiché</label><input @bind="_user.DisplayName" /></div>
+                        <div class="field"><label>E-mail</label><input type="email" @bind="_user.Email" /></div>
+                        <div class="field"><label>Service</label><input @bind="_user.Department" list="depts" /></div>
+                        <div class="field full"><label>Rôles</label>
+                            <div class="chips">@foreach (var r in _roles) { var name = r.Name; <label class="check chip" style="padding:4px 10px"><input type="checkbox" checked="@_user.Roles.Contains(name)" @onchange="e => ToggleRole(name, (bool)e.Value!)" /> @name</label> }</div></div>
+                        <div class="field"><label>@(_userId is null ? "Mot de passe initial" : "Nouveau mot de passe (laisser vide pour conserver)")</label><input type="password" @bind="_user.Password" autocomplete="new-password" />
+                            <div class="help">Au moins 10 caractères, avec des lettres et des chiffres.</div></div>
+                        <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" @bind="_user.IsActive" /> Actif</label></div>
+                        <div class="field full"><label>Périmètre de données — agences</label>
+                            <div class="chips">@foreach (var a in Filters.Options?.Agencies ?? []) { var code = a.Value; <label class="check chip" style="padding:4px 10px"><input type="checkbox" checked="@_user.ScopeAgencies.Contains(code)" @onchange="e => Toggle(_user.ScopeAgencies, code, (bool)e.Value!)" /> @a.Label</label> }</div>
+                            <div class="help">Aucune case cochée = toutes les agences. Appliqué par l'API à chaque vue, export et recherche.</div></div>
+                        <div class="field full"><label>Périmètre de données — familles de produits</label>
+                            <div class="chips">@foreach (var c in Filters.Options?.Categories ?? []) { var code = c.Value; <label class="check chip" style="padding:4px 10px"><input type="checkbox" checked="@_user.ScopeCategories.Contains(code)" @onchange="e => Toggle(_user.ScopeCategories, code, (bool)e.Value!)" /> @c.Label</label> }</div>
+                            <div class="help">Aucune case cochée = toutes les familles. Pris en compte à la prochaine connexion de l'utilisateur.</div></div>
+                    </div>
+                </div>
+                <div class="modal-foot"><button class="btn" @onclick="() => _user = null">Annuler</button><button class="btn primary" @onclick="SaveUser">Enregistrer</button></div>
+            </div>
+        </div>
+    }
+    @if (_newRole is not null)
+    {
+        <div class="modal-back" @onclick="() => _newRole = null">
+            <div class="modal" style="width:min(460px,100%)" @onclick:stopPropagation role="dialog" aria-modal="true">
+                <div class="modal-head"><h2>Nouveau rôle</h2></div>
+                <div class="modal-body"><div class="form">
+                    <div class="field full"><label>Nom</label><input @bind="_newRole.Name" /></div>
+                    <div class="field full"><label>Description</label><input @bind="_newRole.Description" /></div>
+                </div></div>
+                <div class="modal-foot"><button class="btn" @onclick="() => _newRole = null">Annuler</button><button class="btn primary" @onclick="CreateRole">Créer</button></div>
+            </div>
+        </div>
+    }
+    <datalist id="depts"><option>Direction</option><option>Supply Chain</option><option>Commercial</option><option>Finance</option><option>Production</option><option>Entrepôt</option><option>Logistique</option><option>Informatique</option></datalist>
+</RequirePermission>
+
+@code {
+    private sealed class UserForm
+    {
+        public string Username { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string? Email { get; set; }
+        public string? Department { get; set; }
+        public bool IsActive { get; set; } = true;
+        public List<string> Roles { get; set; } = [];
+        public string? Password { get; set; }
+        public List<string> ScopeAgencies { get; set; } = [];
+        public List<string> ScopeCategories { get; set; } = [];
+    }
+
+    private static void Toggle(List<string> list, string code, bool on) { if (on) { if (!list.Contains(code)) list.Add(code); } else list.Remove(code); }
+
+    private static string Scope(UserDto u) =>
+        u.ScopeAgencies.Count + u.ScopeCategories.Count == 0 ? "toutes les données"
+        : string.Join(" · ", new[] { u.ScopeAgencies.Count > 0 ? "agences : " + string.Join(", ", u.ScopeAgencies) : null,
+                                     u.ScopeCategories.Count > 0 ? "familles : " + string.Join(", ", u.ScopeCategories) : null }.Where(x => x is not null));
+    private sealed class RoleForm { public string Name { get; set; } = ""; public string Description { get; set; } = ""; }
+
+    private string _tab = "users", _search = "";
+    private List<UserDto> _users = [];
+    private List<RoleDto> _roles = [];
+    private List<PermissionDto> _permissions = [];
+    private Dictionary<int, HashSet<string>> _matrix = [];
+    private bool _dirty;
+    private string? _error, _ok, _formError;
+    private UserForm? _user;
+    private int? _userId;
+    private RoleForm? _newRole;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _users = (await Api.GetAsync<List<UserDto>>("api/admin/users")).ToList();
+            _roles = (await Api.GetAsync<List<RoleDto>>("api/admin/roles")).ToList();
+            _permissions = (await Api.GetAsync<List<PermissionDto>>("api/admin/permissions")).ToList();
+            _matrix = _roles.ToDictionary(r => r.Id, r => r.Permissions.ToHashSet());
+            _dirty = false;
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+
+    private void Toggle(int roleId, string perm, bool on) { if (on) _matrix[roleId].Add(perm); else _matrix[roleId].Remove(perm); _dirty = true; }
+
+    private async Task SaveRoles()
+    {
+        _error = _ok = null;
+        try
+        {
+            foreach (var r in _roles.Where(r => !r.Permissions.ToHashSet().SetEquals(_matrix[r.Id])))
+                await Api.SendAsync(HttpMethod.Put, $"api/admin/roles/{r.Id}", new RoleUpsert(r.Name, r.Description, _matrix[r.Id].ToList()));
+            _ok = "Permissions enregistrées. Elles s'appliquent à la prochaine connexion de chaque utilisateur.";
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+
+    private void NewRole() => _newRole = new RoleForm();
+
+    private async Task CreateRole()
+    {
+        if (_newRole is null) return;
+        try
+        {
+            await Api.PostAsync<RoleDto>("api/admin/roles", new RoleUpsert(_newRole.Name, _newRole.Description, []));
+            _newRole = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _error = ex.Full; _newRole = null; }
+    }
+
+    private void NewUser() { _userId = null; _formError = null; _user = new UserForm(); }
+
+    private void EditUser(UserDto u)
+    {
+        _userId = u.Id;
+        _formError = null;
+        _user = new UserForm { Username = u.Username, DisplayName = u.DisplayName, Email = u.Email, Department = u.Department, IsActive = u.IsActive, Roles = u.Roles.ToList(),
+            ScopeAgencies = u.ScopeAgencies.ToList(), ScopeCategories = u.ScopeCategories.ToList() };
+    }
+
+    private void ToggleRole(string name, bool on) { if (_user is null) return; if (on) _user.Roles.Add(name); else _user.Roles.Remove(name); }
+
+    private async Task SaveUser()
+    {
+        if (_user is null) return;
+        _formError = null;
+        var body = new UserUpsert(_user.Username, _user.DisplayName, _user.Email, _user.Department, _user.IsActive, _user.Roles, string.IsNullOrEmpty(_user.Password) ? null : _user.Password,
+            _user.ScopeAgencies, _user.ScopeCategories);
+        try
+        {
+            if (_userId is { } id) await Api.PutAsync<UserDto>($"api/admin/users/{id}", body);
+            else await Api.PostAsync<UserDto>("api/admin/users", body);
+            _ok = $"Utilisateur {_user.Username} enregistré.";
+            _user = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex) { _formError = ex.Full; }
+    }
+}

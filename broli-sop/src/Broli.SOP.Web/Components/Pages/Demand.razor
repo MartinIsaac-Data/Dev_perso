@@ -1,0 +1,169 @@
+@page "/demand"
+@inherits SopPage
+
+<PageTitle>Demande · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.DemandView">
+    <PageHeader Title="Prévision vs réel" Question="Notre prévision est-elle fiable, et où induit-elle l'approvisionnement en erreur ?" Period="_d?.Period">
+        <Actions><ExportMenu Dataset="demand" Query="_q" /></Actions>
+    </PageHeader>
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            var s = d.Summary;
+            <div class="kpis k6">
+                @Tile("Prévision", Fmt.Num(s.Forecast), d.Unit, null, "neutral")
+                @Tile("Réel", Fmt.Num(s.Actual), d.Unit, null, "neutral")
+                @Tile("Écart", (s.Variance > 0 ? "+" : "") + Fmt.Num(s.Variance), d.Unit, "Réel − prévision", "neutral")
+                @Tile("Écart %", Fmt.SignedPct(s.VariancePct), null, $"Tolérance ±{d.TolerancePct:0} %", Band(s.VariancePct, d.TolerancePct))
+                @Tile("Précision des prévisions", Fmt.Pct(s.AccuracyPct), null, $"Objectif {d.AccuracyTargetPct:0} % · 1 − Σ|R−P| / ΣR",
+                      s.AccuracyPct is null ? "neutral" : s.AccuracyPct >= d.AccuracyTargetPct ? "good" : s.AccuracyPct >= d.AccuracyTargetPct - 10 ? "watch" : "bad")
+                @Tile("Biais", Fmt.SignedPct(s.BiasPct), null, "(ΣP − ΣR) / ΣR · + = surprévision", Band(s.BiasPct, d.TolerancePct))
+            </div>
+
+            <div class="grid g-2 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Prévision vs réel par mois</h2><span class="hint">@d.Unit · cliquer sur un mois pour le sélectionner</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Height="260" Labels="d.TrendMonths" Unit="@d.Unit" AriaLabel="Prévision et réel par mois"
+                                  Datasets="@([new ChartDataset("Prévision", d.TrendForecast, "--series-1"), new ChartDataset("Réel", d.TrendActual, "--series-2")])"
+                                  OnClick="c => SelectMonth(c.Index)" />
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Précision des prévisions par mois</h2><span class="hint">% · objectif @d.AccuracyTargetPct.ToString("0") %</span></div>
+                    <div class="card-body">
+                        <SopChart Type="line" Height="260" Labels="d.TrendMonths" Unit="%" Max="100" AriaLabel="Précision des prévisions par mois"
+                                  Datasets="@([new ChartDataset("Précision", d.TrendAccuracy, "--series-3"),
+                                              new ChartDataset("Objectif", d.TrendMonths.Select(_ => (double?)d.AccuracyTargetPct).ToList(), "--text-muted", Dashed: true)])" />
+                    </div>
+                </div>
+            </div>
+            <div class="grid g-2 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Précision des 15 plus gros articles</h2><span class="hint">% · les moins bons d'abord · cliquer pour le détail</span></div>
+                    <div class="card-body">
+                        @if (d.WorstAccuracyByProduct.Count == 0) { <div class="empty">Aucune demande sur la période.</div> }
+                        else
+                        {
+                            <SopChart Type="bar" Horizontal="true" Height="@(d.WorstAccuracyByProduct.Count * 24 + 50)" Unit="%" Max="100"
+                                      Labels="d.WorstAccuracyByProduct.Select(p => p.Label).ToList()" AriaLabel="Précision des prévisions par article"
+                                      Datasets="@([new ChartDataset("Précision", d.WorstAccuracyByProduct.Select(p => p.Value).ToList(), "--series-1",
+                                                  PointColors: d.WorstAccuracyByProduct.Select(p => p.Value >= d.AccuracyTargetPct ? "--series-1" : "--serious").ToList())])"
+                                      OnClick="c => Go(ProductUrl(d.WorstAccuracyByProduct[c.Index].Key))" />
+                        }
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Biais par famille de produits</h2><span class="hint">% · bleu = surprévision, rouge = sous-prévision</span></div>
+                    <div class="card-body">
+                        @if (d.BiasByFamily.Count == 0) { <div class="empty">Aucune demande sur la période.</div> }
+                        else
+                        {
+                            <SopChart Type="bar" Horizontal="true" Height="@(d.BiasByFamily.Count * 30 + 50)" Unit="%"
+                                      Labels="d.BiasByFamily.Select(p => p.Label).ToList()" AriaLabel="Biais de prévision par famille de produits"
+                                      Datasets="@([new ChartDataset("Biais", d.BiasByFamily.Select(p => p.Value).ToList(), "--series-1",
+                                                  PointColors: d.BiasByFamily.Select(p => p.Value >= 0 ? "--series-1" : "--series-8").ToList())])"
+                                      OnClick="c => FilterFamily(d.BiasByFamily[c.Index].Key)" />
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView" Items="@([("", "Tous les articles"), ("under", $"Sous la prévision ({s.UnderForecast})"), ("over", $"Au-dessus de la prévision ({s.OverForecast})"), ("ontrack", $"Conformes ({s.OnTrack})")])" />
+                <div class="table-tools">
+                    <input type="search" placeholder="Rechercher CArtSAP, article, famille, marque…" @bind="_q.Search" @bind:event="oninput" @bind:after="SearchChanged" />
+                    <span class="muted">Le statut applique une tolérance de ±@d.TolerancePct.ToString("0") % (Configuration).</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr>
+                                <Th Query="_q" Field="CArtSap" OnChanged="LoadRows">Article</Th>
+                                <Th Query="_q" Field="Category" OnChanged="LoadRows">Famille</Th>
+                                <Th Query="_q" Field="Forecast" Numeric OnChanged="LoadRows">Prévision</Th>
+                                <Th Query="_q" Field="Actual" Numeric OnChanged="LoadRows">Réel</Th>
+                                <Th Query="_q" Field="Variance" Numeric OnChanged="LoadRows">Écart</Th>
+                                <Th Query="_q" Field="VariancePct" Numeric OnChanged="LoadRows">Écart %</Th>
+                                <Th Query="_q" Field="AccuracyPct" Numeric OnChanged="LoadRows">Précision</Th>
+                                <Th Query="_q" Field="BiasPct" Numeric OnChanged="LoadRows">Biais</Th>
+                                <Th Query="_q" Field="Status" OnChanged="LoadRows">Statut</Th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _rows?.Items ?? [])
+                            {
+                                <tr class="click" @onclick="@(() => Go(ProductUrl(r.CArtSap)))">
+                                    <td><b>@r.Description</b><span class="sub">@r.CArtSap @(r.Brand is null ? "" : "· " + r.Brand)</span></td>
+                                    <td>@r.Category</td>
+                                    <td class="num">@Fmt.Num(r.Forecast) <span class="muted">@r.Unit</span></td>
+                                    <td class="num">@Fmt.Num(r.Actual)</td>
+                                    <td class="num">@((r.Variance > 0 ? "+" : "") + Fmt.Num(r.Variance))</td>
+                                    <td class="num">@Fmt.SignedPct(r.VariancePct)</td>
+                                    <td class="num">@Fmt.Pct(r.AccuracyPct)</td>
+                                    <td class="num">@Fmt.SignedPct(r.BiasPct)</td>
+                                    <td><StatusBadge Status="@r.Status" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_rows is { Total: 0 }) { <div class="empty">Aucun article ne correspond.</div> }
+                </div>
+                <Pager Query="_q" Total="@(_rows?.Total ?? 0)" OnChanged="LoadRows" />
+            </div>
+        }
+    </LoadState>
+</RequirePermission>
+
+@code {
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+
+    private DemandDashboard? _d;
+    private PagedResult<DemandRow>? _rows;
+    private readonly TableQuery _q = new() { Sort = "Actual", Desc = true };
+
+    protected override async Task LoadAsync(CancellationToken ct)
+    {
+        _q.View = View;
+        _q.Page = 1;
+        var dash = Api.GetAsync<DemandDashboard>("api/demand", Filter, ct: ct);
+        var rows = Api.GetAsync<PagedResult<DemandRow>>("api/demand/rows", Filter, _q, ct);
+        _d = await dash;
+        _rows = await rows;
+    }
+
+    private async Task LoadRows()
+    {
+        try { _rows = await Api.GetAsync<PagedResult<DemandRow>>("api/demand/rows", Filter, _q); }
+        catch (ApiException ex) { Nav.NavigateTo(Nav.Uri); Console.Error.WriteLine(ex.Message); }
+    }
+
+    private Task SearchChanged() { _q.Page = 1; return LoadRows(); }
+
+    private void SetView(string v) => Go(v.Length == 0 ? "demand" : $"demand?view={v}");
+
+    private static string ProductUrl(string? cartSap) => $"products/{Uri.EscapeDataString(cartSap ?? "")}";
+
+    private async Task SelectMonth(int index)
+    {
+        if (_d?.TrendMonthKeys is not { } keys || index >= keys.Count) return;
+        var key = keys[index];
+        await Filters.UpdateAsync(f => { f.Year = key / 100; f.Months = [key % 100]; });
+    }
+
+    private Task FilterFamily(string? code) => code is null ? Task.CompletedTask : Filters.UpdateAsync(f => f.Categories = [code]);
+
+    private static string Band(double? v, double tol) =>
+        v is not { } x ? "neutral" : Math.Abs(x) <= tol ? "good" : Math.Abs(x) <= 2 * tol ? "watch" : "bad";
+
+    private static RenderFragment Tile(string title, string value, string? unit, string? sub, string status) => __builder =>
+    {
+        <div class="kpi @status">
+            <div class="k-title"><span>@title</span></div>
+            <div class="k-value">@value@if (unit is not null && value != Fmt.Empty) {<span class="u">@unit</span>}</div>
+            @if (sub is not null) { <div class="k-sub">@sub</div> }
+        </div>
+    };
+}

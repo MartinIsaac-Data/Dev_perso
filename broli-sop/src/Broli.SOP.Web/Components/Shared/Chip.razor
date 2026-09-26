@@ -1,0 +1,7 @@
+<span class="chip">@Name : <b>@Value</b><button type="button" aria-label="Retirer le filtre @Name @Value" @onclick="OnRemove">✕</button></span>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback OnRemove { get; set; }
+}

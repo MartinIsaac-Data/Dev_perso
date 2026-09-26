@@ -1,0 +1,61 @@
+@implements IDisposable
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<div class="user-chip">
+    <button class="icon-btn" title="Notifications" aria-label="Notifications, @_feed.Unread non lues" @onclick="Toggle" style="position:relative">
+        🔔@if (_feed.Unread > 0) {<span class="bell-count">@(_feed.Unread > 99 ? "99+" : _feed.Unread.ToString())</span>}
+    </button>
+    @if (_open)
+    {
+        <div class="backdrop" @onclick="() => _open = false"></div>
+        <div class="dropdown notif-panel">
+            <div class="notif-head"><b>Notifications</b>@if (_feed.Unread > 0) {<button class="link-btn" @onclick="ReadAll">Tout marquer comme lu</button>}</div>
+            @if (_feed.Items.Count == 0) { <div class="empty" style="padding:18px">Aucune notification pour le moment.</div> }
+            @foreach (var n in _feed.Items)
+            {
+                <button class="notif @(n.IsRead ? "" : "unread")" @onclick="() => Open(n)">
+                    <span class="badge @Fmt.StatusClass(n.Severity == "info" ? "OK" : n.Severity)"><span class="i">@Fmt.StatusIcon(n.Severity == "info" ? "OK" : n.Severity)</span></span>
+                    <span class="notif-body"><b>@n.Title</b><span class="notif-msg">@n.Message</span><span class="sub">@Fmt.DateTime(n.CreatedAtUtc)</span></span>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private NotificationFeed _feed = new(0, []);
+    private bool _open;
+    private Timer? _timer;
+
+    protected override void OnInitialized() =>
+        _timer = new Timer(_ => InvokeAsync(LoadAsync), null, TimeSpan.Zero, TimeSpan.FromSeconds(60));
+
+    private async Task LoadAsync()
+    {
+        try { _feed = await Api.GetAsync<NotificationFeed>("api/notifications"); StateHasChanged(); }
+        catch (ApiException) { /* offline or signed out: keep the last state */ }
+    }
+
+    private async Task Toggle()
+    {
+        _open = !_open;
+        if (_open) await LoadAsync();
+    }
+
+    private async Task Open(NotificationDto n)
+    {
+        _open = false;
+        if (!n.IsRead) { try { await Api.SendAsync(HttpMethod.Post, $"api/notifications/{n.Id}/read"); } catch (ApiException) { } }
+        await LoadAsync();
+        if (n.Link is { } link) Nav.NavigateTo(link);
+    }
+
+    private async Task ReadAll()
+    {
+        try { await Api.SendAsync(HttpMethod.Post, "api/notifications/read-all"); } catch (ApiException) { }
+        await LoadAsync();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

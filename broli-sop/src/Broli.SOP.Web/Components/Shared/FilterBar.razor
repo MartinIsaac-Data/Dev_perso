@@ -1,0 +1,109 @@
+@implements IDisposable
+@inject FilterState Filters
+
+@if (Filters.Options is { } o)
+{
+    var f = Filters.Filter;
+    <div class="filterbar" aria-label="Filtres globaux">
+        <span class="lbl">Filtres</span>
+        <div class="fsel">
+            <select class="fsel-select" style="height:32px;border:1px solid var(--border);border-radius:7px;background:var(--surface);padding:0 6px"
+                    aria-label="Année" value="@(f.Year?.ToString() ?? "")" @onchange="SetYear">
+                <option value="">Année : dernière</option>
+                @foreach (var y in o.Years.OrderDescending()) { <option value="@y">@y</option> }
+            </select>
+        </div>
+        <div class="fsel">
+            <button type="button" class="@(f.Months.Count > 0 ? "on" : "")" @onclick="() => _months = !_months">
+                Mois@(f.Months.Count == 1 ? $" : {MonthNames[f.Months[0] - 1]}" : f.Months.Count > 1 ? "" : " : dernier")
+                @if (f.Months.Count > 1) { <span class="count">@f.Months.Count</span> }
+                <span class="caret">▼</span>
+            </button>
+            @if (_months)
+            {
+                <div class="backdrop" @onclick="() => _months = false"></div>
+                <div class="fpanel" style="min-width:240px">
+                    <div class="months">
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            var month = m;
+                            <button type="button" class="@(f.Months.Contains(month) ? "on" : "")" @onclick="() => ToggleMonth(month)">@MonthNames[month - 1]</button>
+                        }
+                    </div>
+                    <div class="actions">
+                        <button type="button" @onclick="ClearMonths">Dernier mois</button>
+                        <button type="button" @onclick="() => _months = false">OK</button>
+                    </div>
+                </div>
+            }
+        </div>
+        <MultiSelect Label="Agence" Options="o.Agencies" Selected="f.Agencies" SelectedChanged="v => Set(x => x.Agencies = v)" />
+        <MultiSelect Label="Famille de produits" Options="o.Categories" Selected="f.Categories" SelectedChanged="v => Set(x => x.Categories = v)" />
+        <MultiSelect Label="Marque" Options="o.Brands" Selected="f.Brands" SelectedChanged="v => Set(x => x.Brands = v)" />
+        <MultiSelect Label="Type d'article" Options="o.MaterialTypes" Selected="f.MaterialTypes" SelectedChanged="v => Set(x => x.MaterialTypes = v)" />
+        @if (_more)
+        {
+            <MultiSelect Label="Fournisseur" Options="o.Suppliers" Selected="f.Suppliers" SelectedChanged="v => Set(x => x.Suppliers = v)" />
+            <MultiSelect Label="Pays" Options="o.Countries" Selected="f.Countries" SelectedChanged="v => Set(x => x.Countries = v)" />
+            <MultiSelect Label="Statut" Options="o.Statuses" Selected="f.Statuses" SelectedChanged="v => Set(x => x.Statuses = v)" />
+            <ProductPicker />
+        }
+        <button class="link-btn" style="font-size:12.5px" @onclick="() => _more = !_more">@(_more ? "− Moins de filtres" : "+ Plus de filtres")</button>
+
+        @if (f.ActiveCount > 0)
+        {
+            <div class="chips" aria-label="Filtres actifs">
+                @if (f.Year is { } y) { <Chip Name="Année" Value="@y.ToString()" OnRemove="@(() => Set(x => x.Year = null))" /> }
+                @foreach (var m in f.Months) { var mm = m; <Chip Name="Mois" Value="@MonthNames[mm - 1]" OnRemove="@(() => Set(x => x.Months.Remove(mm)))" /> }
+                @Chips("Agence", f.Agencies, (x, v) => x.Agencies.Remove(v))
+                @Chips("Famille", f.Categories, (x, v) => x.Categories.Remove(v))
+                @Chips("Marque", f.Brands, (x, v) => x.Brands.Remove(v))
+                @Chips("Article", f.Products, (x, v) => x.Products.Remove(v))
+                @Chips("Fournisseur", f.Suppliers, (x, v) => x.Suppliers.Remove(v))
+                @Chips("Pays", f.Countries, (x, v) => x.Countries.Remove(v))
+                @Chips("Type d'article", f.MaterialTypes, (x, v) => x.MaterialTypes.Remove(v))
+                @Chips("Statut", f.Statuses, (x, v) => x.Statuses.Remove(v))
+                <button class="reset" @onclick="Filters.ResetAsync">✕ Réinitialiser les filtres</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    public static readonly string[] MonthNames = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
+    private bool _months, _more;
+
+    protected override void OnInitialized()
+    {
+        Filters.Changed += OnChanged;
+        Filters.OptionsChanged += OnOptions;
+    }
+
+    private void OnOptions() => InvokeAsync(StateHasChanged);
+
+    private Task OnChanged() => InvokeAsync(StateHasChanged);
+
+    private Task Set(Action<SopFilter> mutate) => Filters.UpdateAsync(mutate);
+
+    private Task SetYear(ChangeEventArgs e) => Set(x => x.Year = int.TryParse(e.Value?.ToString(), out var y) ? y : null);
+
+    private Task ToggleMonth(int m) => Set(x => { if (!x.Months.Remove(m)) x.Months.Add(m); x.Months.Sort(); });
+
+    private Task ClearMonths() { _months = false; return Set(x => x.Months.Clear()); }
+
+
+    private RenderFragment Chips(string name, List<string> values, Action<SopFilter, string> remove) => __builder =>
+    {
+        foreach (var v in values)
+        {
+            var value = v;
+            <Chip Name="@name" Value="@Filters.LabelOf(name, value)" OnRemove="@(() => Set(x => remove(x, value)))" />
+        }
+    };
+
+    public void Dispose()
+    {
+        Filters.Changed -= OnChanged;
+        Filters.OptionsChanged -= OnOptions;
+    }
+}

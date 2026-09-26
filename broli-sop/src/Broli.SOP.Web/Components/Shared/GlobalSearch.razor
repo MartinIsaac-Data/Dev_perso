@@ -1,0 +1,93 @@
+@implements IDisposable
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<div class="search" role="search">
+    <span class="glyph" aria-hidden="true">⌕</span>
+    <input type="search" placeholder="Rechercher CArtSAP, article, fournisseur, commande, marque…" aria-label="Recherche globale"
+           value="@_term" @oninput="OnInput" @onkeydown="OnKey" @onfocus="() => _open = _results.Count > 0" @onblur="Close" />
+    @if (_open)
+    {
+        <div class="search-results">
+            @if (_results.Count == 0)
+            {
+                <div class="empty" style="padding:14px">@(_searching ? "Recherche…" : "Aucun résultat.")</div>
+            }
+            @for (var i = 0; i < _results.Count; i++)
+            {
+                var r = _results[i];
+                <button class="@(i == _sel ? "sel" : "")" @onmousedown="() => Open(r)" @onmousedown:preventDefault>
+                    <span class="type">@TypeLabel(r.Type)</span>
+                    <span><b>@r.Title</b> <span class="sub">@r.Subtitle</span></span>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string _term = "";
+    private List<SearchResult> _results = [];
+    private bool _open, _searching;
+    private int _sel = -1;
+    private Timer? _debounce;
+    private CancellationTokenSource? _cts;
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _term = e.Value?.ToString() ?? "";
+        _debounce?.Dispose();
+        if (_term.Trim().Length < 2) { _results = []; _open = false; return; }
+        _searching = true;
+        _open = true;
+        _debounce = new Timer(_ => InvokeAsync(SearchAsync), null, 220, Timeout.Infinite);
+    }
+
+    private async Task SearchAsync()
+    {
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+        try
+        {
+            _results = (await Api.GetAsync<List<SearchResult>>($"api/search?q={Uri.EscapeDataString(_term.Trim())}", ct: _cts.Token)).ToList();
+            _sel = _results.Count > 0 ? 0 : -1;
+        }
+        catch (OperationCanceledException) { return; }
+        catch (ApiException) { _results = []; }
+        _searching = false;
+        StateHasChanged();
+    }
+
+    private static string TypeLabel(string type) => type switch
+    {
+        "Product" => "Article", "Supplier" => "Fournisseur", "PO" => "Commande", "Brand" => "Marque", "Material" => "Famille", _ => type,
+    };
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowDown" && _results.Count > 0) _sel = (_sel + 1) % _results.Count;
+        else if (e.Key == "ArrowUp" && _results.Count > 0) _sel = (_sel - 1 + _results.Count) % _results.Count;
+        else if (e.Key == "Enter" && _sel >= 0 && _sel < _results.Count) Open(_results[_sel]);
+        else if (e.Key == "Escape") _open = false;
+    }
+
+    private void Open(SearchResult r)
+    {
+        _open = false;
+        _term = "";
+        _results = [];
+        Nav.NavigateTo(r.Url);
+    }
+
+    private async Task Close()
+    {
+        await Task.Delay(150);
+        _open = false;
+    }
+
+    public void Dispose()
+    {
+        _debounce?.Dispose();
+        _cts?.Cancel();
+    }
+}

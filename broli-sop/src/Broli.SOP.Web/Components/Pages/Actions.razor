@@ -1,0 +1,203 @@
+@page "/actions"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Actions S&amp;OP · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.ActionsView">
+    <PageHeader Title="Plan d'actions S&OP" Question="Qui fait quoi, pour quand — et quelles décisions restent ouvertes ?">
+        <Actions>
+            @if (_canEdit) { <button class="btn sm primary" @onclick="New">+ Nouvelle action</button> }
+            <ExportMenu Dataset="actions" Query="_q" UseFilter="false" />
+        </Actions>
+    </PageHeader>
+    @if (_error is not null) { <div class="alert error">@_error</div> }
+
+    @if (_summary is { } s)
+    {
+        <div class="kpis">
+            @Tile("Ouvertes", s.Open.ToString(), "non démarrées", "neutral", "active")
+            @Tile("En cours", s.InProgress.ToString(), "en traitement", "neutral", "active")
+            @Tile("En retard", s.Overdue.ToString(), "échéance dépassée", s.Overdue > 0 ? "bad" : "good", "overdue")
+            @Tile("Échéance cette semaine", s.DueThisWeek.ToString(), "7 prochains jours", s.DueThisWeek > 0 ? "watch" : "neutral", "active")
+            @Tile("Décisions ouvertes", s.OpenDecisions.ToString(), "pour la réunion S&OP", s.OpenDecisions > 0 ? "watch" : "good", "decisions")
+        </div>
+    }
+
+    <div class="card">
+        <ViewTabs Current="@(_q.View ?? "")" OnSelect="SetView"
+                  Items="@([("active", "Actives"), ("mine", "Les miennes"), ("overdue", "En retard"), ("decisions", "Décisions"), ("done", "Terminées / annulées"), ("", "Toutes")])" />
+        <div class="table-tools">
+            <input type="search" placeholder="Rechercher n°, sujet, description, commentaire…" @bind="_q.Search" @bind:event="oninput" @bind:after="Reload" />
+            <select class="btn sm" @bind="_q.Department" @bind:after="Reload" aria-label="Service">
+                <option value="">Tous les services</option>@foreach (var d in _summary?.Departments ?? []) { <option>@d</option> }
+            </select>
+            <select class="btn sm" @bind="_q.Owner" @bind:after="Reload" aria-label="Responsable">
+                <option value="">Tous les responsables</option>@foreach (var o in _summary?.Owners ?? []) { <option value="@o.Value">@o.Label</option> }
+            </select>
+            <select class="btn sm" @bind="_q.Status" @bind:after="Reload" aria-label="Statut">
+                <option value="">Tous les statuts</option><option>Ouverte</option><option>En cours</option><option>Terminée</option><option>Annulée</option>
+            </select>
+            <select class="btn sm" @bind="_q.Priority" @bind:after="Reload" aria-label="Priorité">
+                <option value="">Toutes les priorités</option><option>Critique</option><option>Haute</option><option>Moyenne</option><option>Basse</option>
+            </select>
+            <label class="check">Échéance avant le <input type="date" class="btn sm" @bind="_q.DueBefore" @bind:after="Reload" /></label>
+        </div>
+        <div class="table-wrap">
+            <table class="data dense">
+                <thead>
+                    <tr>
+                        <Th Query="_q" Field="Code" OnChanged="Reload">N° action</Th>
+                        <Th Query="_q" Field="Date" OnChanged="Reload">Date</Th>
+                        <Th Query="_q" Field="Topic" OnChanged="Reload">Sujet / description</Th>
+                        <Th Query="_q" Field="Owner" OnChanged="Reload">Responsable</Th>
+                        <Th Query="_q" Field="Department" OnChanged="Reload">Service</Th>
+                        <Th Query="_q" Field="DueDate" OnChanged="Reload">Échéance</Th>
+                        <Th Query="_q" Field="Priority" OnChanged="Reload">Priorité</Th>
+                        <Th Query="_q" Field="Status" OnChanged="Reload">Statut</Th>
+                        <th>Commentaire</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _page?.Items ?? [])
+                    {
+                        <tr class="@(_canEdit ? "click" : "")" @onclick="() => Edit(a)">
+                            <td class="code">@a.Code@if (a.IsDecision) {<span class="sub" style="color:var(--accent)">◆ décision</span>}</td>
+                            <td class="nowrap">@Fmt.Date(a.Date)</td>
+                            <td style="min-width:260px"><b>@a.Topic</b><span class="sub" style="color:var(--text-secondary)">@a.Description</span>
+                                @if (a.RiskCode is not null || a.CArtSap is not null) {<span class="sub">@(a.RiskCode is null ? "" : "Risque " + a.RiskCode)@(a.RiskCode is not null && a.CArtSap is not null ? " · " : "")@if (a.CArtSap is { } c) {<a href="@($"products/{Uri.EscapeDataString(c)}")" @onclick:stopPropagation>@c</a>}</span>}</td>
+                            <td>@a.Owner</td>
+                            <td>@a.Department</td>
+                            <td class="nowrap">@Fmt.Date(a.DueDate)@if (a.IsOverdue) {<span class="sub" style="color:var(--critical-ink)">▲ en retard</span>}</td>
+                            <td><StatusBadge Status="@(a.Priority == "Basse" ? "OK" : a.Priority)" Text="@a.Priority" /></td>
+                            <td><StatusBadge Status="@(a.Status switch { "Terminée" => "OK", "En cours" => "En cours", "Annulée" => "neutral", _ => a.IsOverdue ? "Critique" : "neutral" })" Text="@a.Status" /></td>
+                            <td class="muted" style="max-width:220px">@a.Comment</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_page is { Total: 0 }) { <div class="empty">Aucune action ne correspond.</div> }
+        </div>
+        <Pager Query="_q" Total="@(_page?.Total ?? 0)" OnChanged="Reload" />
+    </div>
+
+    @if (_form is not null)
+    {
+        <div class="modal-back" @onclick="() => _form = null">
+            <div class="modal" @onclick:stopPropagation role="dialog" aria-modal="true" aria-label="Action">
+                <div class="modal-head"><h2>@(_editId is null ? "Nouvelle action" : "Modifier " + _editCode)</h2><button class="icon-btn" @onclick="() => _form = null">✕</button></div>
+                <div class="modal-body">
+                    @if (_formError is not null) { <div class="alert error">@_formError</div> }
+                    <div class="form">
+                        <div class="field"><label>Sujet</label><input @bind="_form.Topic" maxlength="200" /></div>
+                        <div class="field"><label>Date</label><input type="date" @bind="_form.Date" /></div>
+                        <div class="field full"><label>Description</label><textarea @bind="_form.Description" maxlength="2000"></textarea></div>
+                        <div class="field"><label>Responsable</label><input @bind="_form.Owner" list="owners" /><div class="help">Nom d'un utilisateur : il sera notifié.</div></div>
+                        <div class="field"><label>Service</label><input @bind="_form.Department" list="depts" /></div>
+                        <div class="field"><label>Échéance</label><input type="date" @bind="_form.DueDate" /></div>
+                        <div class="field"><label>Priorité</label><select @bind="_form.Priority"><option>Basse</option><option>Moyenne</option><option>Haute</option><option>Critique</option></select></div>
+                        <div class="field"><label>Statut</label><select @bind="_form.Status"><option>Ouverte</option><option>En cours</option><option>Terminée</option><option>Annulée</option></select></div>
+                        <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" @bind="_form.IsDecision" /> Décision pour la réunion S&amp;OP</label></div>
+                        <div class="field"><label>Risque lié (facultatif)</label><input @bind="_form.RiskCode" placeholder="R-0001" /></div>
+                        <div class="field"><label>CArtSAP (facultatif)</label><input @bind="_form.CArtSap" /></div>
+                        <div class="field full"><label>Commentaire</label><textarea @bind="_form.Comment" maxlength="2000"></textarea></div>
+                    </div>
+                </div>
+                <div class="modal-foot"><button class="btn" @onclick="() => _form = null">Annuler</button><button class="btn primary" @onclick="Save" disabled="@_saving">Enregistrer</button></div>
+            </div>
+        </div>
+    }
+    <datalist id="owners">@foreach (var o in _summary?.Owners ?? []) { <option>@o.Value</option> }</datalist>
+    <datalist id="depts">@foreach (var d in new[] { "Direction", "Supply Chain", "Commercial", "Finance", "Production", "Entrepôt", "Logistique", "Informatique" }) { <option>@d</option> }</datalist>
+</RequirePermission>
+
+@code {
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+    private ActionSummary? _summary;
+    private PagedResult<ActionDto>? _page;
+    private readonly ActionQuery _q = new() { View = "active" };
+    private string? _error, _formError, _editCode;
+    private bool _canEdit => Session.Can(Permissions.ActionsEdit);
+    private bool _saving;
+    private int? _editId;
+
+    private sealed class ActionForm
+    {
+        public string Topic { get; set; } = "";
+        public DateOnly? Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string Description { get; set; } = "";
+        public string Owner { get; set; } = "";
+        public string Department { get; set; } = "";
+        public DateOnly? DueDate { get; set; }
+        public string Priority { get; set; } = "Moyenne";
+        public string Status { get; set; } = "Ouverte";
+        public bool IsDecision { get; set; }
+        public string? RiskCode { get; set; }
+        public string? CArtSap { get; set; }
+        public string? Comment { get; set; }
+    }
+    private ActionForm? _form;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _q.View = View ?? "active";
+        _q.Page = 1;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        _error = null;
+        try
+        {
+            _summary = await Api.GetAsync<ActionSummary>("api/actions/summary");
+            _page = await Api.GetAsync<PagedResult<ActionDto>>($"api/actions?{_q.ToActionQueryString()}");
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+
+    private void SetView(string v) => Nav.NavigateTo(v.Length == 0 ? "actions?view=all" : $"actions?view={v}");
+
+    private void New()
+    {
+        _editId = null; _formError = null;
+        _form = new ActionForm { Owner = Session.User?.DisplayName ?? "", Department = Session.User?.Department ?? "", DueDate = DateOnly.FromDateTime(DateTime.Today.AddDays(7)) };
+    }
+
+    private void Edit(ActionDto a)
+    {
+        if (!_canEdit) return;
+        _editId = a.Id; _editCode = a.Code; _formError = null;
+        _form = new ActionForm
+        {
+            Topic = a.Topic, Date = a.Date, Description = a.Description, Owner = a.Owner, Department = a.Department, DueDate = a.DueDate,
+            Priority = a.Priority, Status = a.Status, IsDecision = a.IsDecision, RiskCode = a.RiskCode, CArtSap = a.CArtSap, Comment = a.Comment,
+        };
+    }
+
+    private async Task Save()
+    {
+        if (_form is null) return;
+        _saving = true; _formError = null;
+        var f = _form;
+        var body = new ActionUpsert(f.Date, f.Topic, f.Description, f.Owner, f.Department, f.DueDate, f.Priority, f.Status, f.Comment, f.IsDecision, f.RiskCode, f.CArtSap);
+        try
+        {
+            if (_editId is { } id) await Api.PutAsync<ActionDto>($"api/actions/{id}", body);
+            else await Api.PostAsync<ActionDto>("api/actions", body);
+            _form = null;
+            await Reload();
+        }
+        catch (ApiException ex) { _formError = ex.Full; }
+        finally { _saving = false; }
+    }
+
+    private RenderFragment Tile(string title, string value, string sub, string status, string view) => __builder =>
+    {
+        <button type="button" class="kpi @status" @onclick="() => SetView(view)">
+            <div class="k-title"><span>@title</span><span class="go">›</span></div>
+            <div class="k-value">@value</div><div class="k-sub">@sub</div>
+        </button>
+    };
+}

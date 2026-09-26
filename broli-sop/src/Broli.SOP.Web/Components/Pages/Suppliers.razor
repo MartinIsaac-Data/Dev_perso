@@ -1,0 +1,90 @@
+@page "/suppliers"
+@inherits SopPage
+
+<PageTitle>Fournisseurs · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.SupplyView">
+    <PageHeader Title="Performance fournisseurs" Question="Quel fournisseur livre le plus souvent en retard — et que reste-t-il en commande chez lui ?" Period="_d?.Period">
+        <Actions><ExportMenu Dataset="suppliers" Query="_exportQuery" /></Actions>
+    </PageHeader>
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            <div class="kpis k6">
+                @Tile("Livraisons à l'heure", Fmt.Pct(d.OnTimePct), $"alerte sous {d.AlertPct:0} %", d.OnTimePct is null ? "neutral" : d.OnTimePct >= 90 ? "good" : d.OnTimePct >= d.AlertPct ? "watch" : "bad")
+                @Tile("Retard moyen", Fmt.Num(d.AvgDelayDays, 1) + " j", "livraison vs date de besoin", "neutral")
+                @Tile("Commandes ouvertes", d.OpenOrders.ToString("N0"), "lignes de commande", "neutral")
+                @Tile("En transit", Fmt.Num(d.InTransitTc, 1) + " TC", "expédiés, port, douane", "neutral")
+                @Tile("Transit moyen", Fmt.Num(d.AvgTransitDays, 1) + " j", "ETD → arrivée", "neutral")
+                @Tile("Livraisons partielles", d.PartialDeliveries.ToString(), "indicateur qualité : livraisons incomplètes", d.PartialDeliveries > 0 ? "watch" : "good")
+            </div>
+
+            <div class="card mb">
+                <div class="card-head"><h2>Livraisons à l'heure par fournisseur</h2><span class="hint">% · @d.Window.ToLowerInvariant() · cliquer sur une barre pour ses commandes</span></div>
+                <div class="card-body">
+                    @{ var ranked = _rows.Where(r => r.OnTimePct.HasValue).OrderBy(r => r.OnTimePct).ToList(); }
+                    <SopChart Type="bar" Horizontal="true" Height="@(Math.Max(180, ranked.Count * 24 + 50))" Unit="%" Max="100"
+                              Labels="ranked.Select(r => r.Name).ToList()" AriaLabel="Taux de livraison à l'heure par fournisseur"
+                              Datasets="@([new ChartDataset("À l'heure", ranked.Select(r => r.OnTimePct).ToList(), "--series-1",
+                                          PointColors: ranked.Select(r => r.OnTimePct < d.AlertPct ? "--critical" : r.OnTimePct < 90 ? "--warning" : "--series-1").ToList())])"
+                              OnClick="c => Open(ranked[c.Index].Code)" />
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="table-tools">
+                    <input type="search" placeholder="Rechercher un fournisseur ou un pays…" @bind="_search" @bind:event="oninput" @bind:after="() => _exportQuery.Search = _search" />
+                    <span class="muted">Les données qualité ne font pas partie du modèle : les livraisons partielles servent d'indicateur qualité.</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Fournisseur</th><th class="num">Commandes</th><th class="num">À l'heure</th><th class="num">Retard moyen</th><th class="num">Partielles</th>
+                            <th class="num">Ouvertes</th><th class="num">En transit</th><th class="num">Transit</th><th class="num">Ouvertes en retard</th><th>Risque</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _rows.Where(r => _search.Length == 0 || $"{r.Code} {r.Name} {r.Country}".Contains(_search, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                <tr class="click" @onclick="() => Open(r.Code)">
+                                    <td><b>@r.Name</b><span class="sub">@r.Code · @r.Country</span></td>
+                                    <td class="num">@r.Orders<span class="sub">@r.Delivered livrées</span></td>
+                                    <td class="num"><div class="bar-cell">@Fmt.Pct(r.OnTimePct, 0)<span class="track"><span class="fill" style="width:@(Math.Clamp(r.OnTimePct ?? 0, 0, 100).ToString(System.Globalization.CultureInfo.InvariantCulture))%;background:var(@(r.OnTimePct < d.AlertPct ? "--critical" : r.OnTimePct < 90 ? "--warning" : "--good"))"></span></span></div></td>
+                                    <td class="num">@(r.AvgDelayDays is { } ad ? $"{ad:0.0} j" : Fmt.Empty)</td>
+                                    <td class="num">@(r.PartialDeliveries > 0 ? r.PartialDeliveries : Fmt.Empty)</td>
+                                    <td class="num">@r.OpenOrders</td>
+                                    <td class="num">@Fmt.Num(r.InTransitTc, 1) TC</td>
+                                    <td class="num">@(r.AvgTransitDays is { } t ? $"{t:0} j" : Fmt.Empty)<span class="sub">std @(r.StandardTransitDays?.ToString() ?? "—") j</span></td>
+                                    <td class="num">@(r.LateOpen > 0 ? $"{r.LateOpen} ({r.CriticalOpen} critiques)" : Fmt.Empty)</td>
+                                    <td><StatusBadge Status="@r.Risk" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_rows.Count == 0) { <div class="empty">Aucune activité fournisseur pour ces filtres.</div> }
+                </div>
+            </div>
+        }
+    </LoadState>
+</RequirePermission>
+
+@code {
+    private SupplierDashboard? _d;
+    private List<SupplierRow> _rows = [];
+    private string _search = "";
+    private readonly TableQuery _exportQuery = new();
+
+    protected override async Task LoadAsync(CancellationToken ct)
+    {
+        var dash = Api.GetAsync<SupplierDashboard>("api/suppliers", Filter, ct: ct);
+        var rows = Api.GetAsync<List<SupplierRow>>("api/suppliers/rows", Filter, ct: ct);
+        _d = await dash;
+        _rows = (await rows).ToList();
+    }
+
+    /// <summary>Drill-down: all orders of the supplier (supplier filter applied to every page).</summary>
+    private void Open(string code) => Go($"transit?view=all&supplier={Uri.EscapeDataString(code)}");
+
+    private static RenderFragment Tile(string title, string value, string sub, string status) => __builder =>
+    {
+        <div class="kpi @status"><div class="k-title"><span>@title</span></div><div class="k-value">@value</div><div class="k-sub">@sub</div></div>
+    };
+}

@@ -1,0 +1,151 @@
+@page "/admin/config"
+@inject ApiClient Api
+@inject AuthSession Session
+
+<PageTitle>Configuration · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.ConfigEdit">
+    <PageHeader Title="Configuration" Question="Quelles règles métier pilotent la couverture, les risques et les KPI ?">
+        <Actions><button class="btn primary" @onclick="Save" disabled="@(_s is null || _saving)">Enregistrer la configuration</button></Actions>
+    </PageHeader>
+    @if (_error is not null) { <div class="alert error" role="alert">✖ <div>@_error</div></div> }
+    @if (_ok) { <div class="alert ok">✔ Enregistré. Tous les tableaux de bord sont recalculés avec les nouveaux paramètres ; la modification figure dans le journal d'audit.</div> }
+
+    @if (_s is { } s)
+    {
+        <div class="grid g-2">
+            <div class="card" style="grid-column:1 / -1">
+                <div class="card-head"><h2>Alertes et notifications</h2>
+                    <button class="btn sm" @onclick="RunAlerts" disabled="@_saving">Lancer les alertes maintenant</button></div>
+                <div class="card-body form">
+                    @{ var a = s.Alerts!; }
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.StockoutRisk" /> Risque de rupture détecté (couverture critique) → lecteurs des stocks</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.CoverageBelowThreshold" /> Couverture sous le seuil Risque → lecteurs des stocks</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.EtaDelay" /> Retard d'ETA (Risque appro / Critique) → lecteurs de l'approvisionnement</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.OpenPoOverdue" /> Commande ouverte en retard (ETA dépassée) → lecteurs de l'approvisionnement</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.ActionsOverdue" /> Actions S&amp;OP en retard → leur responsable</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.RefreshFailures" /> Échecs du rafraîchissement automatique → administrateurs des données</label></div>
+                    <div class="field"><label>Ne pas répéter la même alerte pendant (jours)</label><input type="number" min="0" max="90" @bind="a.RepeatAfterDays" /></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="a.SendEmail" /> Envoyer aussi un e-mail</label><div class="help">Nécessite un serveur SMTP (Smtp:Host, Smtp:From). Les notifications dans l'application fonctionnent toujours.</div></div>
+                    @if (_alertResult is { } ar) { <div class="field full"><div class="alert ok">✔ @ar.Alerts nouvelle(s) alerte(s), @ar.Notifications notification(s), @ar.Emails e-mail(s).</div></div> }
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>Couverture</h2><span class="hint">Couverture = stock disponible ÷ consommation mensuelle moyenne</span></div>
+                <div class="card-body form">
+                    <div class="field"><label>Base de consommation</label>
+                        <select @bind="s.Coverage.Basis">
+                            <option value="@ConsumptionBasis.Forecast">Prévision (N prochains mois)</option>
+                            <option value="@ConsumptionBasis.History">Historique (N derniers mois)</option>
+                            <option value="@ConsumptionBasis.MaxOfBoth">Maximum de la prévision et de l'historique</option>
+                        </select></div>
+                    <div class="field"><label>Mois moyennés (N)</label><input type="number" min="1" max="24" @bind="s.Coverage.AverageMonths" /></div>
+                    <div class="field"><label>Critique sous (mois)</label><input type="number" step="0.1" @bind="s.Coverage.CriticalBelowMonths" /></div>
+                    <div class="field"><label>Risque sous (mois)</label><input type="number" step="0.1" @bind="s.Coverage.RiskBelowMonths" /></div>
+                    <div class="field"><label>À surveiller sous (mois)</label><input type="number" step="0.1" @bind="s.Coverage.WatchBelowMonths" /></div>
+                    <div class="field"><label>Excédent au-dessus de (mois)</label><input type="number" step="0.1" @bind="s.Coverage.ExcessAboveMonths" /></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="s.Coverage.IncludeInTransit" /> Compter le stock en transit comme disponible</label></div>
+                    <div class="field"><label class="check"><input type="checkbox" @bind="s.Coverage.IncludeOpenOrders" /> Compter toutes les commandes ouvertes comme disponibles</label></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>Prévision et service</h2></div>
+                <div class="card-body form">
+                    <div class="field"><label>Tolérance « conforme » (± %)</label><input type="number" step="1" @bind="s.Forecast.OnTrackTolerancePct" /><div class="help">|Écart %| dans cette limite = Conforme.</div></div>
+                    <div class="field"><label>Horizon de prévision (mois)</label><input type="number" min="1" max="24" @bind="s.Forecast.HorizonMonths" /></div>
+                    <div class="field"><label>Objectif de précision (%)</label><input type="number" @bind="s.Forecast.AccuracyTargetPct" /></div>
+                    <div class="field"><label>Objectif de taux de service (%)</label><input type="number" @bind="s.Forecast.ServiceLevelTargetPct" /></div>
+                    <div class="field"><label>Alerte hausse de la demande (%)</label><input type="number" @bind="s.Forecast.DemandIncreaseThresholdPct" /></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>Approvisionnement et moteur de risques</h2></div>
+                <div class="card-body form">
+                    <div class="field"><label>Fenêtre de surveillance ETA (jours)</label><input type="number" @bind="s.Supply.WatchWindowDays" /><div class="help">ETA à moins de ce nombre de jours de la date de besoin / de rupture = À surveiller.</div></div>
+                    <div class="field"><label>Tolérance « à l'heure » (jours)</label><input type="number" @bind="s.Supply.OnTimeToleranceDays" /></div>
+                    <div class="field"><label>Tolérance « complet » (%)</label><input type="number" @bind="s.Supply.InFullTolerancePct" /></div>
+                    <div class="field"><label>Objectif OTIF (%)</label><input type="number" @bind="s.Supply.OtifTargetPct" /></div>
+                    <div class="field"><label>Port → entrepôt (jours)</label><input type="number" @bind="s.Supply.PortToWarehouseDays" /><div class="help">Dédouanement + livraison après l'arrivée au port (livraison estimée, délai MRP).</div></div>
+                    <div class="field"><label>Alerte ponctualité fournisseur (%)</label><input type="number" @bind="s.Supply.SupplierOnTimeAlertPct" /></div>
+                    <div class="field full"><label>Jours de transit par pays (valeurs spécifiques)</label>
+                        <textarea @bind="_transit" placeholder="TR=30&#10;CN=45"></textarea><div class="help">Un code ISO par ligne : CODE=jours. Les temps de transit par défaut proviennent du référentiel des pays.</div></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>Stock de sécurité, TC et général</h2></div>
+                <div class="card-body form">
+                    <div class="field"><label>Stock de sécurité par défaut (mois de consommation)</label><input type="number" step="0.1" @bind="s.SafetyStock.DefaultMonths" /></div>
+                    <div class="field"><label>Kg par TC (par défaut)</label><input type="number" step="100" @bind="s.Tc.DefaultKgPerTc" /><div class="help">Utilisé pour les articles en KG sans conversion TC.</div></div>
+                    <div class="field full"><label>Stock de sécurité par famille (valeurs spécifiques)</label>
+                        <textarea @bind="_safety" placeholder="FILMS=1.5&#10;DURUM=1"></textarea><div class="help">Un code famille par ligne : CODE=mois.</div></div>
+                    <div class="field"><label>Devise</label><input maxlength="5" @bind="s.General.Currency" /></div>
+                    <div class="field"><label>Mois de début d'exercice</label><input type="number" min="1" max="12" @bind="s.General.FiscalYearStartMonth" /></div>
+                    <div class="field full"><label>Services</label><input @bind="_departments" /><div class="help">Séparés par des virgules.</div></div>
+                    <div class="field full"><label>Familles de films</label><input @bind="_films" /><div class="help">Codes des familles affichées sur le tableau de bord Films, séparés par des virgules.</div></div>
+                    <div class="field"><label>Fenêtre de rotation lente (mois)</label><input type="number" min="1" max="24" @bind="s.Coverage.SlowMovingMonths" /></div>
+                </div>
+            </div>
+        </div>
+    }
+</RequirePermission>
+
+@code {
+    private SettingsDto? _s;
+    private string _transit = "", _safety = "", _departments = "", _films = "";
+    private string? _error;
+    private bool _ok, _saving;
+    private AlertRunResult? _alertResult;
+
+    private async Task RunAlerts()
+    {
+        _error = null; _saving = true;
+        try { _alertResult = await Api.PostAsync<AlertRunResult>("api/alerts/run", new { }); }
+        catch (ApiException ex) { _error = ex.Full; }
+        finally { _saving = false; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _s = await Api.GetAsync<SettingsDto>("api/settings");
+            _s = _s with { Alerts = _s.Alerts ?? new AlertSettings() };
+            _transit = string.Join("\n", _s.Supply.TransitDaysByCountry.Select(kv => $"{kv.Key}={kv.Value}"));
+            _safety = string.Join("\n", _s.SafetyStock.MonthsByCategory.Select(kv => $"{kv.Key}={kv.Value}"));
+            _departments = string.Join(", ", _s.General.Departments);
+            _films = string.Join(", ", _s.General.FilmCategories);
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+
+    private async Task Save()
+    {
+        if (_s is null) return;
+        _error = null; _ok = false; _saving = true;
+        try
+        {
+            _s.Supply.TransitDaysByCountry = ParseMap(_transit, v => int.TryParse(v, out var d) ? d : (int?)null);
+            _s.SafetyStock.MonthsByCategory = ParseMap(_safety, v => double.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (double?)null);
+            _s.General.Departments = _departments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            _s.General.FilmCategories = _films.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(c => c.ToUpperInvariant()).ToList();
+            await Api.SendAsync(HttpMethod.Put, "api/settings", _s);
+            _ok = true;
+        }
+        catch (FormatException ex) { _error = ex.Message; }
+        catch (ApiException ex) { _error = ex.Full; }
+        finally { _saving = false; }
+    }
+
+    private static Dictionary<string, T> ParseMap<T>(string text, Func<string, T?> parse) where T : struct
+    {
+        var map = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = line.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length != 2 || parts[0].Length == 0 || parse(parts[1].Replace(',', '.')) is not { } v)
+                throw new FormatException($"Ligne invalide : « {line} ». Format attendu : CODE=valeur.");
+            map[parts[0].ToUpperInvariant()] = v;
+        }
+        return map;
+    }
+}

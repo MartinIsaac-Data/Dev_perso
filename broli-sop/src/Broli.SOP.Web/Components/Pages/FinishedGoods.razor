@@ -1,0 +1,7 @@
+@page "/finished-goods"
+
+<MaterialsView Kind="finished-goods" View="@View" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+}

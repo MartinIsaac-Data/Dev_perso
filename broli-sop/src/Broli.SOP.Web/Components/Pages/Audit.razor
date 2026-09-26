@@ -1,0 +1,54 @@
+@page "/admin/audit"
+@inject ApiClient Api
+
+<PageTitle>Journal d'audit · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.AuditView">
+    <PageHeader Title="Journal d'audit" Question="Qui a modifié quoi, et quand ?" />
+    @if (_error is not null) { <div class="alert error">@_error</div> }
+    <div class="card">
+        <div class="table-tools">
+            <input type="search" placeholder="Rechercher utilisateur, action, objet, valeur…" @bind="_search" @bind:event="oninput" @bind:after="Reload" />
+            <select class="btn sm" @bind="_module" @bind:after="Reload" aria-label="Module">
+                <option value="">Tous les modules</option>
+                @foreach (var m in new[] { "Sécurité", "Approvisionnement", "Risques", "Actions S&OP", "Gestion des données", "Configuration", "Administration", "Export" }) { <option>@m</option> }
+            </select>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Module</th><th>Objet</th><th>Ancienne valeur</th><th>Nouvelle valeur</th></tr></thead>
+                <tbody>
+                    @foreach (var a in _page?.Items ?? [])
+                    {
+                        <tr><td class="nowrap">@Fmt.DateTime(a.TimestampUtc)</td><td>@a.Username</td><td>@a.Action</td><td>@a.Module</td><td>@a.ObjectRef</td>
+                            <td class="muted" style="max-width:280px;overflow-wrap:anywhere">@a.OldValue</td><td style="max-width:280px;overflow-wrap:anywhere">@a.NewValue</td></tr>
+                    }
+                </tbody>
+            </table>
+            @if (_page is { Total: 0 }) { <div class="empty">Aucune entrée.</div> }
+        </div>
+        <div class="pager">
+            <span>@(_page?.Total ?? 0) entrées</span>
+            <button class="btn sm" disabled="@(_p <= 1)" @onclick="() => Go(_p - 1)">‹ Préc.</button>
+            <span>Page @_p / @Math.Max(1, _page?.PageCount ?? 1)</span>
+            <button class="btn sm" disabled="@(_p >= (_page?.PageCount ?? 1))" @onclick="() => Go(_p + 1)">Suiv. ›</button>
+        </div>
+    </div>
+</RequirePermission>
+
+@code {
+    private PagedResult<AuditEntryDto>? _page;
+    private string _search = "", _module = "";
+    private int _p = 1;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => Load();
+    private Task Reload() { _p = 1; return Load(); }
+    private Task Go(int p) { _p = p; return Load(); }
+
+    private async Task Load()
+    {
+        try { _page = await Api.GetAsync<PagedResult<AuditEntryDto>>($"api/admin/audit?page={_p}&pageSize=50&search={Uri.EscapeDataString(_search)}&module={Uri.EscapeDataString(_module)}"); }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+}

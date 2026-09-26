@@ -1,0 +1,144 @@
+@page "/products/{CArtSap}"
+@inherits SopPage
+
+<PageTitle>@(_d?.Info.Description ?? CArtSap) · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.InventoryView">
+    <PageHeader Title="@(_d is null ? CArtSap : _d.Info.Description)" Period="_d?.Period"
+                Question="@(_d is null ? null : $"{_d.Info.CArtSap} · {_d.Info.Category}{(_d.Info.Brand is null ? "" : " · " + _d.Info.Brand)} · {_d.Info.MaterialType}{(_d.Info.MainSupplier is null ? "" : " · fournisseur " + _d.Info.MainSupplier)}")">
+        <Crumbs><a href="" @onclick="Back" @onclick:preventDefault>‹ Retour</a> · <a href="inventory">Stocks</a> · Article</Crumbs>
+        <Actions>
+            @if (_d is not null) { <StatusBadge Status="@_d.Position.CoverageStatus" Text="@($"{_d.Position.CoverageStatus} · {Fmt.Months(_d.Position.CoverageMonths)}")" /> }
+            <button class="btn sm" @onclick="@(() => JS.InvokeVoidAsync("sop.print"))">⎙ Imprimer / PDF</button>
+        </Actions>
+    </PageHeader>
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            var p = d.Position;
+            <div class="card mb">
+                <div class="facts">
+                    <div><span>Stock (fin @d.Period.AsOfMonth.ToString("MMMM"))</span><b>@Fmt.Num(p.ClosingStock) @p.Unit</b>@if (p.ClosingTc is { } tc) {<span>≈ @Fmt.Num(tc, 1) TC</span>}</div>
+                    <div><span>Conso. moyenne / mois</span><b>@Fmt.Num(p.AvgMonthlyConsumption) @p.Unit</b></div>
+                    <div><span>Couverture</span><b>@Fmt.Months(p.CoverageMonths)</b><span>@p.CoverageStatus</span></div>
+                    <div><span>Rupture prévue</span><b style="color:@(p.StockoutDate is null ? "inherit" : "var(--critical-ink)")">@Fmt.Date(p.StockoutDate)</b><span>@(p.StockoutDate is null ? "pas sur l'horizon" : "appros en cours incluses")</span></div>
+                    <div><span>Stock de sécurité</span><b>@Fmt.Num(p.SafetyStock) @p.Unit</b><span>@(p.BelowSafety ? "▲ stock sous la sécurité" : "couvert")</span></div>
+                    <div><span>Appro en cours</span><b>@Fmt.Num(p.OpenSupplyQty) @p.Unit</b><span>@Fmt.Num(p.InTransitQty) en transit</span></div>
+                    <div><span>Prochaine ETA</span><b>@Fmt.Date(p.NextEta)</b></div>
+                    <div><span>@(p.StockValue is null ? "Stock excédentaire" : "Valeur du stock")</span><b>@(p.StockValue is { } v ? Fmt.Num(v) : Fmt.Num(p.ExcessStock) + " " + p.Unit)</b></div>
+                </div>
+            </div>
+
+            <div class="card actions-panel mb">
+                <div class="card-head"><h2>Actions recommandées</h2><span class="hint">calculées à partir du stock, de la prévision et des commandes ouvertes</span></div>
+                <div class="card-body flush">
+                    @foreach (var a in d.Actions)
+                    {
+                        <div class="action-item">
+                            <span class="sev"><StatusBadge Status="@(a.Severity == "info" ? "OK" : a.Severity)" Text="@Severity(a.Severity)" /></span>
+                            <div><b>@a.Title</b><p>@a.Detail</p></div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card mb">
+                <div class="card-head"><h2>Commandes ouvertes et ETA</h2><span class="hint">@d.OpenOrders.Count ligne(s) ouverte(s)</span></div>
+                <div class="card-body flush table-wrap">
+                    @if (d.OpenOrders.Count == 0)
+                    {
+                        <div class="empty">Aucun approvisionnement en cours pour cet article.@(d.Info.MaterialType == "Produit fini" ? " Les produits finis sont réapprovisionnés par la production." : "")</div>
+                    }
+                    else
+                    {
+                        <table class="data">
+                            <thead><tr><th>Commande</th><th>Fournisseur</th><th class="num">Quantité</th><th>ETD</th><th>ETA</th><th>Besoin</th><th>Statut</th><th>Rupture avant ETA</th><th>Risque</th></tr></thead>
+                            <tbody>
+                                @foreach (var o in d.OpenOrders)
+                                {
+                                    <tr>
+                                        <td class="code"><a href="@($"transit?view=all&search={Uri.EscapeDataString(o.PoNumber)}")" title="Suivi de l'expédition">@o.PoNumber</a><span class="sub">commandée le @Fmt.Date(o.OrderDate)</span></td>
+                                        <td><a href="@($"suppliers")" title="Performance fournisseurs">@o.Supplier</a><span class="sub">@o.Country @(o.BillOfLading is null ? "" : "· BL " + o.BillOfLading)</span></td>
+                                        <td class="num">@Fmt.Num(o.Quantity) <span class="muted">@o.Unit</span><span class="sub">@Fmt.Num(o.Tc, 1) TC</span></td>
+                                        <td class="nowrap">@Fmt.Date(o.Etd)</td>
+                                        <td class="nowrap"><b>@Fmt.Date(o.Eta)</b>@if (o.TransitDays is { } t) {<span class="sub">@t j de transit</span>}</td>
+                                        <td class="nowrap">@Fmt.Date(o.RequiredDate)</td>
+                                        <td><span class="badge st-neutral">@o.Status</span>@if (o.CustomsStatus is not null) {<span class="sub">@o.CustomsStatus</span>}</td>
+                                        <td class="nowrap">@Fmt.Date(o.StockoutDate)</td>
+                                        <td><StatusBadge Status="@o.RiskLevel" />@if (o.RiskReason is not null) {<span class="sub">@o.RiskReason</span>}</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+
+            <div class="grid g-2 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Historique — stock, réel et prévision</h2><span class="hint">@p.Unit par mois</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Height="260" Labels="d.HistoryMonths" Unit="@p.Unit" AriaLabel="Stock, réel et prévision par mois"
+                                  Datasets="@([new ChartDataset("Prévision", d.HistoryForecast, "--series-1", Type: "line", Dashed: true),
+                                              new ChartDataset("Réel", d.HistoryActual, "--series-2", Type: "line"),
+                                              new ChartDataset("Stock fin de mois", d.HistoryStock, "--series-3")])" />
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Stock projeté</h2><span class="hint">initial + arrivées − prévision</span></div>
+                    <div class="card-body flush table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Mois</th><th class="num">Initial</th><th class="num">Arrivées</th><th class="num">Prévision</th><th class="num">Final</th><th>Couverture</th></tr></thead>
+                            <tbody>
+                                @foreach (var m in d.Projection)
+                                {
+                                    <tr>
+                                        <td>@m.Month</td>
+                                        <td class="num">@Fmt.Num(m.Opening)</td>
+                                        <td class="num">@(m.Incoming > 0 ? "+" + Fmt.Num(m.Incoming) : Fmt.Empty)</td>
+                                        <td class="num">−@Fmt.Num(m.Forecast)</td>
+                                        <td class="num"><b>@Fmt.Num(m.Closing)</b></td>
+                                        <td><StatusBadge Status="@m.CoverageStatus" Text="@(m.CoverageMonths is null ? m.CoverageStatus : Fmt.Months(m.CoverageMonths))" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <div class="chart-note" style="padding:8px 12px">Vue mensuelle : une rupture en cours de mois peut être masquée par une livraison arrivant plus tard dans le mois — voir « Rupture prévue » ci-dessus (simulation journalière).</div>
+                    </div>
+                </div>
+            </div>
+
+            @if (d.RegisterItems.Count > 0)
+            {
+                <div class="card">
+                    <div class="card-head"><h2>Risques et opportunités suivis</h2><a class="hint" href="risks">Registre des risques ›</a></div>
+                    <div class="card-body flush table-wrap">
+                        <table class="data">
+                            <thead><tr><th>N°</th><th>Description</th><th>Responsable</th><th>Action</th><th>Échéance</th><th>Statut</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in d.RegisterItems)
+                                {
+                                    <tr><td class="code">@r.Code</td><td>@r.Description<span class="sub">@r.Category · impact @r.Impact · @r.Probability %</span></td><td>@r.Owner</td><td>@r.Action</td>
+                                        <td class="nowrap">@Fmt.Date(r.DueDate)@if (r.IsOverdue) {<span class="sub" style="color:var(--critical-ink)">en retard</span>}</td><td><StatusBadge Status="@r.Status" /></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+    </LoadState>
+</RequirePermission>
+
+@code {
+    [Parameter] public string CArtSap { get; set; } = "";
+    private ProductDetail? _d;
+
+    protected override async Task LoadAsync(CancellationToken ct) =>
+        _d = await Api.GetAsync<ProductDetail>($"api/products/{Uri.EscapeDataString(CArtSap)}", Filter, ct: ct);
+
+    private static string Severity(string s) => s switch { "critical" => "Critique", "high" => "Élevé", "medium" => "Moyen", _ => "Info" };
+
+    private async Task Back() => await JS.InvokeVoidAsync("history.back");
+}

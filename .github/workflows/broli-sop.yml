@@ -1,0 +1,163 @@
+name: Broli S&OP — build & tests
+
+on:
+  pull_request:
+    paths: ["broli-sop/**", ".github/workflows/broli-sop.yml"]
+  push:
+    branches: ["claude/transformation-os-architecture-122kmh"]
+    paths: ["broli-sop/**", ".github/workflows/broli-sop.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: broli-sop
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore
+        run: dotnet restore Broli.SOP.sln
+      - name: Build (warnings are errors)
+        run: dotnet build Broli.SOP.sln --no-restore -c Release -warnaserror
+      - name: SQL Server migrations in sync with the model
+        run: |
+          dotnet tool restore
+          dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/Broli.SOP.Data --no-build --configuration Release
+      - name: Tests
+        run: dotnet test Broli.SOP.sln --no-build -c Release --logger "trx;LogFileName=results.trx" --results-directory TestResults
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: broli-sop/TestResults/*.trx
+
+  sqlserver:
+    name: tests on SQL Server 2022
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: broli-sop
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Start SQL Server (throw-away container, random password)
+        run: |
+          pw="Ci$(openssl rand -hex 12)!"
+          echo "::add-mask::$pw"
+          docker run -d --name mssql -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$pw" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+          for i in $(seq 1 60); do
+            docker exec mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$pw" -C -Q "SELECT 1" > /dev/null 2>&1 && break
+            sleep 2
+          done
+          echo "BROLI_TEST_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$pw;TrustServerCertificate=True" >> "$GITHUB_ENV"
+          echo "MSSQL_SA_PASSWORD=$pw" >> "$GITHUB_ENV"
+      - name: Build
+        run: dotnet build Broli.SOP.sln -c Release
+      - name: Tests on SQL Server (migrations, imports, writes, start-up checks)
+        run: dotnet test Broli.SOP.sln --no-build -c Release --logger "trx;LogFileName=results-sqlserver.trx" --results-directory TestResults
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-sqlserver
+          path: broli-sop/TestResults/*.trx
+      - name: Build the release package
+        shell: pwsh
+        run: ./deploy/build-release.ps1 -SkipTests -Version "ci-$("${{ github.sha }}".Substring(0,7))" -Output "$env:RUNNER_TEMP/release"
+      - name: Verify the package on SQL Server (Production mode, DBA script and self-migration)
+        run: |
+          pkg=$(find "$RUNNER_TEMP/release" -mindepth 1 -maxdepth 1 -type d | head -1)
+          ./deploy/ci/verify-package.sh "$pkg" mssql "$MSSQL_SA_PASSWORD"
+      - name: Upload the release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: ${{ runner.temp }}/release/*.zip
+
+  iis:
+    name: IIS install, update and rollback (Windows Server 2022)
+    runs-on: windows-2022
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: broli-sop
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: IIS with WebSocket Protocol and Application Initialization
+        shell: powershell
+        run: Install-WindowsFeature Web-Server, Web-WebSockets, Web-AppInit, Web-Mgmt-Console | Format-Table -AutoSize
+      - name: ASP.NET Core 10 Hosting Bundle
+        shell: powershell
+        run: |
+          $meta = Invoke-RestMethod 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json'
+          $release = $meta.releases | Where-Object { $_.'aspnetcore-runtime' } | Select-Object -First 1
+          $file = $release.'aspnetcore-runtime'.files | Where-Object { $_.name -eq 'dotnet-hosting-win.exe' }
+          Write-Host "Hosting Bundle $($release.'aspnetcore-runtime'.version)"
+          Invoke-WebRequest $file.url -OutFile "$env:RUNNER_TEMP\hosting.exe" -UseBasicParsing
+          $p = Start-Process "$env:RUNNER_TEMP\hosting.exe" -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "Hosting Bundle install failed ($($p.ExitCode))" }
+          net stop was /y; net start w3svc
+      - name: SQL Server Express
+        # SQL Server refuses volumes whose physical sectors exceed 4 KB, and some runners have 8 KB system disks:
+        # the data files go on the first drive that SQL Server accepts.
+        shell: powershell
+        run: |
+          $dataDrive = $null
+          foreach ($d in 'D', 'C') {
+            if (-not (Test-Path "${d}:\")) { continue }
+            $info = fsutil fsinfo sectorinfo "${d}:" | Out-String
+            $sector = [int](([regex]::Match($info, 'PhysicalBytesPerSectorForPerformance\s*:\s*(\d+)')).Groups[1].Value)
+            Write-Host "Drive ${d}: physical sector $sector bytes"
+            if (-not $dataDrive -and $sector -gt 0 -and $sector -le 4096) { $dataDrive = $d }
+          }
+          if (-not $dataDrive) { throw 'No drive with physical sectors of 4 KB or less: SQL Server cannot run on this runner.' }
+          $setup = "$env:RUNNER_TEMP\sqlexpr"
+          Invoke-WebRequest 'https://download.microsoft.com/download/3/8/d/38de7036-2433-4207-8eae-06e247e17b25/SQLEXPR_x64_ENU.exe' -OutFile "$env:RUNNER_TEMP\SQLEXPR.exe" -UseBasicParsing
+          Start-Process "$env:RUNNER_TEMP\SQLEXPR.exe" -ArgumentList '/q', "/x:$setup" -Wait
+          $p = Start-Process "$setup\setup.exe" -Wait -PassThru -ArgumentList @(
+            '/Q', '/ACTION=Install', '/FEATURES=SQLEngine', '/INSTANCENAME=SQLEXPRESS', '/IACCEPTSQLSERVERLICENSETERMS',
+            '/SQLSYSADMINACCOUNTS=BUILTIN\Administrators', "/INSTALLSQLDATADIR=${dataDrive}:\SQLData", '/UPDATEENABLED=FALSE')
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
+            Get-ChildItem 'C:\Program Files\Microsoft SQL Server\*\Setup Bootstrap\Log\Summary.txt' -ErrorAction SilentlyContinue | Get-Content -Tail 40
+            throw "SQL Server Express install failed ($($p.ExitCode))"
+          }
+          Write-Host "SQL Server Express installed, data on ${dataDrive}:"
+      - name: Build the release package
+        shell: pwsh
+        run: ./deploy/build-release.ps1 -SkipTests -Version ci -Output "$env:RUNNER_TEMP\release"
+      - name: Install, update, broken update, rollback (Windows PowerShell 5.1)
+        # -NonInteractive: any prompt fails at once instead of waiting for a keyboard until the job times out.
+        shell: powershell -NonInteractive -Command ". '{0}'"
+        run: ./deploy/ci/verify-iis.ps1 -Package "$env:RUNNER_TEMP\release\broli-sop-ci"
+      - name: Diagnostics
+        if: failure()
+        shell: powershell
+        run: |
+          Get-WinEvent -LogName Application -MaxEvents 40 | Where-Object { $_.LevelDisplayName -in 'Error', 'Warning' } |
+            Format-List TimeCreated, ProviderName, Message
+          Get-ChildItem C:\inetpub\broli-sop -ErrorAction SilentlyContinue
+          netsh http show sslcert hostnameport=localhost:443
+          & "$env:windir\system32\inetsrv\appcmd.exe" list site

@@ -1,0 +1,88 @@
+@page "/login"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject FilterState Filters
+@inject NavigationManager Nav
+
+<PageTitle>Connexion · Broli S&amp;OP</PageTitle>
+
+<div class="login-page">
+    <section class="login-hero">
+        <div class="brand" style="border:0;padding:0"><div class="brand-mark">B</div><div>Broli <small>Portail S&amp;OP</small></div></div>
+        <div>
+            <h1>Planification S&amp;OP,<br />une seule vue pour toutes les équipes.</h1>
+            <p>Stock, couverture, approvisionnement, transit et risques — calculés à partir des mêmes données pour la Direction, la Supply, le Commercial, la Finance, la Production, l'Entrepôt et la Logistique.</p>
+            <ul>
+                <li>Avons-nous assez de stock ?</li>
+                <li>Quels articles risquent la rupture ?</li>
+                <li>Quelles commandes sont en retard, et que devons-nous décider ?</li>
+            </ul>
+        </div>
+        <small style="color:#7f95b0">Usage interne uniquement · les accès sont journalisés</small>
+    </section>
+    <section class="login-form">
+        <form @onsubmit="SignIn" @onsubmit:preventDefault>
+            <div>
+                <h1 style="font-size:24px">Connexion</h1>
+                <p class="muted" style="margin:4px 0 0">Utilisez votre compte S&amp;OP Broli.</p>
+            </div>
+            @if (Expired) { <div class="alert warn">Votre session a expiré. Veuillez vous reconnecter.</div> }
+            @if (_error is not null) { <div class="alert error" role="alert">@_error</div> }
+            <div class="field">
+                <label for="u">Identifiant</label>
+                <input id="u" autocomplete="username" @bind="_username" required autofocus />
+            </div>
+            <div class="field">
+                <label for="p">Mot de passe</label>
+                <input id="p" type="password" autocomplete="current-password" @bind="_password" required />
+            </div>
+            <button class="btn primary" type="submit" disabled="@_busy">@(_busy ? "Connexion…" : "Se connecter")</button>
+            <p class="muted" style="font-size:12px;margin:0">5 échecs verrouillent le compte pendant 15 minutes. Contactez votre administrateur pour réinitialiser un mot de passe.</p>
+        </form>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "expired")] public string? ExpiredFlag { get; set; }
+    private bool Expired => ExpiredFlag == "1" && _error is null;
+
+    private string _username = "", _password = "";
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.RestoreAsync();
+        if (Session.IsAuthenticated) Nav.NavigateTo(SafeReturn);
+    }
+
+    private string SafeReturn => ReturnUrl is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") && !r.StartsWith("/login") ? r : "/";
+
+    private async Task SignIn()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Api.LoginAsync(new LoginRequest(_username.Trim(), _password));
+            if (response is null)
+            {
+                _error = "Identifiant ou mot de passe incorrect, ou compte temporairement verrouillé.";
+                return;
+            }
+            await Session.SignInAsync(response);
+            Filters.Options = null;
+            Nav.NavigateTo(SafeReturn);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _password = "";
+            _busy = false;
+        }
+    }
+}

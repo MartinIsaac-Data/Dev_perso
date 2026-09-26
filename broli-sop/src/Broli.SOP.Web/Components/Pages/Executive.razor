@@ -1,0 +1,136 @@
+@page "/"
+@inherits SopPage
+
+<PageTitle>Synthèse · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.ExecutiveView">
+    <PageHeader Title="Tableau de bord de synthèse" Question="L'approvisionnement, le stock et la demande sont-ils sous contrôle — et où devons-nous agir ?" Period="_d?.Period">
+        <Actions><ExportMenu Dataset="inventory" Query="_exportQuery" /></Actions>
+    </PageHeader>
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            <div class="kpis">
+                @foreach (var k in d.Kpis) { <KpiTile Kpi="k" Previous="@d.Period.PreviousLabel" /> }
+            </div>
+
+            <div class="grid g-32 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Prévision vs réel — 12 derniers mois</h2><span class="hint">@_demandUnit · cliquer sur un mois pour l'analyser</span></div>
+                    <div class="card-body">
+                        <SopChart Type="line" Height="270" Labels="d.ForecastTrend.Points.Select(p => p.Label).ToList()" Unit="@_demandUnit"
+                                  AriaLabel="Prévision et réel par mois"
+                                  Datasets="@([new ChartDataset("Prévision", d.ForecastTrend.Points.Select(p => p.Value).ToList(), "--series-1", Dashed: true),
+                                              new ChartDataset("Réel", d.ActualTrend.Points.Select(p => p.Value).ToList(), "--series-2")])"
+                                  OnClick="c => DrillMonth(d.ActualTrend.Points[c.Index].Key)" />
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Articles par statut de couverture</h2><span class="hint">Articles · cliquer sur une barre pour la liste</span></div>
+                    <div class="card-body">
+                        <SopChart Type="bar" Height="270" Labels="d.CoverageDistribution.Select(p => p.Label).ToList()" Unit="articles"
+                                  AriaLabel="Nombre d'articles par statut de couverture"
+                                  Datasets="@([new ChartDataset("Articles", d.CoverageDistribution.Select(p => p.Value).ToList(), "--series-1",
+                                              PointColors: d.CoverageDistribution.Select(p => StatusColors.For(p.Label)).ToList())])"
+                                  OnClick="c => Go(CoverageUrl(d.CoverageDistribution[c.Index].Key))" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid g-2 mb">
+                <div class="card">
+                    <div class="card-head"><h2>Stock à risque — à traiter en priorité</h2><a href="inventory?view=at-risk" class="hint">Tous (@d.Kpis.First(k => k.Code == "STOCK_AT_RISK").Value?.ToString("0")) ›</a></div>
+                    <div class="card-body flush table-wrap">
+                        @if (d.TopRisks.Count == 0) { <div class="empty">✔ Aucun article sous le seuil de risque.</div> }
+                        else
+                        {
+                            <table class="data">
+                                <thead><tr><th>Article</th><th class="num">Stock</th><th class="num">Couverture</th><th>Rupture</th><th>Prochaine ETA</th></tr></thead>
+                                <tbody>
+                                    @foreach (var r in d.TopRisks)
+                                    {
+                                        <tr class="click" @onclick="@(() => Go($"products/{Uri.EscapeDataString(r.CArtSap)}"))">
+                                            <td><b>@r.Description</b><span class="sub">@r.CArtSap · @r.Category</span></td>
+                                            <td class="num">@Fmt.Num(r.ClosingStock) <span class="muted">@r.Unit</span></td>
+                                            <td class="num"><StatusBadge Status="@r.CoverageStatus" Text="@Fmt.Months(r.CoverageMonths)" /></td>
+                                            <td class="nowrap">@Fmt.Date(r.StockoutDate)</td>
+                                            <td class="nowrap">@Fmt.Date(r.NextEta)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-head"><h2>Approvisionnements en retard ou critiques</h2><a href="supply?view=late" class="hint">Toutes les commandes en retard ›</a></div>
+                    <div class="card-body flush table-wrap">
+                        @if (d.LateSupply.Count == 0) { <div class="empty">✔ Aucune ligne d'approvisionnement à risque.</div> }
+                        else
+                        {
+                            <table class="data">
+                                <thead><tr><th>Commande</th><th>Article</th><th>ETA</th><th>Risque</th></tr></thead>
+                                <tbody>
+                                    @foreach (var s in d.LateSupply)
+                                    {
+                                        <tr class="click" @onclick="@(() => Go($"products/{Uri.EscapeDataString(s.CArtSap)}"))">
+                                            <td class="code">@s.PoNumber<span class="sub">@s.Supplier</span></td>
+                                            <td>@s.Product<span class="sub">@s.RiskReason</span></td>
+                                            <td class="nowrap">@Fmt.Date(s.Eta)</td>
+                                            <td><StatusBadge Status="@s.RiskLevel" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-head"><h2>Stock par famille de produits</h2><span class="hint">TC à fin @d.Period.AsOfMonth.ToString("MMMM yyyy") · cliquer pour filtrer</span></div>
+                <div class="card-body">
+                    <SopChart Type="bar" Horizontal="true" Height="@(Math.Max(160, d.StockByCategoryTc.Count * 32 + 40))" Unit="TC"
+                              Labels="d.StockByCategoryTc.Select(p => p.Label).ToList()" AriaLabel="Stock en conteneurs par famille de produits"
+                              Datasets="@([new ChartDataset("Stock", d.StockByCategoryTc.Select(p => p.Value).ToList(), "--series-1")])"
+                              OnClick="c => FilterFamily(d.StockByCategoryTc[c.Index].Key)" />
+                </div>
+            </div>
+        }
+    </LoadState>
+</RequirePermission>
+
+@code {
+    private ExecutiveDashboard? _d;
+    private string _demandUnit = "TC";
+    private readonly TableQuery _exportQuery = new() { View = "at-risk" };
+
+    protected override async Task LoadAsync(CancellationToken ct)
+    {
+        _d = await Api.GetAsync<ExecutiveDashboard>("api/executive", Filter, ct: ct);
+        _demandUnit = _d.DemandUnit;
+    }
+
+    private static string CoverageUrl(string? status) => status switch
+    {
+        null => "inventory",
+        "NoDemand" => "inventory?view=nodemand",
+        _ => $"inventory?view={status.ToLowerInvariant()}",
+    };
+
+    private async Task DrillMonth(string? monthKey)
+    {
+        if (monthKey is null || monthKey.Length < 6) return;
+        var year = int.Parse(monthKey[..4]);
+        var month = int.Parse(monthKey.Substring(4, 2));
+        await Filters.UpdateAsync(f => { f.Year = year; f.Months = [month]; });
+        Go("demand");
+    }
+
+    private async Task FilterFamily(string? code)
+    {
+        if (code is null) return;
+        await Filters.UpdateAsync(f => f.Categories = [code]);
+    }
+}

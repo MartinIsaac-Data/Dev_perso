@@ -1,0 +1,22 @@
+@inject AuthSession Session
+
+@if (Session.Can(Permission))
+{
+    @ChildContent
+}
+else
+{
+    <div class="card" style="max-width:560px;margin:40px auto">
+        <div class="card-body" style="text-align:center;padding:36px">
+            <div style="font-size:30px">⚿</div>
+            <h2 style="margin:8px 0">Accès restreint</h2>
+            <p class="muted">Votre rôle n'inclut pas <b>@Permission</b>. Demandez à un administrateur si vous avez besoin de cette vue.</p>
+            <a class="btn" href="">Retour au portail</a>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Permission { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

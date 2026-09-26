@@ -1,0 +1,9 @@
+global using Broli.SOP.Application.Abstractions;
+global using Broli.SOP.Application.Analytics;
+global using Broli.SOP.Contracts;
+global using Broli.SOP.Contracts.Dtos;
+global using Broli.SOP.Contracts.Settings;
+global using Broli.SOP.Domain;
+global using Broli.SOP.Domain.Entities;
+global using Broli.SOP.Domain.Enums;
+global using Microsoft.EntityFrameworkCore;

@@ -1,0 +1,6 @@
+<span class="badge @Fmt.StatusClass(Status)"><span class="i" aria-hidden="true">@Fmt.StatusIcon(Status)</span>@(Text ?? Status)</span>
+
+@code {
+    [Parameter] public string? Status { get; set; }
+    [Parameter] public string? Text { get; set; }
+}

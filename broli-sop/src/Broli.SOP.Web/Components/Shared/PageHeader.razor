@@ -1,0 +1,22 @@
+<div class="page-head">
+    <div>
+        @if (Crumbs is not null) { <div class="crumbs">@Crumbs</div> }
+        <h1 tabindex="-1">@Title</h1>
+        @if (Question is not null) { <div class="q">@Question</div> }
+    </div>
+    <div class="toolbar">
+        @if (Period is not null)
+        {
+            <span class="period-pill">Période <b>@Period.Label</b>@if (Period.AsOfMonth.Month != Period.PeriodEnd.Month || Period.AsOfMonth.Year != Period.PeriodEnd.Year) {<span> · stock au @Period.AsOfMonth.ToString("MMM yyyy")</span>}</span>
+        }
+        @Actions
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Question { get; set; }
+    [Parameter] public PeriodInfo? Period { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public RenderFragment? Crumbs { get; set; }
+}

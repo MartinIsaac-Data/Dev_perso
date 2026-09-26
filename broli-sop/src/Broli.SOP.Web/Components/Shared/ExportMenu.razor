@@ -1,0 +1,32 @@
+@inject AuthSession Session
+@inject ApiClient Api
+@inject FilterState Filters
+@inject IJSRuntime JS
+
+@if (Session.Can(Permissions.DataExport))
+{
+    <button class="btn sm" disabled="@_busy" @onclick="@(() => Export("xlsx"))" title="Exporter les lignes filtrées (toutes les pages) vers Excel">⤓ Excel</button>
+    <button class="btn sm" disabled="@_busy" @onclick="@(() => Export("csv"))" title="Exporter les lignes filtrées (toutes les pages) en CSV">⤓ CSV</button>
+}
+<button class="btn sm" @onclick="Print" title="Imprimer ou enregistrer en PDF">⎙ Imprimer / PDF</button>
+@if (_error is not null) { <span class="muted" style="color:var(--critical-ink)">@_error</span> }
+
+@code {
+    [Parameter, EditorRequired] public string Dataset { get; set; } = "";
+    [Parameter, EditorRequired] public TableQuery Query { get; set; } = default!;
+    [Parameter] public bool UseFilter { get; set; } = true;
+
+    private bool _busy;
+    private string? _error;
+
+    private async Task Export(string format)
+    {
+        _busy = true;
+        _error = null;
+        try { await ExportHelper.ExportAsync(Api, JS, Dataset, format, UseFilter ? Filters.Filter : null, Query); }
+        catch (ApiException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Print() => await JS.InvokeVoidAsync("sop.print");
+}

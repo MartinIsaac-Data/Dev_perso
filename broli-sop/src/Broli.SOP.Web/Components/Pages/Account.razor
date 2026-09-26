@@ -1,0 +1,40 @@
+@page "/account"
+@inject ApiClient Api
+@inject AuthSession Session
+
+<PageTitle>Mon compte · Broli S&amp;OP</PageTitle>
+
+<PageHeader Title="Mon compte" Question="@($"{Session.User?.DisplayName} · {string.Join(", ", Session.User?.Roles ?? [])}")" />
+<div class="card" style="max-width:520px">
+    <div class="card-head"><h2>Changer le mot de passe</h2></div>
+    <div class="card-body" style="display:grid;gap:12px">
+        @if (_error is not null) { <div class="alert error">@_error</div> }
+        @if (_ok) { <div class="alert ok">✔ Mot de passe modifié.</div> }
+        <div class="field"><label>Mot de passe actuel</label><input type="password" autocomplete="current-password" @bind="_current" /></div>
+        <div class="field"><label>Nouveau mot de passe</label><input type="password" autocomplete="new-password" @bind="_new" /><div class="help">Au moins 10 caractères, avec des lettres et des chiffres.</div></div>
+        <div class="field"><label>Confirmer le nouveau mot de passe</label><input type="password" autocomplete="new-password" @bind="_confirm" /></div>
+        <div><button class="btn primary" @onclick="Save">Changer le mot de passe</button></div>
+    </div>
+</div>
+<div class="card" style="max-width:520px;margin-top:14px">
+    <div class="card-head"><h2>Mes permissions</h2></div>
+    <div class="card-body chips">@foreach (var p in Session.User?.Permissions ?? []) { <span class="chip" style="padding:2px 10px">@p</span> }</div>
+</div>
+
+@code {
+    private string _current = "", _new = "", _confirm = "";
+    private string? _error;
+    private bool _ok;
+
+    private async Task Save()
+    {
+        _error = null; _ok = false;
+        if (_new != _confirm) { _error = "Les deux nouveaux mots de passe sont différents."; return; }
+        try
+        {
+            await Api.SendAsync(HttpMethod.Post, "api/auth/change-password", new ChangePasswordRequest(_current, _new));
+            _ok = true; _current = _new = _confirm = "";
+        }
+        catch (ApiException ex) { _error = ex.Full; }
+    }
+}

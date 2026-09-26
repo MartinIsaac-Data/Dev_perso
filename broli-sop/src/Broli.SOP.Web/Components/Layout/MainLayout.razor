@@ -1,0 +1,169 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject AuthSession Session
+@inject FilterState Filters
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject UiState Ui
+@inject IJSRuntime JS
+
+@if (!_ready)
+{
+    <div class="splash">Chargement du portail S&amp;OP Broli…</div>
+}
+else if (IsLoginPage)
+{
+    @Body
+}
+else if (Session.IsAuthenticated)
+{
+    @if (Ui.Busy) { <div class="loading-bar" aria-hidden="true"></div> }
+    <div class="shell @(Ui.MeetingMode ? "meeting" : "") @(_navOpen ? "nav-open" : "")">
+        <aside class="sidebar" aria-label="Navigation principale">
+            <div class="brand"><div class="brand-mark">B</div><div>Broli <small>Portail S&amp;OP</small></div></div>
+            <nav class="nav" @onclick="() => _navOpen = false">
+                <div class="nav-section">Pilotage</div>
+                @NavItem("", "◧", "Synthèse", Permissions.ExecutiveView, NavLinkMatch.All)
+                @NavItem("demand", "↗", "Demande", Permissions.DemandView)
+                @NavItem("supply", "⇄", "Approvisionnement", Permissions.SupplyView)
+                @NavItem("inventory", "▦", "Stocks", Permissions.InventoryView)
+                @NavItem("risks", "⚑", "Risques", Permissions.RisksView)
+                @NavItem("mrp", "∑", "MRP", Permissions.SupplyView)
+                <div class="nav-section">Matières et logistique</div>
+                @NavItem("raw-materials", "⬡", "Matières premières", Permissions.InventoryView)
+                @NavItem("finished-goods", "▣", "Produits finis", Permissions.InventoryView)
+                @NavItem("films", "◫", "Films", Permissions.InventoryView)
+                @NavItem("transit", "⛴", "Transit", Permissions.SupplyView)
+                @NavItem("suppliers", "⚙", "Fournisseurs", Permissions.SupplyView)
+                <div class="nav-section">Processus S&amp;OP</div>
+                @NavItem("meeting", "▣", "Réunion S&OP", Permissions.ActionsView)
+                @NavItem("actions", "☑", "Actions S&OP", Permissions.ActionsView)
+                @NavItem("reporting", "◷", "Suivi des reportings", Permissions.ActionsView)
+                <div class="nav-section">Administration</div>
+                @NavItem("data", "⤓", "Gestion des données", Permissions.DataImport)
+                @NavItem("admin", "⚿", "Administration", Permissions.UsersManage, NavLinkMatch.All)
+                @NavItem("admin/config", "⚙", "Configuration", Permissions.ConfigEdit)
+                @NavItem("admin/audit", "☰", "Journal d'audit", Permissions.AuditView)
+            </nav>
+            <div class="sidebar-foot">Phase 3 · données via API REST</div>
+        </aside>
+        <div class="main">
+            <header class="topbar">
+                <button class="icon-btn menu-btn" @onclick="() => _navOpen = !_navOpen" aria-label="Menu">☰</button>
+                <span class="title">Portail S&amp;OP Broli</span>
+                <GlobalSearch />
+                <span class="spacer"></span>
+                <NotificationBell />
+                <button class="icon-btn" title="Mode réunion / TV" @onclick="Ui.ToggleMeeting">@(Ui.MeetingMode ? "⤡ Quitter la réunion" : "⤢ Réunion")</button>
+                <button class="icon-btn" title="Plein écran" @onclick="FullScreen" aria-label="Plein écran">⛶</button>
+                <div class="user-chip">
+                    <button class="icon-btn" style="border:0;padding:0 4px" @onclick="() => _userMenu = !_userMenu" aria-haspopup="true">
+                        <span class="avatar">@Initials</span>
+                        <span class="who"><b>@Session.User?.DisplayName</b>@string.Join(", ", Session.User?.Roles ?? [])</span>
+                    </button>
+                    @if (_userMenu)
+                    {
+                        <div class="backdrop" @onclick="() => _userMenu = false"></div>
+                        <div class="dropdown" @onclick="() => _userMenu = false">
+                            <div style="padding:8px 10px" class="muted">Connecté en tant que <b>@Session.User?.Username</b></div>
+                            <button @onclick="@(() => SetTheme(null))">Thème : système</button>
+                            <button @onclick="@(() => SetTheme("light"))">Thème : clair</button>
+                            <button @onclick="@(() => SetTheme("dark"))">Thème : sombre</button>
+                            <a href="account">Changer le mot de passe</a>
+                            <button @onclick="SignOut">Se déconnecter</button>
+                        </div>
+                    }
+                </div>
+            </header>
+            @if (_dataStatus?.HasDemoData == true)
+            {
+                <div class="demo-banner" role="status"><b>DONNÉES DE DÉMO</b> Tous les chiffres sont fictifs. Ils sont supprimés automatiquement au premier import réel du référentiel.</div>
+            }
+            @if (!HidesFilters) { <FilterBar /> }
+            <main class="content">@Body</main>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _ready;
+    private bool _navOpen;
+    private bool _userMenu;
+    private DataStatus? _dataStatus;
+
+    /// <summary>Pages whose data does not depend on the global filters (period, agency, family…).</summary>
+    private bool HidesFilters => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("reporting", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsLoginPage => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("login", StringComparison.OrdinalIgnoreCase);
+    private string Initials => string.Concat((Session.User?.DisplayName ?? "?").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+
+    protected override void OnInitialized()
+    {
+        Ui.Changed += Refresh;
+        Session.Changed += Refresh;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Session.RestoreAsync();
+        await Filters.RestoreAsync();
+        _ready = true;
+        if (!Session.IsAuthenticated && !IsLoginPage)
+        {
+            var back = Nav.ToBaseRelativePath(Nav.Uri);
+            Nav.NavigateTo(back.Length > 0 ? $"login?returnUrl={Uri.EscapeDataString("/" + back)}" : "login");
+        }
+        else if (Session.IsAuthenticated)
+        {
+            await LoadShellDataAsync();
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadShellDataAsync()
+    {
+        try
+        {
+            Filters.Options ??= await Api.GetAsync<FilterOptions>("api/filters/options");
+            _dataStatus = await Api.GetAsync<DataStatus>("api/data/status");
+        }
+        catch (ApiException) { /* the page itself shows the error */ }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _userMenu = false;
+        if (_ready && !Session.IsAuthenticated && !IsLoginPage) Nav.NavigateTo("login");
+        else if (_ready && Session.IsAuthenticated && Filters.Options is null) _ = InvokeAsync(async () => { await LoadShellDataAsync(); StateHasChanged(); });
+        else if (_ready && Session.IsAuthenticated && e.Location.Contains("/data")) _ = InvokeAsync(async () => { await LoadShellDataAsync(); StateHasChanged(); });
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    private async Task SignOut()
+    {
+        await Session.SignOutAsync();
+        Filters.Options = null;
+        Nav.NavigateTo("login");
+    }
+
+    private async Task FullScreen() => await JS.InvokeVoidAsync("sop.toggleFullscreen");
+    private async Task SetTheme(string? theme) => await JS.InvokeVoidAsync("sop.setTheme", theme);
+
+    private RenderFragment NavItem(string href, string icon, string label, string permission, NavLinkMatch match = NavLinkMatch.Prefix) => __builder =>
+    {
+        if (!Session.Can(permission)) return;
+        <NavLink href="@href" Match="match"><span class="ico">@icon</span>@label</NavLink>
+    };
+
+
+    public void Dispose()
+    {
+        Ui.Changed -= Refresh;
+        Session.Changed -= Refresh;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}

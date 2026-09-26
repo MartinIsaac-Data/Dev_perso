@@ -1,0 +1,389 @@
+@page "/reporting"
+@inherits SopPage
+
+<PageTitle>Suivi des reportings · Broli S&amp;OP</PageTitle>
+
+<RequirePermission Permission="@Permissions.ActionsView">
+    <PageHeader Title="Suivi des reportings" Question="Chaque service a-t-il envoyé son reporting à temps — et qui faut-il relancer ?">
+        <Actions>
+            @if (_d is { Weeks.Count: > 0 } h)
+            {
+                <select class="btn sm" aria-label="Semaine S&OP" value="@h.Week?.WeekStart" @onchange="PickWeek">
+                    @foreach (var w in h.Weeks) { <option value="@w.WeekStart">@w.Label</option> }
+                </select>
+                @if (_canRemind && h.RemindersDue > 0)
+                {
+                    <button class="btn sm primary" disabled="@_busy" @onclick="() => Remind(null)">✉ Relancer les retards (@h.RemindersDue)</button>
+                }
+                <ExportMenu Dataset="reporting" Query="_exportQuery" UseFilter="false" />
+            }
+        </Actions>
+    </PageHeader>
+
+    @if (_message is not null) { <div class="alert @(_messageOk ? "ok" : "warn")" role="status">@_message</div> }
+
+    <LoadState HasData="_d is not null" Error="@Error" OnRetry="ReloadAsync">
+        @if (_d is { } d)
+        {
+            @if (d.HasDemoData)
+            {
+                <div class="alert warn">◆ <div><b>Données de démonstration.</b> Le catalogue reprend la structure de votre fichier avec des responsables fictifs.
+                    Elles seront remplacées dès l'import de votre fichier de suivi@(_canImport ? " (onglet « Importer le fichier »)" : "").</div></div>
+            }
+
+            @if (d.Weeks.Count == 0)
+            {
+                <div class="card mb"><div class="card-body empty" style="padding:28px">
+                    Aucun reporting n'est encore suivi. @(_canImport ? "Importez le fichier de suivi (catalogue, suivi hebdomadaire, calendrier) ci-dessous." : "Un administrateur doit importer le fichier de suivi.")
+                </div></div>
+            }
+            else
+            {
+                <div class="kpis k6">
+                    @Tile("Attendus", d.Expected.ToString(), $"{d.NotApplicable} non applicable(s)", "neutral", "all")
+                    @Tile("Reçus à l'heure", d.Received.ToString(), "au plus tard le jour prévu", d.Received > 0 ? "good" : "neutral", "Received")
+                    @Tile("Reçus en retard", d.ReceivedLate.ToString(), "arrivés après l'échéance", d.ReceivedLate > 0 ? "watch" : "good", "ReceivedLate")
+                    @Tile("En retard", d.Late.ToString(), $"{d.Pending} pas encore dus", d.Late > 0 ? "bad" : "good", "Late")
+                    @Tile("Manquants", d.Missing.ToString(), "semaine écoulée, non reçus", d.Missing > 0 ? "bad" : "good", "Missing")
+                    <div class="kpi @RateStatus(d.ReceptionRatePct)">
+                        <div class="k-title"><span>Taux de réception</span></div>
+                        <div class="k-value">@Fmt.Pct(d.ReceptionRatePct)</div>
+                        @if (d.ReceptionRatePct is { } rate && d.PreviousReceptionRatePct is { } prev)
+                        {
+                            var delta = rate - prev;
+                            <div class="k-delta @(Math.Abs(delta) < 0.05 ? "flat" : delta > 0 ? "up-good" : "up-bad")">@(delta > 0.05 ? "▲" : delta < -0.05 ? "▼" : "▬") @Fmt.Num(Math.Abs(delta), 1) pt <span class="vs">vs semaine précédente</span></div>
+                        }
+                        <div class="k-sub">À l'heure : @Fmt.Pct(d.OnTimeRatePct) · sur les reportings déjà dus</div>
+                    </div>
+                </div>
+
+                <div class="grid g-32 mb">
+                    <div class="card">
+                        <div class="card-head"><h2>Taux de réception par semaine</h2><span class="hint">% des reportings dus · cliquer sur une semaine pour l'ouvrir</span></div>
+                        <div class="card-body">
+                            <SopChart Type="line" Height="250" Unit="%" Max="100" Min="0" Labels="d.Trend.Select(t => t.Label).ToList()" AriaLabel="Taux de réception par semaine"
+                                      Datasets="@([new ChartDataset("Reçus", d.Trend.Select(t => t.ReceptionRatePct).ToList(), "--series-1"),
+                                                  new ChartDataset("Reçus à l'heure", d.Trend.Select(t => t.OnTimeRatePct).ToList(), "--good", Dashed: true)])"
+                                      OnClick="c => GoWeek(d.Trend[c.Index].WeekStart)" />
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-head"><h2>Par service</h2><span class="hint">reportings de la semaine</span></div>
+                        <div class="card-body">
+                            <SopChart Type="bar" Horizontal="true" Stacked="true" Height="@(Math.Max(200, d.ByDepartment.Count * 32 + 60))" Unit="reportings"
+                                      Labels="d.ByDepartment.Select(x => x.Department).ToList()" AriaLabel="Statut des reportings par service"
+                                      Datasets="@([new ChartDataset("Reçus", Series(d, x => x.Received), "--good"),
+                                                  new ChartDataset("Reçus en retard", Series(d, x => x.ReceivedLate), "--warning"),
+                                                  new ChartDataset("En retard", Series(d, x => x.Late), "--serious"),
+                                                  new ChartDataset("Manquants", Series(d, x => x.Missing), "--critical"),
+                                                  new ChartDataset("En attente", Series(d, x => x.Pending), "--axis")])"
+                                      OnClick="c => PickDepartment(d.ByDepartment[c.Index].Department)" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid g-32 mb">
+                    <div class="card">
+                        <div class="card-head"><h2>Calendrier de la semaine</h2>
+                            <div class="legend"><span><i class="dot-l" style="background:var(--good)"></i>Reçu</span><span><i class="dot-l" style="background:var(--warning)"></i>Reçu en retard</span>
+                                <span><i class="dot-l" style="background:var(--serious)"></i>En retard</span><span><i class="dot-l" style="background:var(--critical)"></i>Manquant</span>
+                                <span><i class="dot-l" style="background:var(--text-muted)"></i>En attente</span></div>
+                        </div>
+                        <div class="card-body">
+                            <div class="cal-grid">
+                                @foreach (var day in d.Calendar)
+                                {
+                                    <div class="cal-day @(day.Date == DateOnly.FromDateTime(DateTime.Today) ? "today" : "")">
+                                        <h3>@day.Day <span>@(day.Date?.ToString("dd/MM") ?? "")</span></h3>
+                                        @foreach (var r in day.Items)
+                                        {
+                                            <div class="cal-item" title="@($"{r.Name} — {r.State}")">
+                                                <span class="dot @StateClass(r.StateKey)"></span>
+                                                <span><b>@r.Code · @r.Name</b><span class="sub">@r.Owner@(r.ExpectedTime is null ? "" : " · " + r.ExpectedTime)</span></span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-head"><h2>Retards par responsable</h2><span class="hint">@d.Trend.Count dernières semaines · retards et manquants</span></div>
+                        <div class="card-body">
+                            @if (d.LateByOwner.Count == 0) { <div class="empty">✔ Aucun retard sur la période.</div> }
+                            else
+                            {
+                                <SopChart Type="bar" Horizontal="true" Height="@(d.LateByOwner.Count * 30 + 50)" Unit="reportings"
+                                          Labels="d.LateByOwner.Select(p => p.Label).ToList()" AriaLabel="Reportings en retard ou manquants par responsable"
+                                          Datasets="@([new ChartDataset("Retards", d.LateByOwner.Select(p => p.Value).ToList(), "--serious")])" />
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="card">
+                <ViewTabs Current="@_tab" OnSelect="t => _tab = t" Items="Tabs(d)" />
+                @if (_tab == "week" && d.Week is not null)
+                {
+                    <div class="table-tools">
+                        <input type="search" placeholder="Rechercher reporting, service, responsable, commentaire…" @bind="_search" @bind:event="oninput" @bind:after="ResetPage" />
+                        <select class="btn sm" @bind="_department" @bind:after="ResetPage" aria-label="Service">
+                            <option value="">Tous les services</option>
+                            @foreach (var dep in d.ByDepartment) { <option>@dep.Department</option> }
+                        </select>
+                        <select class="btn sm" @bind="_state" @bind:after="ResetPage" aria-label="Statut">
+                            <option value="">Tous les statuts</option>
+                            <option value="Missing">Manquants</option><option value="Late">En retard</option><option value="Pending">En attente</option>
+                            <option value="ReceivedLate">Reçus en retard</option><option value="Received">Reçus à l'heure</option><option value="NotApplicable">Non applicables</option>
+                        </select>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="data dense">
+                            <thead><tr><th>Reporting</th><th>Service</th><th>Responsable</th><th>Attendu</th><th>Reçu le</th><th>Statut</th><th>Qualité</th><th>Commentaire</th>@if (_canRemind) {<th></th>}</tr></thead>
+                            <tbody>
+                                @foreach (var r in Page(FilteredRows(d)))
+                                {
+                                    <tr>
+                                        <td style="min-width:200px"><b>@r.Name</b><span class="sub">@r.Code · @r.Frequency</span></td>
+                                        <td>@r.Department</td>
+                                        <td>@r.Owner</td>
+                                        <td class="nowrap">@Fmt.Date(r.ExpectedDate)<span class="sub">@r.ExpectedDay@(r.ExpectedTime is null ? "" : " · " + r.ExpectedTime)</span></td>
+                                        <td class="nowrap">@Fmt.Date(r.ReceivedDate)</td>
+                                        <td class="nowrap"><StatusBadge Status="@BadgeStatus(r.StateKey)" Text="@r.State" />@if (r.DaysLate is { } dl) {<span class="sub">@dl j de retard</span>}</td>
+                                        <td>@if (r.Quality is { } q) {<StatusBadge Status="@(q == "OK" ? "OK" : q == "Problème" ? "High" : "neutral")" Text="@q" />}</td>
+                                        <td class="muted" style="max-width:240px">@r.Comments</td>
+                                        @if (_canRemind)
+                                        {
+                                            <td class="nowrap">
+                                                @if (r.StateKey is not ("Received" or "ReceivedLate" or "NotApplicable"))
+                                                {
+                                                    <button class="btn sm" disabled="@_busy" @onclick="() => Remind(r.Code)" title="Envoyer une notification au(x) responsable(s)">✉ Relancer</button>
+                                                }
+                                                @if (r.LastReminderUtc is { } lr) {<span class="sub">relancé le @Fmt.DateTime(lr)</span>}
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (!FilteredRows(d).Any()) { <div class="empty">Aucun reporting ne correspond.</div> }
+                    </div>
+                    <Pager Query="_q" Total="@FilteredRows(d).Count()" OnChanged="StateHasChanged" />
+                }
+                else if (_tab == "catalogue")
+                {
+                    <div class="table-wrap">
+                        <table class="data dense">
+                            <thead><tr><th>N°</th><th>Reporting</th><th>Service</th><th>Responsable</th><th>Fréquence</th><th>Jour</th><th>Heure</th><th>Objectif</th><th>État (catalogue)</th><th class="num">Réception</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in d.Catalogue)
+                                {
+                                    <tr class="@(c.IsActive ? "" : "muted")">
+                                        <td class="code">@c.Code</td>
+                                        <td style="min-width:200px"><b>@c.Name</b><span class="sub">@c.MainContent</span>@if (c.FollowUpNotes is not null) {<span class="sub">@c.FollowUpNotes</span>}</td>
+                                        <td>@c.Department</td>
+                                        <td>@c.Owner</td>
+                                        <td>@c.Frequency</td>
+                                        <td>@c.ExpectedDay</td>
+                                        <td>@(c.ExpectedTime ?? Fmt.Empty)</td>
+                                        <td>@(c.Purpose ?? Fmt.Empty)</td>
+                                        <td>@if (!c.IsActive) {<span class="badge st-neutral">Retiré du catalogue</span>} else {@(c.CatalogueStatus ?? Fmt.Empty)}</td>
+                                        <td class="num">
+                                            @if (c.ReceptionRatePct is { } rate)
+                                            {
+                                                <div class="bar-cell">@Fmt.Pct(rate, 0)<span class="track"><span class="fill" style="width:@(Math.Clamp(rate, 0, 100).ToString(System.Globalization.CultureInfo.InvariantCulture))%;background:var(@(rate >= 90 ? "--good" : rate >= 70 ? "--warning" : "--critical"))"></span></span></div>
+                                                <span class="sub">sur @c.WeeksTracked sem.</span>
+                                            }
+                                            else { @Fmt.Empty }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (d.Catalogue.Count == 0) { <div class="empty">Catalogue vide.</div> }
+                    </div>
+                }
+                else if (_tab == "import" && _canImport)
+                {
+                    <div class="card-body">
+                        <p class="muted" style="margin-top:0">Chargez le classeur <b>SOP_Reporting_Catalogue</b> rempli : onglets <b>01_REPORTING_CATALOGUE</b> (obligatoire),
+                            <b>02_REPORTING_TRACKER</b> et <b>03_REPORTING_CALENDAR</b>. Le catalogue remplace le précédent (les reportings retirés sont conservés dans l'historique) ;
+                            les semaines présentes dans le suivi sont mises à jour, les autres sont conservées. Une ligne de suivi doit avoir une date de référence ou une semaine avec l'année (ex. S39 2026).</p>
+                        @if (_importError is not null) { <div class="alert error" role="alert">✖ <div>@_importError</div></div> }
+                        @if (_importResult is { } res)
+                        {
+                            <div class="alert ok">✔ <div><b>Import terminé.</b> @res.Reports reportings, @res.TrackerRows lignes de suivi@(res.Weeks.Count > 0 ? $" ({string.Join(", ", res.Weeks)})" : "")@(res.Deactivated > 0 ? $", {res.Deactivated} reporting(s) retiré(s)" : "").@(res.ReplacedDemo ? " Les données de démonstration ont été remplacées." : "")</div></div>
+                        }
+                        <div class="field" style="max-width:420px">
+                            <label>Classeur Excel (.xlsx, 25 Mo maximum)</label>
+                            <InputFile OnChange="Upload" accept=".xlsx" disabled="@_busy" />
+                            @if (_busy) { <div class="help">Lecture et validation…</div> }
+                        </div>
+                        @if (_preview is { } p)
+                        {
+                            <div class="kpis" style="margin-top:12px">
+                                <div class="kpi neutral"><div class="k-title">Reportings</div><div class="k-value">@p.Reports</div><div class="k-sub">@p.NewReports nouveaux · @p.UpdatedReports mis à jour</div></div>
+                                <div class="kpi @(p.DeactivatedReports > 0 ? "watch" : "neutral")"><div class="k-title">Retirés</div><div class="k-value">@p.DeactivatedReports</div><div class="k-sub">absents du fichier</div></div>
+                                <div class="kpi neutral"><div class="k-title">Lignes de suivi</div><div class="k-value">@p.TrackerRows</div><div class="k-sub">@p.EmptyTrackerRows ligne(s) non renseignée(s) ignorée(s)</div></div>
+                                <div class="kpi @(p.ErrorCount > 0 ? "bad" : "good")"><div class="k-title">Erreurs</div><div class="k-value">@p.ErrorCount</div><div class="k-sub">@(p.ErrorCount > 0 ? "import bloqué" : "aucune")</div></div>
+                                <div class="kpi @(p.WarningCount > 0 ? "watch" : "good")"><div class="k-title">Avertissements</div><div class="k-value">@p.WarningCount</div><div class="k-sub">autorisés, à vérifier</div></div>
+                            </div>
+                            @if (p.Weeks.Count > 0) { <p class="muted">Semaines : @string.Join(", ", p.Weeks)</p> }
+                            @if (p.WillReplaceDemo) { <div class="alert warn">◆ L'import remplacera les données de démonstration du suivi des reportings.</div> }
+                            @if (p.Issues.Count > 0)
+                            {
+                                <div class="table-wrap" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+                                    <table class="data">
+                                        <thead><tr><th>Gravité</th><th class="num">Ligne</th><th>Onglet › colonne</th><th>Message</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var i in p.Issues.Take(300))
+                                            {
+                                                <tr><td><StatusBadge Status="@(i.Severity == "Error" ? "Critical" : "Watch")" Text="@(i.Severity == "Error" ? "Erreur" : "Avertissement")" /></td>
+                                                    <td class="num">@(i.Row == 0 ? Fmt.Empty : i.Row.ToString())</td><td>@i.Column</td><td>@i.Message</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            <div class="toolbar" style="margin-top:14px">
+                                <button class="btn primary" disabled="@(!p.CanCommit || _busy)" @onclick="Commit">
+                                    @(p.CanCommit ? $"Importer {p.Reports} reportings et {p.TrackerRows} lignes de suivi" : "Corrigez les erreurs dans Excel, puis chargez à nouveau le fichier")
+                                </button>
+                                <button class="btn" @onclick="() => _preview = null">Annuler</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            @if (d.LastImportUtc is { } li) { <p class="muted" style="font-size:12px;margin-top:8px">Dernier import du fichier de suivi : @Fmt.DateTime(li)</p> }
+        }
+    </LoadState>
+</RequirePermission>
+
+@code {
+    [SupplyParameterFromQuery(Name = "week")] public string? Week { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private const long MaxBytes = 25 * 1024 * 1024;
+    private ReportingDashboard? _d;
+    private string _tab = "week", _search = "", _department = "", _state = "";
+    private readonly TableQuery _q = new();
+    private readonly TableQuery _exportQuery = new();
+    private bool _busy, _messageOk;
+    private string? _message, _importError;
+    private ReportingImportPreview? _preview;
+    private ReportingImportResult? _importResult;
+
+    private bool _canRemind => Session.Can(Permissions.ActionsEdit);
+    private bool _canImport => Session.Can(Permissions.DataImport);
+
+    protected override async Task LoadAsync(CancellationToken ct)
+    {
+        _d = await Api.GetAsync<ReportingDashboard>($"api/reporting{(Week is null ? "" : $"?week={Uri.EscapeDataString(Week)}")}", ct: ct);
+        _exportQuery.View = _d.Week?.WeekStart;
+        if (Tab is "catalogue" or "import") _tab = Tab;
+        else if (_d.Weeks.Count == 0) _tab = _canImport ? "import" : "catalogue";
+    }
+
+    private IReadOnlyList<(string, string)> Tabs(ReportingDashboard d)
+    {
+        var tabs = new List<(string, string)>();
+        if (d.Week is not null) tabs.Add(("week", $"Suivi de la semaine ({d.Rows.Count})"));
+        tabs.Add(("catalogue", $"Catalogue ({d.Catalogue.Count(c => c.IsActive)})"));
+        if (_canImport) tabs.Add(("import", "Importer le fichier"));
+        return tabs;
+    }
+
+    private IEnumerable<ReportingRow> FilteredRows(ReportingDashboard d) => d.Rows
+        .Where(r => _department.Length == 0 || r.Department == _department)
+        .Where(r => _state.Length == 0 || r.StateKey == _state)
+        .Where(r => _search.Length == 0 || $"{r.Code} {r.Name} {r.Department} {r.Owner} {r.Comments}".Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<ReportingRow> Page(IEnumerable<ReportingRow> rows) => rows.Skip((_q.SafePage - 1) * _q.SafePageSize).Take(_q.SafePageSize);
+
+    private void ResetPage() { _q.Page = 1; _exportQuery.Search = _search; }
+
+    private static List<double?> Series(ReportingDashboard d, Func<ReportingDepartmentStat, int> value) => d.ByDepartment.Select(x => (double?)value(x)).ToList();
+
+    private void PickWeek(ChangeEventArgs e) => GoWeek(e.Value?.ToString());
+
+    private void GoWeek(string? week) { if (week is not null) Go($"reporting?week={Uri.EscapeDataString(week)}"); }
+
+    private void PickDepartment(string department) { _tab = "week"; _department = department; ResetPage(); }
+
+    private void ShowState(string state) { _tab = "week"; _state = state == "all" ? "" : state; ResetPage(); }
+
+    private static string RateStatus(double? rate) => rate is null ? "neutral" : rate >= 90 ? "good" : rate >= 75 ? "watch" : "bad";
+
+    private static string BadgeStatus(string state) => state switch
+    {
+        "Received" => "OK",
+        "ReceivedLate" => "Watch",
+        "Late" => "High",
+        "Missing" => "Critical",
+        _ => "neutral",
+    };
+
+    private static string StateClass(string state) => Fmt.StatusClass(BadgeStatus(state));
+
+    private async Task Remind(string? code)
+    {
+        if (_d?.Week is not { } week) return;
+        _busy = true; _message = null;
+        try
+        {
+            var r = await Api.PostAsync<ReportingReminderResult>("api/reporting/remind", new ReportingReminderRequest(code ?? "", week.WeekStart));
+            _messageOk = r.UnknownOwners.Count == 0;
+            _message = $"✉ {r.Reports} reporting(s) relancé(s), {r.Notified} notification(s) envoyée(s)."
+                       + (r.UnknownOwners.Count > 0 ? $" Sans compte sur le portail (à relancer par un autre moyen) : {string.Join(", ", r.UnknownOwners)}." : "");
+            await ReloadAsync();
+        }
+        catch (ApiException ex) { _messageOk = false; _message = ex.Full; }
+        finally { _busy = false; }
+    }
+
+    private async Task Upload(InputFileChangeEventArgs e)
+    {
+        _preview = null; _importResult = null; _importError = null;
+        var file = e.File;
+        if (file.Size > MaxBytes) { _importError = "Le fichier dépasse 25 Mo."; return; }
+        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)) { _importError = "Seuls les classeurs .xlsx sont acceptés."; return; }
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            buffer.Position = 0;
+            _preview = await Api.UploadAsync<ReportingImportPreview>("api/reporting/import/preview", buffer, file.Name);
+        }
+        catch (ApiException ex) { _importError = ex.Full; }
+        catch (IOException ex) { _importError = "Échec du chargement : " + ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Commit()
+    {
+        if (_preview is null) return;
+        _busy = true; _importError = null;
+        try
+        {
+            _importResult = await Api.PostAsync<ReportingImportResult>($"api/reporting/import/{_preview.Id}/commit", new { });
+            _preview = null;
+            await ReloadAsync();
+            _tab = "import";
+        }
+        catch (ApiException ex) { _importError = ex.Full; }
+        finally { _busy = false; }
+    }
+
+    private RenderFragment Tile(string title, string value, string sub, string status, string state) => __builder =>
+    {
+        <button type="button" class="kpi @status" @onclick="() => ShowState(state)">
+            <div class="k-title"><span>@title</span><span class="go">›</span></div>
+            <div class="k-value">@value</div>
+            <div class="k-sub">@sub</div>
+        </button>
+    };
+}

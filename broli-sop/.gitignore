@@ -1,0 +1,10 @@
+bin/
+obj/
+*.db
+*.db-shm
+*.db-wal
+*.user
+.vs/
+TestResults/
+appsettings.*.local.json
+release/

@@ -1,0 +1,14 @@
+<div class="tabs" role="tablist">
+    @foreach (var (value, label) in Items)
+    {
+        <button type="button" role="tab" aria-selected="@(Current == value)" class="@(Current == value ? "on" : "")" @onclick="() => Select(value)">@label</button>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<(string Value, string Label)> Items { get; set; } = [];
+    [Parameter] public string? Current { get; set; }
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+
+    private Task Select(string v) => OnSelect.InvokeAsync(v);
+}
